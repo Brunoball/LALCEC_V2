@@ -1,28 +1,28 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Inicio from "./components/Login/Inicio";
-import AppLayout from "./components/Layout/AppLayout";
+import Principal from "./components/Principal/Principal";
 import Dashboard from "./components/Dashboard/Dashboard";
-import Socios from "./components/Socios/ListadoSocios/Socios";
-import Familias from "./components/Socios/Familias/Familias";
-import Cuotas from "./components/Cuotas/GestionCuotas/Cuotas";
-import Categorias from "./components/Categorias/GestionCategorias/Categorias";
-import DescuentosFamiliares from "./components/Categorias/DescuentosFamiliares/DescuentosFamiliares";
-import Ingresos from "./components/Contable/Ingresos/Ingresos";
-import Egresos from "./components/Contable/Egresos/Egresos";
-import Resumen from "./components/Contable/Resumen/Resumen";
-import Configuracion from "./components/Configuracion/Inicio/Configuracion";
-import CuotasCobros from "./components/Configuracion/CuotasCobros/CuotasCobros";
-import SociosConfiguracion from "./components/Configuracion/Socios/SociosConfiguracion";
-import ContableConfiguracion from "./components/Configuracion/Contable/ContableConfiguracion";
-import Usuarios from "./components/Configuracion/Usuarios/Usuarios";
-import Ventas from "./components/Ventas/Inicio/Ventas";
+import Socios from "./components/Socios/Socios";
+import Familias from "./components/Socios/secciones/Familias";
+import Cuotas from "./components/Cuotas/Cuotas";
+import Categorias from "./components/Categorias/Categorias";
+import DescuentosFamiliares from "./components/Categorias/secciones/DescuentosFamiliares";
+import Ingresos from "./components/Contable/secciones/Ingresos";
+import Egresos from "./components/Contable/secciones/Egresos";
+import Resumen from "./components/Contable/secciones/Resumen";
+import Configuracion from "./components/Configuracion/Configuracion";
+import CuotasCobros from "./components/Configuracion/secciones/CuotasCobros";
+import SociosConfiguracion from "./components/Configuracion/secciones/SociosConfiguracion";
+import ContableConfiguracion from "./components/Configuracion/secciones/ContableConfiguracion";
+import Usuarios from "./components/Configuracion/secciones/Usuarios";
+import Ventas from "./components/Ventas/Ventas";
 import BotPanel from "./components/BotPanel/BotPanel";
 import { BOT_PANEL_ROUTE } from "./config/config";
-import { isAuthenticated } from "./components/Global/auth/session";
+import { isAuthenticated } from "./components/_shared/auth/session";
 
 function ProtectedLayout() {
-  return isAuthenticated() ? <AppLayout /> : <Navigate to="/" replace />;
+  return isAuthenticated() ? <Principal /> : <Navigate to="/" replace />;
 }
 
 function ProtectedPage({ children }) {

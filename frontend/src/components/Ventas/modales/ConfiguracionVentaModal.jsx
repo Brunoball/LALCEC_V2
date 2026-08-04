@@ -1,1 +1,1 @@
-export { default } from "../../Configuracion/Ventas/modales/ConfiguracionVentaModal";
+export { default } from "../../Configuracion/modales/ConfiguracionVentaModal";

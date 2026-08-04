@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "../../Global/api/apiClient";
+import { apiGet, apiPost } from "../../_shared/api/apiClient";
 
 export const configuracionApi = {
   obtener: () => apiGet("configuracion_obtener"),

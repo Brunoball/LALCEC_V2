@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "../../Global/api/apiClient";
+import { apiGet, apiPost } from "../../_shared/api/apiClient";
 
 export const cuotasApi = {
   listar: (params) => apiGet("cuotas_listar", params),

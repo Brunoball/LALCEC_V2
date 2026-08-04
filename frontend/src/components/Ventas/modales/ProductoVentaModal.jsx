@@ -1,6 +1,6 @@
 import React from "react";
-import CrudModal from "../../Global/components/CrudModal";
-import { FloatingField } from "../../Global/components/TabbedForm";
+import CrudModal from "../../Global/Modales/CrudModal";
+import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import SalesSwitchField from "./SalesSwitchField";
 import { toUpperText } from "../utils/textCase";
 

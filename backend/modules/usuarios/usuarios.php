@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+// El archivo puede ser analizado o cargado de manera independiente sin depender
+// del orden de includes de routes/api.php.
+require_once __DIR__ . '/../../core/auth.php';
+require_once __DIR__ . '/../../core/domain.php';
+require_once __DIR__ . '/../../core/request.php';
+
 final class Usuarios
 {
     private const ROLES = ['admin', 'vista'];

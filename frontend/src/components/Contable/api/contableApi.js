@@ -3,7 +3,7 @@ import {
   apiFormPost,
   apiGet,
   apiPost,
-} from "../../Global/api/apiClient";
+} from "../../_shared/api/apiClient";
 
 export const contableApi = {
   resumen: (params) => apiGet("contable_resumen", params),

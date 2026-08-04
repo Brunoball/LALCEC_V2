@@ -5,8 +5,8 @@ import {
   faFilePdf,
   faPrint,
 } from "@fortawesome/free-solid-svg-icons";
-import CrudModal from "../../components/CrudModal";
-import { normalizePaymentReceipt } from "../../../../utils/comprobantePago";
+import CrudModal from "../CrudModal";
+import { normalizePaymentReceipt } from "../../../_shared/utils/comprobantePago";
 import "./ModalComprobantePago.css";
 
 const money = (value) =>

@@ -1,0 +1,202 @@
+/* =========================================================
+   Familias — estilos propios de sus modales.
+   La base visual vive en Global/Global_css/Global_Modals.css.
+   ========================================================= */
+
+.familias-modal--form.entity-modal {
+  width: min(880px, 100%);
+}
+
+.familias-modal--state.entity-modal {
+  width: min(520px, 100%);
+}
+
+.familias-modal--form .entity-modal__body {
+  padding: 14px 20px 18px;
+  background: linear-gradient(180deg, #fff 0%, #fdfbf7 100%);
+}
+
+.familias-modal--form .entity-modal__footer {
+  padding-top: 12px;
+}
+
+.familias-modal__form {
+  gap: 0;
+}
+
+.familias-form-panel__body--details,
+.familias-form-panel__body--members {
+  display: grid;
+  gap: 14px;
+}
+
+.familias-form-panel__body--details .entity-floating-field:first-child {
+  max-width: 520px;
+}
+
+.familias-modal__search-row {
+  min-width: 0;
+}
+
+.familias-modal__member-search input {
+  min-height: 42px;
+}
+
+.familias-modal__members {
+  display: block;
+  padding: 12px;
+  border-color: rgba(58, 46, 43, 0.1);
+  background: rgba(253, 251, 247, 0.66);
+}
+
+.familias-modal__members legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--entity-modal-ink);
+  font-size: 10.5px;
+}
+
+.familias-modal__members legend svg {
+  color: var(--entity-modal-action);
+}
+
+.familias-modal__member-list {
+  max-height: 276px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 2px 4px 2px 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.familias-modal__member-list > .familias-modal__member {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px -13px rgba(58, 46, 43, 0.62);
+}
+
+.familias-modal__member input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  display: grid;
+  place-content: center;
+  border: 1.5px solid rgba(58, 46, 43, 0.25);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color var(--entity-modal-transition),
+    background var(--entity-modal-transition),
+    box-shadow var(--entity-modal-transition);
+}
+
+.familias-modal__member input[type="checkbox"]::before {
+  content: "";
+  width: 8px;
+  height: 5px;
+  margin-top: -2px;
+  border-bottom: 2px solid #fff;
+  border-left: 2px solid #fff;
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.7);
+  transition:
+    opacity var(--entity-modal-transition),
+    transform var(--entity-modal-transition);
+}
+
+.familias-modal__member input[type="checkbox"]:checked {
+  border-color: var(--entity-modal-action);
+  background: var(--entity-modal-action);
+  box-shadow: 0 0 0 3px rgba(196, 139, 59, 0.1);
+}
+
+.familias-modal__member input[type="checkbox"]:checked::before {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+
+.familias-modal__member input[type="checkbox"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--entity-modal-action) 45%, #fff);
+  outline-offset: 2px;
+}
+
+.familias-modal__member-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.familias-modal__member-copy strong,
+.familias-modal__member-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.familias-modal__member-copy strong {
+  color: var(--entity-modal-ink);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.familias-modal__member-copy small {
+  color: var(--entity-modal-text);
+  font-size: 10.5px;
+  font-weight: 520;
+}
+
+.familias-modal__member.is-selected .familias-modal__member-copy strong {
+  color: var(--entity-modal-action);
+}
+
+.familias-modal__member:has(input:disabled) {
+  border-style: dashed;
+  background: rgba(58, 46, 43, 0.025);
+  box-shadow: none;
+}
+
+.familias-modal__member input:disabled {
+  cursor: not-allowed;
+}
+
+.familias-modal__empty {
+  grid-column: 1 / -1;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--entity-modal-text);
+  text-align: center;
+}
+
+.familias-modal__empty strong {
+  color: var(--entity-modal-ink);
+  font-size: 12px;
+}
+
+.familias-modal__empty span {
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .familias-modal--form .entity-modal__body {
+    padding: 10px 13px 14px;
+  }
+
+  .familias-modal__member-list {
+    max-height: 220px;
+    grid-template-columns: 1fr;
+  }
+}

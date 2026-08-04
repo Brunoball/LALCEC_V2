@@ -1,7 +1,7 @@
-import { apiGet, apiPost } from "../../Global/api/apiClient";
+import { apiGet, apiPost } from "../../_shared/api/apiClient";
 
 // Acceso al backend del módulo Socios. Mantener acá todas las operaciones
-// de ListadoSocios y Familias evita APIs duplicadas dentro de subsecciones.
+// de Socios y Familias evita APIs duplicadas dentro de subsecciones.
 export const sociosApi = {
   listar: (params) => apiGet("socios_listar", params),
   obtener: (id) => apiGet("socios_obtener", { id }),

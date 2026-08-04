@@ -1,8 +1,8 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faPlus, faTrashCan, faUser } from "@fortawesome/free-solid-svg-icons";
-import CrudModal from "../../Global/components/CrudModal";
-import { FloatingField } from "../../Global/components/TabbedForm";
+import CrudModal from "../../Global/Modales/CrudModal";
+import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import { toUpperText } from "../utils/textCase";
 
 const money = (value) =>

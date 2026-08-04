@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers } from "@fortawesome/free-solid-svg-icons";
-import { apiPost } from "../Global/api/apiClient";
-import { saveSession } from "../Global/auth/session";
+import { apiPost } from "../_shared/api/apiClient";
+import { saveSession } from "../_shared/auth/session";
 import "./inicio.css";
 
 const APP_NAME = "Gestión de Socios";

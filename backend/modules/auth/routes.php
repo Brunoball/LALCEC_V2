@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Dependencias explícitas: además de asegurar la carga directa del módulo,
+// permiten que los analizadores de VS Code resuelvan correctamente los helpers.
+require_once __DIR__ . '/../../core/auth.php';
+require_once __DIR__ . '/../../core/domain.php';
+require_once __DIR__ . '/../../core/request.php';
+require_once __DIR__ . '/../../core/router.php';
+
 function auth_login_audit(PDO $db, ?array $candidate, string $usuario, bool $success): void
 {
     try {
