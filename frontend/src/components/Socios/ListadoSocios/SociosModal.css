@@ -1,0 +1,190 @@
+/* Ajustes exclusivos de los modales de Socios. Las bases viven en Global. */
+.socios-modal--form.entity-modal {
+  width: min(880px, 100%);
+}
+
+.socios-modal--form .entity-modal__body {
+  padding: 14px 20px 18px;
+  background: linear-gradient(180deg, #fff 0%, #fdfbf7 100%);
+}
+
+.socios-modal--form .entity-modal__footer {
+  padding-top: 12px;
+}
+
+.socios-modal__form {
+  gap: 0;
+}
+
+.socios-form-panel__body--membership,
+.socios-info-content {
+  display: grid;
+  gap: 14px;
+}
+
+.socios-modal__categories {
+  display: block;
+  padding: 12px 14px 14px;
+  border-color: rgba(58, 46, 43, 0.1);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--entity-modal-bg) 76%, #fff);
+}
+
+.socios-modal__categories legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  color: var(--entity-modal-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+}
+
+.socios-modal__categories legend svg {
+  color: var(--entity-modal-action);
+}
+
+.socios-categories__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.socios-category-option {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--entity-modal-border);
+  border-radius: 11px;
+  color: var(--entity-modal-text);
+  background: #fff;
+  box-shadow: 0 6px 18px -16px rgba(58, 46, 43, 0.65);
+  cursor: pointer;
+  transition:
+    transform var(--entity-modal-transition),
+    color var(--entity-modal-transition),
+    border-color var(--entity-modal-transition),
+    background var(--entity-modal-transition),
+    box-shadow var(--entity-modal-transition);
+}
+
+.socios-category-option:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--entity-modal-action) 34%, #fff);
+  box-shadow: 0 10px 22px -18px rgba(58, 46, 43, 0.72);
+}
+
+.socios-category-option.is-selected {
+  color: var(--entity-modal-ink);
+  border-color: color-mix(in srgb, var(--entity-modal-action) 48%, #fff);
+  background: color-mix(in srgb, var(--entity-modal-action) 9%, #fff);
+  box-shadow: 0 8px 20px -17px var(--entity-modal-action);
+}
+
+.socios-category-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, var(--entity-modal-text) 45%, #fff);
+  border-radius: 5px;
+  background: #fff;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition:
+    border-color var(--entity-modal-transition),
+    background var(--entity-modal-transition),
+    box-shadow var(--entity-modal-transition);
+}
+
+.socios-category-option input[type="checkbox"]::before {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translateY(-1px) rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform var(--entity-modal-transition);
+}
+
+.socios-category-option input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: var(--entity-modal-focus);
+}
+
+.socios-category-option.is-selected input[type="checkbox"] {
+  border-color: var(--entity-modal-action);
+  background: var(--entity-modal-action);
+}
+
+.socios-category-option.is-selected input[type="checkbox"]::before {
+  transform: translateY(-1px) rotate(45deg) scale(1);
+}
+
+.socios-category-option__name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 620;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.socios-category-option__status {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--entity-modal-danger) 24%, #fff);
+  border-radius: 999px;
+  color: var(--entity-modal-danger);
+  background: color-mix(in srgb, var(--entity-modal-danger) 7%, #fff);
+  font-size: 8.5px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.socios-category-option.is-inactive:not(.is-selected) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.socios-category-option.is-inactive:not(.is-selected):hover {
+  transform: none;
+  border-color: var(--entity-modal-border);
+  box-shadow: 0 6px 18px -16px rgba(58, 46, 43, 0.65);
+}
+
+.socios-category-option input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.socios-categories__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--entity-modal-border);
+  border-radius: 10px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .socios-modal--form .entity-modal__body {
+    padding: 10px 13px 14px;
+  }
+
+  .socios-categories__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

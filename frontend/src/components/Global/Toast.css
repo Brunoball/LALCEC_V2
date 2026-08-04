@@ -1,0 +1,124 @@
+.toast-container {
+  position: fixed;
+  top: 18px !important;
+  left: 50%;
+  z-index: 2147483647 !important;
+  isolation: isolate;
+  min-width: 280px;
+  max-width: 90%;
+  display: flex;
+  align-items: center;
+  padding: 14px 20px !important;
+  transform: translateX(-50%);
+  border: 1px solid rgba(58, 46, 43, 0.12) !important;
+  border-radius: 14px !important;
+  background: #fff !important;
+  box-shadow: 0 18px 40px rgba(58, 46, 43, 0.14) !important;
+  color: #3a2e2b !important;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif !important;
+  font-size: 1rem;
+  font-weight: 500 !important;
+  animation: slideDown 0.4s ease-out;
+}
+
+.toast-icon {
+  margin-right: 10px;
+  font-size: 1.4rem;
+}
+
+.toast-exito .toast-icon {
+  color: #22ad5c !important;
+}
+
+.toast-error .toast-icon {
+  color: #e13d45 !important;
+}
+
+.toast-advertencia .toast-icon {
+  color: #f59e0b !important;
+}
+
+.toast-cargando .toast-icon,
+.toast-info .toast-icon {
+  color: #c48b3b !important;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  width: 28px;
+  height: 28px;
+  margin-left: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(58, 46, 43, 0.06);
+  color: #3a2e2b;
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.toast-close:hover {
+  transform: translateY(-1px);
+  background: rgba(58, 46, 43, 0.1);
+}
+
+.toast-close:focus-visible {
+  outline: 2px solid rgba(196, 139, 59, 0.35);
+  outline-offset: 2px;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fadeOutUp {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -30px);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.desaparecer {
+  animation: fadeOutUp 0.28s ease forwards !important;
+}

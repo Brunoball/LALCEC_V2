@@ -1,0 +1,434 @@
+.sales-settingsPage {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sales-settingsPage .module-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.sales-settingsPage .module-stat {
+  --sales-setting-tone: var(--balto-action);
+  position: relative;
+  min-width: 0;
+  min-height: 82px;
+  gap: 11px;
+  overflow: hidden;
+  padding: 12px 14px;
+  border-color: color-mix(
+    in srgb,
+    var(--sales-setting-tone) 24%,
+    var(--mov-border)
+  );
+  border-radius: var(--blue-inst-radius-lg, 16px);
+  color: var(--sales-setting-tone);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sales-setting-tone) 14%, #fff) 0%,
+    #fff 72%
+  );
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--sales-setting-tone) 12%, transparent),
+    var(--mov-shadow-sm);
+}
+
+.sales-settingsPage .module-stat:nth-child(2) {
+  --sales-setting-tone: var(--balto-success);
+}
+
+.sales-settingsPage .module-stat:nth-child(3) {
+  --sales-setting-tone: var(--balto-midnight);
+}
+
+.sales-settingsPage .module-stat::before {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--sales-setting-tone);
+  content: "";
+}
+
+.sales-settingsPage .module-stat::after {
+  position: absolute;
+  right: -25px;
+  bottom: -31px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  opacity: 0.08;
+}
+
+.sales-settingsPage .module-stat__icon {
+  width: 40px;
+  height: 40px;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: var(--blue-inst-radius, 12px);
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 15%, #fff);
+  box-shadow: 0 5px 12px color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 16px;
+}
+
+.sales-settingsPage .module-stat small {
+  color: color-mix(in srgb, var(--sales-setting-tone) 72%, var(--balto-text));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sales-settingsPage .module-stat strong {
+  margin-top: 2px;
+  color: var(--balto-ink);
+  font-size: clamp(19px, 1.8vw, 25px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.sales-settingsPage .module-stat p {
+  margin-top: 2px;
+  font-size: 10.5px;
+}
+
+.sales-settingsPage .module-card {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sales-settingsPage .module-titleBox {
+  overflow: visible;
+}
+
+.sales-settingsPage .sales-cardGrid {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  align-content: start;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.sales-settingsPage .sales-configCard {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  padding: 14px;
+  border-color: color-mix(in srgb, var(--balto-ink) 12%, transparent);
+  border-radius: 15px;
+  box-shadow: var(--mov-shadow-sm);
+  transition:
+    border-color var(--mov-trans),
+    box-shadow var(--mov-trans),
+    transform var(--mov-trans);
+}
+
+.sales-settingsPage .sales-configCard::before {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--balto-action);
+  content: "";
+}
+
+.sales-settingsPage .sales-configCard:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--balto-action) 28%, transparent);
+  box-shadow: 0 12px 25px -22px
+    color-mix(in srgb, var(--balto-ink) 52%, transparent);
+}
+
+.sales-settingsPage .sales-configCard.is-inactive {
+  opacity: 0.64;
+}
+
+.sales-settingsPage .sales-configCard.is-inactive::before {
+  background: var(--balto-danger);
+}
+
+.sales-settingsPage .sales-configCard > header {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.sales-settingsPage .sales-cardIcon {
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--balto-action) 24%, transparent);
+  border-radius: 11px;
+  color: var(--balto-action);
+  background: color-mix(in srgb, var(--balto-action) 11%, #fff);
+  font-size: 14px;
+}
+
+.sales-settingsPage .sales-configCard__identity {
+  min-width: 0;
+}
+
+.sales-settingsPage .sales-configCard h3 {
+  overflow: hidden;
+  margin: 0 0 4px;
+  color: var(--balto-ink);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-settingsPage .sales-configCard > p {
+  min-height: 0;
+  margin: 11px 0 12px;
+  overflow: hidden;
+  color: var(--balto-text);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-settingsPage .sales-configCard__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.sales-settingsPage .sales-configCard__fact {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr);
+  align-items: center;
+  justify-content: initial;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--balto-ink) 9%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--balto-bg) 54%, #fff);
+}
+
+.sales-settingsPage .sales-configCard__factContent {
+  min-width: 0;
+}
+
+.sales-settingsPage .sales-configCard__factIcon {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--balto-action);
+  background: color-mix(in srgb, var(--balto-action) 9%, #fff);
+  font-size: 10px;
+}
+
+.sales-settingsPage .sales-configCard__factLabel,
+.sales-settingsPage .sales-configCard__factValue {
+  display: block;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-settingsPage .sales-configCard__factLabel {
+  color: var(--balto-text);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.sales-settingsPage .sales-configCard__factValue {
+  margin-top: 2px;
+  color: var(--balto-ink);
+  font-size: 10px;
+  font-weight: 680;
+}
+
+.sales-settingsPage .sales-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.sales-settingsPage .sales-iconButton {
+  width: 26px;
+  min-width: 26px;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 26px;
+  padding: 0;
+  box-sizing: border-box;
+  border-color: color-mix(in srgb, var(--balto-ink) 12%, transparent);
+  border-radius: 7px;
+  color: var(--balto-ink);
+  font-size: 10px;
+}
+
+.sales-settingsPage .sales-iconButton:hover {
+  border-color: color-mix(in srgb, var(--balto-action) 35%, transparent);
+  color: var(--balto-action);
+  background: color-mix(in srgb, var(--balto-action) 7%, #fff);
+}
+
+.sales-settingsPage .sales-iconButton--danger {
+  color: var(--balto-danger);
+}
+
+.sales-settingsPage .sales-iconButton--success {
+  color: var(--balto-success);
+}
+
+.sales-configModal {
+  width: min(940px, 100%);
+}
+
+.sales-configModal__layout {
+  display: grid;
+  gap: 12px;
+}
+
+.sales-configModal__section,
+.sales-configModal__accounting {
+  padding: 14px;
+  border: 1px solid var(--entity-modal-border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.sales-configModal__sectionHead,
+.sales-configModal__accounting > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+
+.sales-configModal__sectionHead > span,
+.sales-configModal__accounting > header > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid
+    color-mix(in srgb, var(--entity-modal-action) 22%, transparent);
+  border-radius: 9px;
+  color: var(--entity-modal-action);
+  background: color-mix(in srgb, var(--entity-modal-action) 9%, #fff);
+  font-size: 12px;
+}
+
+.sales-configModal__sectionHead strong,
+.sales-configModal__sectionHead small {
+  display: block;
+}
+
+.sales-configModal__sectionHead strong {
+  color: var(--entity-modal-ink);
+  font-size: 12.5px;
+  font-weight: 680;
+}
+
+.sales-configModal__sectionHead small {
+  margin-top: 2px;
+  color: var(--entity-modal-text);
+  font-size: 10.5px;
+}
+
+.sales-configModal__identityGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.sales-configModal__identityGrid textarea {
+  min-height: 47px;
+  resize: none;
+}
+
+.sales-configModal__switchGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.sales-configModal__switchGrid .sales-stockControl {
+  min-height: 72px;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 11px;
+}
+
+.sales-configModal__switchGrid .sales-stockControl__copy strong {
+  font-size: 11.5px;
+}
+
+.sales-configModal__switchGrid .sales-stockControl__copy small {
+  font-size: 9.5px;
+}
+
+.sales-configModal__switchGrid .sales-stockControl__visual {
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.sales-configModal__switchGrid .sales-stockControl__state {
+  min-width: 0;
+  font-size: 9px;
+  text-align: center;
+}
+
+.sales-configModal__accounting {
+  background: color-mix(in srgb, var(--entity-modal-action) 4%, #fff);
+}
+
+.sales-configModal__accounting .sales-formGrid--three {
+  gap: 10px;
+}
+
+@media (max-width: 820px) {
+  .sales-settingsPage .module-stats {
+    grid-template-columns: repeat(3, minmax(210px, 1fr));
+    padding-bottom: 3px;
+    overflow-x: auto;
+  }
+
+  .sales-configModal__switchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-configModal__identityGrid,
+  .sales-configModal__accounting .sales-formGrid--three {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-configModal__switchGrid .sales-stockControl__visual {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 680px) {
+  .sales-settingsPage .sales-cardGrid {
+    grid-template-columns: 1fr;
+    padding: 10px 12px 14px;
+  }
+
+  .sales-settingsPage .sales-configCard__facts {
+    grid-template-columns: 1fr;
+  }
+}

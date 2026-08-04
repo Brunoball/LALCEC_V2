@@ -1,0 +1,81 @@
+/* Medidas y alineaciones exclusivas de las tablas de Categorías. */
+.categorias-grid {
+  grid-template-columns:
+    minmax(0, 1.1fr)
+    minmax(0, 1.5fr)
+    minmax(0, 0.8fr)
+    minmax(0, 0.5fr)
+    minmax(0, 0.6fr)
+    minmax(0, 0.7fr)
+    minmax(0, 0.78fr);
+  width: 100%;
+  min-width: 0;
+}
+
+.categorias-grid > :nth-child(3) {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.categorias-grid > :nth-child(4),
+.categorias-grid > :nth-child(5),
+.categorias-grid > :nth-child(6),
+.categorias-grid > :nth-child(7) {
+  justify-content: center;
+  text-align: center;
+}
+
+.categorias-discountsGrid {
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 0.8fr)
+    minmax(0, 1.5fr)
+    minmax(0, 0.8fr)
+    minmax(0, 0.65fr);
+  width: 100%;
+  min-width: 0;
+}
+
+.categorias-discountsGrid > :nth-child(1),
+.categorias-discountsGrid > :nth-child(2),
+.categorias-discountsGrid > :nth-child(4),
+.categorias-discountsGrid > :nth-child(5) {
+  justify-content: center;
+  text-align: center;
+}
+
+.categorias-table,
+.categorias-discountsTable,
+.categorias-table .entity-table-wrap,
+.categorias-discountsTable .entity-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.categorias-table .entity-table-wrap,
+.categorias-discountsTable .entity-table-wrap {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.categorias-grid > .mov-gridCell--head,
+.categorias-discountsGrid > .mov-gridCell--head {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categorias-grid .mov-actionsInline,
+.categorias-discountsGrid .mov-actionsInline {
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.categorias-discountNotice {
+  margin: 14px;
+}
+
+.categorias-updating {
+  margin: 10px 14px;
+}

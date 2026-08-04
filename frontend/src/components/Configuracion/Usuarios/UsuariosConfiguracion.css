@@ -1,0 +1,413 @@
+.config-usersSchemaNotice {
+  margin: 14px 20px 0;
+  padding: 10px 13px;
+  border: 1px solid rgba(196, 139, 59, 0.3);
+  border-radius: 12px;
+  color: var(--balto-midnight);
+  background: rgba(196, 139, 59, 0.08);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.config-usersStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+}
+
+.config-usersStat {
+  position: relative;
+  min-width: 0;
+  min-height: 106px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid rgba(58, 46, 43, 0.11);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 12px 25px -24px rgba(58, 46, 43, 0.65);
+}
+
+.config-usersStat__icon {
+  z-index: 1;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  font-size: 15px;
+}
+
+.config-usersStat > div {
+  z-index: 1;
+  min-width: 0;
+}
+
+.config-usersStat small {
+  display: block;
+  color: #748294;
+  font-size: 9.5px;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+}
+
+.config-usersStat strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--balto-midnight);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.config-usersStat p {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #6e7c8d;
+  font-size: 10.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-usersStat__decoration {
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+.config-usersStat--total .config-usersStat__icon {
+  color: var(--balto-action);
+  background: rgba(196, 139, 59, 0.11);
+}
+
+.config-usersStat--total .config-usersStat__decoration {
+  background: rgba(196, 139, 59, 0.12);
+}
+
+.config-usersStat--active .config-usersStat__icon {
+  color: #1da960;
+  background: rgba(29, 169, 96, 0.12);
+}
+
+.config-usersStat--active .config-usersStat__decoration {
+  background: rgba(29, 169, 96, 0.14);
+}
+
+.config-usersStat--inactive .config-usersStat__icon {
+  color: #e13d45;
+  background: rgba(225, 61, 69, 0.11);
+}
+
+.config-usersStat--inactive .config-usersStat__decoration {
+  background: rgba(225, 61, 69, 0.13);
+}
+
+.config-usersStat--admin .config-usersStat__icon {
+  color: #7445e8;
+  background: rgba(116, 69, 232, 0.11);
+}
+
+.config-usersStat--admin .config-usersStat__decoration {
+  background: rgba(116, 69, 232, 0.13);
+}
+
+.config-usersPanel {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.config-usersPanel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+}
+
+.config-usersPanel__toolbar > strong {
+  color: #8a7e79;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.config-usersTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgba(58, 46, 43, 0.13);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.config-usersTabs button {
+  min-height: 32px;
+  padding: 6px 15px;
+  border: 0;
+  border-radius: 999px;
+  color: #655b57;
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.config-usersTabs button.is-active {
+  color: var(--balto-action);
+  background: #fff;
+  box-shadow: 0 4px 12px -9px rgba(58, 46, 43, 0.72);
+}
+
+.config-usersTable {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.config-usersTable__head,
+.config-usersTable__row {
+  min-width: 1040px;
+  display: grid;
+  grid-template-columns: minmax(230px, 1.35fr) minmax(250px, 1.45fr) minmax(150px, 0.8fr) minmax(125px, 0.65fr) minmax(170px, 0.8fr) 150px;
+  align-items: center;
+}
+
+.config-usersTable__head {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  background: var(--balto-midnight);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.config-usersTable__body {
+  min-height: 180px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.config-usersTable__row {
+  min-height: 68px;
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+  color: var(--balto-midnight);
+  background: #fff;
+  font-size: 11px;
+}
+
+.config-usersTable__row.is-inactive {
+  background: rgba(120, 102, 97, 0.035);
+}
+
+.config-usersIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.config-usersAvatar {
+  width: 39px;
+  height: 39px;
+  min-width: 39px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--balto-midnight), var(--balto-action));
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.config-usersIdentity > div {
+  min-width: 0;
+}
+
+.config-usersIdentity strong {
+  display: block;
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-usersIdentity small {
+  display: block;
+  margin-top: 4px;
+  color: var(--balto-action);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.config-usersEmail {
+  overflow: hidden;
+  padding-right: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-usersEmail span,
+.config-usersCreated {
+  color: #958b87;
+}
+
+.config-usersRole,
+.config-usersState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid rgba(196, 139, 59, 0.25);
+  border-radius: 999px;
+  color: var(--balto-action);
+  background: rgba(196, 139, 59, 0.07);
+  font-size: 9.5px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.config-usersRole--vista {
+  color: #56697d;
+  border-color: rgba(86, 105, 125, 0.2);
+  background: rgba(86, 105, 125, 0.07);
+}
+
+.config-usersState {
+  color: #188f4e;
+  border-color: rgba(29, 169, 96, 0.24);
+  background: rgba(29, 169, 96, 0.08);
+}
+
+.config-usersState i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.config-usersState.is-inactive {
+  color: #c63d45;
+  border-color: rgba(225, 61, 69, 0.21);
+  background: rgba(225, 61, 69, 0.07);
+}
+
+.config-usersActions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.config-usersActions button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(58, 46, 43, 0.12);
+  border-radius: 10px;
+  color: var(--balto-midnight);
+  background: #fff;
+  cursor: pointer;
+}
+
+.config-usersActions button:hover:not(:disabled) {
+  border-color: rgba(196, 139, 59, 0.36);
+  color: var(--balto-action);
+}
+
+.config-usersActions button.is-warning {
+  color: #7b5e50;
+}
+
+.config-usersActions button.is-success {
+  color: var(--balto-success);
+}
+
+.config-usersActions button.is-danger {
+  color: var(--balto-danger);
+}
+
+.config-usersActions button:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.config-usersEmpty {
+  min-width: 1040px;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  flex: 1;
+  padding: 26px;
+  color: var(--balto-text);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.config-usersForm__roleHelp {
+  min-height: 66px;
+  padding: 11px 12px;
+  border: 1px dashed rgba(58, 46, 43, 0.16);
+  border-radius: 12px;
+  background: rgba(253, 251, 247, 0.72);
+}
+
+.config-usersForm__roleHelp strong {
+  color: var(--balto-midnight);
+  font-size: 11px;
+}
+
+.config-usersForm__roleHelp p {
+  margin: 5px 0 0;
+  color: var(--balto-text);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1180px) {
+  .config-usersStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .config-usersStats {
+    grid-template-columns: 1fr;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .config-usersPanel__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .config-usersTabs {
+    width: 100%;
+  }
+
+  .config-usersTabs button {
+    flex: 1;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+}

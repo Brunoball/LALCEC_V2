@@ -1,0 +1,61 @@
+/* =========================================================
+   GESTIÓN DE SOCIOS — TOKENS GLOBALES
+   Sin modo oscuro.
+   ========================================================= */
+:root{
+  /* Opción 1 PDF: Prestigio Académico (Marrón + Arena + Oro) */
+  --balto-midnight:#3A2E2B;
+  --balto-ink:#3A2E2B;
+  --balto-action:#C48B3B;
+  --balto-action-strong:#D4AF37;
+  --balto-bg:#FDFBF7;
+  --balto-text:#786661;
+  --balto-white:#FFFFFF;
+  --balto-success:#22AD5C;
+  --balto-danger:#E13D45;
+  --balto-warning:#F59E0B;
+
+  --mov-text:color-mix(in srgb, var(--balto-ink) 86%, #000);
+  --mov-muted:color-mix(in srgb, var(--balto-text) 82%, #fff);
+  --mov-border:color-mix(in srgb, var(--balto-ink) 14%, #fff);
+  --mov-card:var(--balto-white);
+  --mov-radius:16px;
+  --mov-shadow-sm:0 1px 2px rgba(58,46,43,.06);
+  --mov-shadow-md:0 14px 34px -22px rgba(58,46,43,.28);
+  --mov-focus:0 0 0 4px rgba(196,139,59,.12);
+  --mov-trans:160ms cubic-bezier(.4,0,.2,1);
+
+  --cc-muted:color-mix(in srgb, var(--balto-text) 82%, #fff);
+  --cc-focus:rgba(196,139,59,.18);
+  --cc-transition:160ms cubic-bezier(.4,0,.2,1);
+  --cc-shadow-sm:0 1px 2px rgba(58,46,43,.06);
+
+  /* Alias heredados para conservar la estética */
+  --blue-inst-primary:#3A2E2B;
+  --blue-inst-primary-light:#C48B3B;
+  --blue-inst-primary-dark:#3A2E2B;
+  --blue-inst-secondary:#C48B3B;
+  --blue-inst-accent:#C48B3B;
+  --blue-inst-success:#22AD5C;
+  --blue-inst-warning:#F59E0B;
+  --blue-inst-danger:#E13D45;
+  --blue-inst-light:#FDFBF7;
+  --blue-inst-dark:#3A2E2B;
+  --blue-inst-gray-100:#FBF7EF;
+  --blue-inst-gray-200:#E8DED3;
+  --blue-inst-gray-300:#D8C9BB;
+  --blue-inst-gray-400:#9A8981;
+  --blue-inst-gray-500:#786661;
+  --blue-inst-gray-600:#6C5A55;
+  --blue-inst-gray-700:#786661;
+  --blue-inst-gray-800:#3A2E2B;
+  --blue-inst-gray-900:#2B211F;
+  --blue-inst-radius:12px;
+  --blue-inst-radius-lg:18px;
+  --blue-inst-radius-xl:22px;
+  --blue-inst-transition:180ms ease;
+  --blue-inst-shadow-sm:var(--mov-shadow-sm);
+  --blue-inst-shadow-md:var(--mov-shadow-md);
+  --blue-inst-shadow-lg:0 18px 40px rgba(58,46,43,.14);
+  --blue-inst-shadow-xl:0 28px 64px -24px rgba(58,46,43,.28);
+}
