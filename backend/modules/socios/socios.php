@@ -35,7 +35,10 @@ final class Socios
         $result = self::guardarDatos($auth, request_body());
         $created = (bool)$result['creado'];
         unset($result['creado']);
-        api_success($result, $created ? 'Socio creado correctamente.' : 'Socio actualizado correctamente.');
+        api_success(
+            $result,
+            $created ? 'Registro creado correctamente.' : 'Registro actualizado correctamente.'
+        );
     }
 
     public static function darBaja(): never
@@ -45,13 +48,16 @@ final class Socios
         $id = positive_id($body['id'] ?? null, 'socio');
         $date = valid_date($body['fecha_baja'] ?? date('Y-m-d'), 'baja');
         $reason = required_text($body, 'motivo_baja', 'motivo de baja', 500);
-        api_success(self::darBajaDatos($auth, $id, $date, $reason), 'Socio dado de baja correctamente.');
+        api_success(self::darBajaDatos($auth, $id, $date, $reason), 'Registro dado de baja correctamente.');
     }
 
     public static function reactivar(): never
     {
         $auth = require_admin();
-        $id = positive_id(request_body()['id'] ?? null, 'socio');
-        api_success(self::reactivarDatos($auth, $id), 'Socio reactivado correctamente.');
+        $body = request_body();
+        $id = positive_id($body['id'] ?? null, 'socio');
+        $date = valid_date($body['fecha_reactivacion'] ?? date('Y-m-d'), 'reactivación');
+        $reason = optional_text($body['motivo_reactivacion'] ?? null, 500);
+        api_success(self::reactivarDatos($auth, $id, $date, $reason), 'Registro reactivado correctamente.');
     }
 }

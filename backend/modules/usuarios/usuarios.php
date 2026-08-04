@@ -59,9 +59,9 @@ final class Usuarios
                 u.rol,
                 u.activo,
                 u.creado_en,
-                (SELECT COUNT(*) FROM sesiones s WHERE s.idUsuario = u.idUsuario) AS sesiones,
-                (SELECT COUNT(*) FROM login_auditoria la WHERE la.idUsuario = u.idUsuario) AS accesos
-             FROM usuarios_sistema u
+                (SELECT COUNT(*) FROM sis_sesiones s WHERE s.idUsuario = u.idUsuario) AS sesiones,
+                (SELECT COUNT(*) FROM sis_login_auditoria la WHERE la.idUsuario = u.idUsuario) AS accesos
+             FROM sis_usuarios u
              ORDER BY u.activo DESC, u.usuario ASC, u.idUsuario ASC"
         );
 
@@ -130,7 +130,7 @@ final class Usuarios
 
             if ($id === null) {
                 $insert = $db->prepare(
-                    'INSERT INTO usuarios_sistema
+                    'INSERT INTO sis_usuarios
                      (usuario, hash_contrasena, email, rol, activo, creado_en, actualizado_en)
                      VALUES (?, ?, ?, ?, 1, NOW(), NOW())'
                 );
@@ -157,7 +157,7 @@ final class Usuarios
 
             $lock = $db->prepare(
                 'SELECT idUsuario, usuario, email, rol, activo
-                 FROM usuarios_sistema
+                 FROM sis_usuarios
                  WHERE idUsuario = ?
                  FOR UPDATE'
             );
@@ -186,17 +186,17 @@ final class Usuarios
             $values[] = $id;
 
             $db->prepare(
-                'UPDATE usuarios_sistema SET ' . implode(', ', $sets) . ' WHERE idUsuario = ?'
+                'UPDATE sis_usuarios SET ' . implode(', ', $sets) . ' WHERE idUsuario = ?'
             )->execute($values);
 
             if ($password !== '') {
                 if ($isCurrent) {
                     $db->prepare(
-                        'UPDATE sesiones SET activo = 0
+                        'UPDATE sis_sesiones SET activo = 0
                          WHERE idUsuario = ? AND idSesion <> ?'
                     )->execute([$id, $auth['id_sesion']]);
                 } else {
-                    $db->prepare('UPDATE sesiones SET activo = 0 WHERE idUsuario = ?')
+                    $db->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idUsuario = ?')
                         ->execute([$id]);
                 }
             }
@@ -240,7 +240,7 @@ final class Usuarios
         return transaction($db, static function () use ($db, $auth, $id, $active): array {
             $lock = $db->prepare(
                 'SELECT idUsuario, usuario, rol, activo
-                 FROM usuarios_sistema
+                 FROM sis_usuarios
                  WHERE idUsuario = ?
                  FOR UPDATE'
             );
@@ -253,11 +253,11 @@ final class Usuarios
             }
 
             $db->prepare(
-                'UPDATE usuarios_sistema SET activo = ?, actualizado_en = NOW() WHERE idUsuario = ?'
+                'UPDATE sis_usuarios SET activo = ?, actualizado_en = NOW() WHERE idUsuario = ?'
             )->execute([$active ? 1 : 0, $id]);
 
             if (!$active) {
-                $db->prepare('UPDATE sesiones SET activo = 0 WHERE idUsuario = ?')->execute([$id]);
+                $db->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idUsuario = ?')->execute([$id]);
             }
 
             self::audit(
@@ -283,7 +283,7 @@ final class Usuarios
         return transaction($db, static function () use ($db, $auth, $id): array {
             $lock = $db->prepare(
                 'SELECT idUsuario, usuario, email, rol, activo
-                 FROM usuarios_sistema
+                 FROM sis_usuarios
                  WHERE idUsuario = ?
                  FOR UPDATE'
             );
@@ -297,8 +297,8 @@ final class Usuarios
 
             $usage = $db->prepare(
                 'SELECT
-                    (SELECT COUNT(*) FROM sesiones WHERE idUsuario = ?) AS sesiones,
-                    (SELECT COUNT(*) FROM login_auditoria WHERE idUsuario = ?) AS accesos'
+                    (SELECT COUNT(*) FROM sis_sesiones WHERE idUsuario = ?) AS sesiones,
+                    (SELECT COUNT(*) FROM sis_login_auditoria WHERE idUsuario = ?) AS accesos'
             );
             $usage->execute([$id, $id]);
             $counts = $usage->fetch() ?: ['sesiones' => 0, 'accesos' => 0];
@@ -310,7 +310,7 @@ final class Usuarios
                 );
             }
 
-            $db->prepare('DELETE FROM usuarios_sistema WHERE idUsuario = ?')->execute([$id]);
+            $db->prepare('DELETE FROM sis_usuarios WHERE idUsuario = ?')->execute([$id]);
 
             self::audit($auth, 'ELIMINAR_USUARIO', $id, [
                 'usuario' => (string)$user['usuario'],
@@ -372,7 +372,7 @@ final class Usuarios
 
     private static function assertUniqueUsername(PDO $db, string $username, ?int $excludeId): void
     {
-        $sql = 'SELECT idUsuario FROM usuarios_sistema WHERE usuario = ?';
+        $sql = 'SELECT idUsuario FROM sis_usuarios WHERE usuario = ?';
         $params = [$username];
         if ($excludeId !== null) {
             $sql .= ' AND idUsuario <> ?';
@@ -389,7 +389,7 @@ final class Usuarios
     private static function assertUniqueEmail(PDO $db, ?string $email, ?int $excludeId): void
     {
         if ($email === null) return;
-        $sql = 'SELECT idUsuario FROM usuarios_sistema WHERE email = ?';
+        $sql = 'SELECT idUsuario FROM sis_usuarios WHERE email = ?';
         $params = [$email];
         if ($excludeId !== null) {
             $sql .= ' AND idUsuario <> ?';
@@ -406,7 +406,7 @@ final class Usuarios
     private static function assertAnotherActiveAdmin(PDO $db, int $excludeId): void
     {
         $statement = $db->prepare(
-            "SELECT COUNT(*) FROM usuarios_sistema
+            "SELECT COUNT(*) FROM sis_usuarios
              WHERE rol = 'admin' AND activo = 1 AND idUsuario <> ?"
         );
         $statement->execute([$excludeId]);
@@ -445,7 +445,7 @@ final class Usuarios
                 $auth,
                 'CONFIGURACION',
                 $action,
-                'usuarios_sistema',
+                'sis_usuarios',
                 $id,
                 'Se actualizó la configuración de usuarios.',
                 $before,

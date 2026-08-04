@@ -28,8 +28,3 @@ export const BOT_PANEL_PUNTOS_URL = withoutTrailingSlash(
 
 export default BASE_URL;
 
-
-// cd backend /  php -c "C:\php\php.ini" -S localhost:3001
-
-//usuario: admin_socio
-//contraseña: @Socios_2026

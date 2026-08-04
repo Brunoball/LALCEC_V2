@@ -12,7 +12,7 @@ function auth_login_audit(PDO $db, ?array $candidate, string $usuario, bool $suc
 {
     try {
         $statement = $db->prepare(
-            'INSERT INTO login_auditoria (idUsuario, usuario, ip, user_agent, exito)
+            'INSERT INTO sis_login_auditoria (idUsuario, usuario, ip, user_agent, exito)
              VALUES (:id_usuario, :usuario, :ip, :agente, :exito)'
         );
         $statement->execute([
@@ -37,12 +37,12 @@ function auth_login_lock_status(PDO $db, string $usuario): array
                     0,
                     TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(creado_en, INTERVAL 15 MINUTE))
                 ) AS reintentar_en_segundos
-             FROM login_auditoria
+             FROM sis_login_auditoria
              WHERE usuario = :usuario_fallos
                AND exito = 0
                AND idLog > COALESCE((
                    SELECT MAX(exitoso.idLog)
-                   FROM login_auditoria exitoso
+                   FROM sis_login_auditoria exitoso
                    WHERE exitoso.usuario = :usuario_exitos
                      AND exitoso.exito = 1
                ), 0)
@@ -136,7 +136,7 @@ function auth_upgrade_password_if_needed(PDO $db, array $user, string $password)
     $legacyPrefix = $normalized !== $stored;
 
     if (!$isPasswordHash || $legacyPrefix || password_needs_rehash($normalized, PASSWORD_DEFAULT)) {
-        $db->prepare('UPDATE usuarios_sistema SET hash_contrasena = ? WHERE idUsuario = ?')
+        $db->prepare('UPDATE sis_usuarios SET hash_contrasena = ? WHERE idUsuario = ?')
             ->execute([password_hash($password, PASSWORD_DEFAULT), (int)$user['idUsuario']]);
     }
 }
@@ -155,7 +155,7 @@ function auth_login(): never
 
     $statement = $db->prepare(
         'SELECT idUsuario, usuario, hash_contrasena, rol, activo AS usuario_activo
-         FROM usuarios_sistema
+         FROM sis_usuarios
          WHERE usuario = :usuario
          LIMIT 1'
     );
@@ -180,7 +180,7 @@ function auth_login(): never
     $expiresAt = (new DateTimeImmutable())->modify("+{$hours} hours");
     $token = bin2hex(random_bytes(32));
     $insert = $db->prepare(
-        'INSERT INTO sesiones (session_key, idUsuario, expira_en, ultimo_uso, ip, user_agent, activo)
+        'INSERT INTO sis_sesiones (session_key, idUsuario, expira_en, ultimo_uso, ip, user_agent, activo)
          VALUES (:token, :usuario, :expira, NOW(), :ip, :agente, 1)'
     );
     $insert->execute([
@@ -215,7 +215,7 @@ function auth_current(): never
 function auth_logout(): never
 {
     $auth = auth_context();
-    app_db()->prepare('UPDATE sesiones SET activo = 0 WHERE idSesion = ?')->execute([$auth['id_sesion']]);
+    app_db()->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idSesion = ?')->execute([$auth['id_sesion']]);
     auth_cookie('', time() - 3600);
     api_success([], 'Sesión cerrada correctamente.');
 }

@@ -34,8 +34,14 @@ final class Familias
     public static function darBaja(): never
     {
         $auth = require_admin();
-        $id = positive_id(request_body()['id'] ?? null, 'familia');
-        api_success(self::cambiarEstadoDatos($auth, $id, false), 'Familia dada de baja correctamente.');
+        $body = request_body();
+        $id = positive_id($body['id'] ?? null, 'familia');
+        $date = valid_date($body['fecha_baja'] ?? date('Y-m-d'), 'baja');
+        $reason = optional_text($body['motivo_baja'] ?? null, 500);
+        api_success(
+            self::cambiarEstadoDatos($auth, $id, false, $date, $reason),
+            'Familia dada de baja correctamente.'
+        );
     }
 
     public static function reactivar(): never

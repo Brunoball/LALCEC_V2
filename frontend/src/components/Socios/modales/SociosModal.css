@@ -188,3 +188,48 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.socios-contact-grid {
+  align-items: start;
+}
+
+.socios-reminder-option {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid var(--entity-modal-border);
+  border-radius: 12px;
+  color: var(--entity-modal-text);
+  background: #fff;
+  cursor: pointer;
+}
+
+.socios-reminder-option input {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  accent-color: var(--entity-modal-action);
+}
+
+.socios-reminder-option span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.socios-reminder-option strong {
+  color: var(--entity-modal-ink);
+  font-size: 12px;
+}
+
+.socios-reminder-option small {
+  color: var(--entity-modal-text);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.socios-info-modal.entity-modal {
+  width: min(930px, 100%);
+}

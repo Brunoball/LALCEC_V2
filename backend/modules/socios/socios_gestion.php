@@ -3,73 +3,135 @@ declare(strict_types=1);
 
 trait SociosGestion
 {
-    /**
-     * Implementado por SociosConsultas al componerse ambos traits en Socios.
-     * La declaración explícita evita que los analizadores estáticos interpreten
-     * las llamadas a self::detalle() como un método inexistente.
-     */
-    abstract private static function detalle(PDO $db, int $id): ?array;
-
     private static function guardarDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
         $id = isset($body['id_socio']) && $body['id_socio'] !== ''
             ? positive_id($body['id_socio'], 'socio')
             : null;
-        $name = required_text($body, 'nombre', 'nombre', 120);
-        $surname = required_text($body, 'apellido', 'apellido', 120);
-        $dni = preg_replace('/[.\s-]+/', '', required_text($body, 'dni', 'DNI', 20)) ?? '';
-        if (!preg_match('/^\d{6,9}$/', $dni)) {
-            api_error('El DNI debe contener entre 6 y 9 dígitos.', 'VALIDATION_ERROR');
+
+        $type = strtoupper(trim((string)($body['tipo_socio'] ?? '')));
+        if (!in_array($type, ['PERSONA', 'EMPRESA'], true)) {
+            api_error('Seleccioná un tipo de socio válido.', 'VALIDATION_ERROR');
         }
 
-        $birthDate = valid_date($body['fecha_nacimiento'] ?? '', 'nacimiento', false);
-        if ($birthDate !== null && $birthDate > date('Y-m-d')) {
-            api_error('La fecha de nacimiento no puede ser futura.', 'VALIDATION_ERROR');
-        }
-        $admissionDate = valid_date($body['fecha_ingreso'] ?? '', 'ingreso');
-        if ($admissionDate > date('Y-m-d')) {
-            api_error('La fecha de ingreso no puede ser futura.', 'VALIDATION_ERROR');
+        $current = $id === null ? null : self::detalle($db, $id);
+        if ($id !== null && !$current) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+        if ($current && $current['tipo_socio'] !== $type) {
+            api_error('El tipo de socio no puede modificarse después del alta.', 'TIPO_SOCIO_INMUTABLE', 409);
         }
 
-        $sex = clean_text($body['sexo'] ?? 'NO_INFORMA', 20);
-        if (!in_array($sex, ['MASCULINO', 'FEMENINO', 'OTRO', 'NO_INFORMA'], true)) {
-            api_error('El sexo seleccionado no es válido.', 'VALIDATION_ERROR');
-        }
-        $address = optional_text($body['domicilio'] ?? null, 255);
-        $phone = optional_text($body['telefono'] ?? null, 50, false);
-        $email = optional_text($body['email'] ?? null, 190, false);
-        if ($email !== null) {
-            $email = strtolower($email);
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                api_error('El email no tiene un formato válido.', 'VALIDATION_ERROR');
-            }
-        }
+        $date = valid_date($body['fecha_alta'] ?? ($current['fecha_alta'] ?? date('Y-m-d')), 'alta');
         $observations = optional_text($body['observaciones'] ?? null, 5000);
-        $categoryIds = self::validarCategorias($db, $body['categoria_ids'] ?? [], $id);
+        $categoryId = self::optionalForeignId(
+            $db,
+            $body['id_categoria'] ?? null,
+            'categorias',
+            'id_categoria',
+            'categoría',
+            $current['id_categoria'] ?? null
+        );
+        $paymentMethodId = self::optionalForeignId(
+            $db,
+            $body['id_medio_pago'] ?? null,
+            'medios_pago',
+            'id_medio_pago',
+            'medio de pago',
+            $current['id_medio_pago'] ?? null
+        );
+        $reminder = self::booleanValue($body['enviar_recordatorio'] ?? true) ? 1 : 0;
+
+        $specific = $type === 'PERSONA'
+            ? self::validatePerson($body)
+            : self::validateCompany($db, $body, $current);
 
         try {
-            $saved = transaction($db, static function () use ($db, $auth, $body, $id, $name, $surname, $dni, $birthDate, $sex, $address, $phone, $email, $admissionDate, $observations, $categoryIds): array {
-                $locationId = self::resolverLocalidad($db, $auth, $body, $id);
-                $duplicate = $db->prepare('SELECT id_socio FROM socios WHERE dni = ? AND id_socio <> ? LIMIT 1');
-                $duplicate->execute([$dni, $id ?? 0]);
-                if ($duplicate->fetch()) api_error('Ya existe un socio con ese DNI.', 'DNI_DUPLICADO');
-
+            $saved = transaction($db, static function () use (
+                $db,
+                $auth,
+                $body,
+                $id,
+                $type,
+                $date,
+                $observations,
+                $categoryId,
+                $paymentMethodId,
+                $reminder,
+                $specific
+            ): array {
                 if ($id === null) {
+                    self::setHistoryVariables($db, $auth['id_usuario'], $date, null, 'Alta inicial del socio.');
                     $insert = $db->prepare(
                         'INSERT INTO socios
-                         (nombre, apellido, dni, fecha_nacimiento, sexo, domicilio, id_localidad, telefono, email, fecha_ingreso, observaciones, activo)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                         (tipo_socio, observaciones, fecha_alta, estado, id_categoria, id_medio_pago, enviar_recordatorio)
+                         VALUES (?, ?, ?, \'ACTIVO\', ?, ?, ?)'
                     );
-                    $insert->execute([$name, $surname, $dni, $birthDate, $sex, $address, $locationId, $phone, $email, $admissionDate, $observations]);
+                    $insert->execute([$type, $observations, $date, $categoryId, $paymentMethodId, $reminder]);
                     $partnerId = (int)$db->lastInsertId();
-                    $db->prepare(
-                        'INSERT INTO socios_periodos_activos (id_socio, vigente_desde, vigente_hasta, motivo_baja)
-                         VALUES (?, ?, NULL, NULL)'
-                    )->execute([$partnerId, $admissionDate]);
-                    self::sincronizarCategorias($db, $partnerId, $categoryIds, $admissionDate, true);
+
+                    if ($type === 'PERSONA') {
+                        $db->prepare(
+                            'INSERT INTO socios_personas
+                             (id_socio, apellido, nombre, dni, domicilio, numero_domicilio, localidad, telefono, email, domicilio_alternativo)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([
+                            $partnerId,
+                            $specific['apellido'],
+                            $specific['nombre'],
+                            $specific['dni'],
+                            $specific['domicilio'],
+                            $specific['numero_domicilio'],
+                            $specific['localidad'],
+                            $specific['telefono'],
+                            $specific['email'],
+                            $specific['domicilio_alternativo'],
+                        ]);
+                    } else {
+                        $legacyId = self::nextLegacyCompanyId($db, $partnerId);
+                        $db->prepare(
+                            'INSERT INTO socios_empresas
+                             (id_socio, id_empresa_anterior, razon_social, cuit, domicilio, telefono, email, domicilio_alternativo, id_condicion_iva)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([
+                            $partnerId,
+                            $legacyId,
+                            $specific['razon_social'],
+                            $specific['cuit'],
+                            $specific['domicilio'],
+                            $specific['telefono'],
+                            $specific['email'],
+                            $specific['domicilio_alternativo'],
+                            $specific['id_condicion_iva'],
+                        ]);
+                    }
+
+                    self::ensureStateHistory(
+                        $db,
+                        $partnerId,
+                        'ALTA',
+                        null,
+                        'ACTIVO',
+                        $date,
+                        null,
+                        'Alta inicial del socio.',
+                        $auth['id_usuario']
+                    );
+                    self::clearHistoryVariables($db);
+
                     $after = self::detalle($db, $partnerId);
-                    audit_change($db, $auth, 'SOCIOS', 'CREAR', 'socios', $partnerId, "Se creó el socio {$surname}, {$name}.", null, $after);
+                    audit_change(
+                        $db,
+                        $auth,
+                        $type === 'PERSONA' ? 'SOCIOS' : 'EMPRESAS',
+                        'CREAR',
+                        'socios',
+                        $partnerId,
+                        $type === 'PERSONA'
+                            ? "Se creó el socio {$specific['apellido']}, {$specific['nombre']}."
+                            : "Se creó la empresa {$specific['razon_social']}.",
+                        null,
+                        $after
+                    );
                     return $after ?? [];
                 }
 
@@ -77,46 +139,90 @@ trait SociosGestion
                 $lock->execute([$id]);
                 $locked = $lock->fetch();
                 if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                if ((string)$locked['tipo_socio'] !== $type) {
+                    api_error('El tipo de socio no puede modificarse después del alta.', 'TIPO_SOCIO_INMUTABLE', 409);
+                }
                 $before = self::detalle($db, $id) ?? $locked;
 
-                if ($locked['fecha_ingreso'] !== $admissionDate) {
-                    $payments = $db->prepare(
-                        'SELECT (SELECT COUNT(*) FROM pagos WHERE id_socio = ?) +
-                                (SELECT COUNT(*) FROM pagos_inscripciones WHERE id_socio = ?)'
+                $db->prepare(
+                    'UPDATE socios
+                     SET observaciones = ?, fecha_alta = ?, id_categoria = ?, id_medio_pago = ?, enviar_recordatorio = ?
+                     WHERE id_socio = ?'
+                )->execute([$observations, $date, $categoryId, $paymentMethodId, $reminder, $id]);
+
+                if ($type === 'PERSONA') {
+                    $detailUpdate = $db->prepare(
+                        'UPDATE socios_personas
+                         SET apellido = ?, nombre = ?, dni = ?, domicilio = ?, numero_domicilio = ?, localidad = ?,
+                             telefono = ?, email = ?, domicilio_alternativo = ?
+                         WHERE id_socio = ?'
                     );
-                    $payments->execute([$id, $id]);
-                    if ((int)$payments->fetchColumn() > 0) {
-                        api_error('No se puede modificar la fecha de ingreso porque el socio ya tiene pagos.', 'FECHA_INGRESO_BLOQUEADA');
+                    $detailUpdate->execute([
+                        $specific['apellido'],
+                        $specific['nombre'],
+                        $specific['dni'],
+                        $specific['domicilio'],
+                        $specific['numero_domicilio'],
+                        $specific['localidad'],
+                        $specific['telefono'],
+                        $specific['email'],
+                        $specific['domicilio_alternativo'],
+                        $id,
+                    ]);
+                } else {
+                    $detailUpdate = $db->prepare(
+                        'UPDATE socios_empresas
+                         SET razon_social = ?, cuit = ?, domicilio = ?, telefono = ?, email = ?,
+                             domicilio_alternativo = ?, id_condicion_iva = ?
+                         WHERE id_socio = ?'
+                    );
+                    $detailUpdate->execute([
+                        $specific['razon_social'],
+                        $specific['cuit'],
+                        $specific['domicilio'],
+                        $specific['telefono'],
+                        $specific['email'],
+                        $specific['domicilio_alternativo'],
+                        $specific['id_condicion_iva'],
+                        $id,
+                    ]);
+                }
+
+                if ($detailUpdate->rowCount() === 0) {
+                    $exists = $db->prepare(
+                        $type === 'PERSONA'
+                            ? 'SELECT 1 FROM socios_personas WHERE id_socio = ?'
+                            : 'SELECT 1 FROM socios_empresas WHERE id_socio = ?'
+                    );
+                    $exists->execute([$id]);
+                    if (!$exists->fetchColumn()) {
+                        api_error(
+                            'El registro central no posee su detalle especializado. Revisá la integridad de la migración.',
+                            'SOCIO_SIN_DETALLE',
+                            409
+                        );
                     }
                 }
 
-                $update = $db->prepare(
-                    'UPDATE socios SET nombre = ?, apellido = ?, dni = ?, fecha_nacimiento = ?, sexo = ?, domicilio = ?,
-                        id_localidad = ?, telefono = ?, email = ?, fecha_ingreso = ?, observaciones = ? WHERE id_socio = ?'
-                );
-                $update->execute([$name, $surname, $dni, $birthDate, $sex, $address, $locationId, $phone, $email, $admissionDate, $observations, $id]);
-                if ($locked['fecha_ingreso'] !== $admissionDate) {
-                    $db->prepare(
-                        'UPDATE socios_periodos_activos SET vigente_desde = ?
-                         WHERE id_socio = ? AND vigente_desde = ?'
-                    )->execute([$admissionDate, $id, $locked['fecha_ingreso']]);
-                    $db->prepare(
-                        'UPDATE socio_categorias SET fecha_desde = ?
-                         WHERE id_socio = ? AND fecha_desde = ?'
-                    )->execute([$admissionDate, $id, $locked['fecha_ingreso']]);
-                }
-                self::sincronizarCategorias($db, $id, $categoryIds, $admissionDate, false);
                 $after = self::detalle($db, $id);
-                audit_change($db, $auth, 'SOCIOS', 'MODIFICAR', 'socios', $id, "Se modificó el socio {$surname}, {$name}.", $before, $after);
+                audit_change(
+                    $db,
+                    $auth,
+                    $type === 'PERSONA' ? 'SOCIOS' : 'EMPRESAS',
+                    'EDITAR',
+                    'socios',
+                    $id,
+                    $type === 'PERSONA'
+                        ? "Se modificó el socio {$specific['apellido']}, {$specific['nombre']}."
+                        : "Se modificó la empresa {$specific['razon_social']}.",
+                    $before,
+                    $after
+                );
                 return $after ?? [];
             });
         } catch (Throwable $error) {
-            if (duplicate_key($error)) {
-                if (str_contains($error->getMessage(), 'uq_socio_categoria_activa')) {
-                    api_error('El socio ya tiene esa categoría asignada como activa.', 'CATEGORIA_DUPLICADA', 409);
-                }
-                api_error('El DNI o alguno de los datos ingresados ya está registrado.', 'DNI_DUPLICADO');
-            }
+            self::clearHistoryVariablesSilently($db);
+            if (duplicate_key($error)) self::throwDuplicateSocioError($error, $type);
             throw $error;
         }
 
@@ -125,199 +231,293 @@ trait SociosGestion
 
     private static function darBajaDatos(array $auth, int $id, string $date, string $reason): array
     {
-        $db = $auth['db'];
-        if ($date > date('Y-m-d')) {
-            api_error('La fecha de baja no puede ser futura.', 'FECHA_BAJA_INVALIDA');
-        }
-        $saved = transaction($db, static function () use ($db, $auth, $id, $date, $reason): array {
-            $statement = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
-            $statement->execute([$id]);
-            $locked = $statement->fetch();
-            if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
-            if (!(bool)$locked['activo']) api_error('El socio ya se encuentra dado de baja.', 'ESTADO_SIN_CAMBIOS', 409);
-            if ($date < $locked['fecha_ingreso']) {
-                api_error('La fecha de baja no puede ser anterior a la fecha de ingreso.', 'FECHA_BAJA_INVALIDA');
-            }
-            $before = self::detalle($db, $id) ?? $locked;
-            $period = $db->prepare(
-                'SELECT id_periodo, vigente_desde FROM socios_periodos_activos
-                 WHERE id_socio = ? AND vigente_hasta IS NULL FOR UPDATE'
-            );
-            $period->execute([$id]);
-            $activePeriod = $period->fetch();
-            if (!$activePeriod) api_error('El socio no tiene un período activo abierto. Ejecutá la migración SQL.', 'HISTORIAL_INCONSISTENTE', 409);
-            if ($date < $activePeriod['vigente_desde']) {
-                api_error('La fecha de baja no puede ser anterior a la última reactivación.', 'FECHA_BAJA_INVALIDA');
-            }
-            $db->prepare(
-                'UPDATE socios_periodos_activos SET vigente_hasta = ?, motivo_baja = ? WHERE id_periodo = ?'
-            )->execute([$date, $reason, $activePeriod['id_periodo']]);
-            $db->prepare('UPDATE socios SET activo = 0, fecha_baja = ?, motivo_baja = ? WHERE id_socio = ?')->execute([$date, $reason, $id]);
-            $after = self::detalle($db, $id);
-            audit_change($db, $auth, 'SOCIOS', 'DAR_BAJA', 'socios', $id, 'Se dio de baja al socio.', $before, $after);
-            return $after ?? [];
-        });
-        return ['item' => $saved];
+        return self::changeStatus($auth, $id, 'INACTIVO', $date, $reason, 'BAJA');
     }
 
-    private static function reactivarDatos(array $auth, int $id): array
+    private static function reactivarDatos(array $auth, int $id, ?string $date = null, ?string $reason = null): array
     {
-        $db = $auth['db'];
-        $saved = transaction($db, static function () use ($db, $auth, $id): array {
-            $statement = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
-            $statement->execute([$id]);
-            $locked = $statement->fetch();
-            if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
-            if ((bool)$locked['activo']) api_error('El socio ya se encuentra activo.', 'ESTADO_SIN_CAMBIOS', 409);
-            $before = self::detalle($db, $id) ?? $locked;
-            $today = date('Y-m-d');
-            $openPeriod = $db->prepare(
-                'SELECT id_periodo FROM socios_periodos_activos WHERE id_socio = ? AND vigente_hasta IS NULL FOR UPDATE'
-            );
-            $openPeriod->execute([$id]);
-            if ($openPeriod->fetch()) api_error('El historial del socio ya tiene un período abierto.', 'HISTORIAL_INCONSISTENTE', 409);
-            $db->prepare(
-                'INSERT INTO socios_periodos_activos (id_socio, vigente_desde, vigente_hasta, motivo_baja)
-                 VALUES (?, ?, NULL, NULL)'
-            )->execute([$id, $today]);
-            $db->prepare('UPDATE socios SET activo = 1, fecha_baja = NULL, motivo_baja = NULL WHERE id_socio = ?')->execute([$id]);
-            $after = self::detalle($db, $id);
-            audit_change($db, $auth, 'SOCIOS', 'REACTIVAR', 'socios', $id, 'Se reactivó al socio.', $before, $after);
-            return $after ?? [];
-        });
-        return ['item' => $saved];
-    }
-
-    private static function resolverLocalidad(PDO $db, array $auth, array $body, ?int $partnerId): int
-    {
-        if (!empty($body['localidad_nueva'])) {
-            $name = clean_text($body['localidad_nueva'], 120);
-            if ($name === '') api_error('Ingresá el nombre de la nueva localidad.', 'LOCALIDAD_INVALIDA');
-            $existing = $db->prepare('SELECT id_localidad, activo FROM localidades WHERE nombre = ? LIMIT 1');
-            $existing->execute([$name]);
-            $row = $existing->fetch();
-            if ($row) {
-                if (!(bool)$row['activo']) api_error('La localidad existe pero está inactiva.', 'LOCALIDAD_INVALIDA');
-                return (int)$row['id_localidad'];
-            }
-            try {
-                $db->prepare('INSERT INTO localidades (nombre, activo) VALUES (?, 1)')->execute([$name]);
-            } catch (Throwable $error) {
-                if (!duplicate_key($error)) throw $error;
-                $existing->execute([$name]);
-                $row = $existing->fetch();
-                if (!$row || !(bool)$row['activo']) api_error('La localidad existe pero está inactiva.', 'LOCALIDAD_INVALIDA');
-                return (int)$row['id_localidad'];
-            }
-            $id = (int)$db->lastInsertId();
-            audit_change($db, $auth, 'CONFIGURACION', 'CREAR_LOCALIDAD', 'localidades', $id, "Se creó la localidad {$name} desde Socios.", null, ['id_localidad' => $id, 'nombre' => $name]);
-            return $id;
-        }
-
-        $id = positive_id($body['id_localidad'] ?? null, 'localidad');
-        $statement = $db->prepare(
-            'SELECT l.id_localidad
-             FROM localidades l
-             LEFT JOIN socios s ON s.id_socio = ? AND s.id_localidad = l.id_localidad
-             WHERE l.id_localidad = ? AND (l.activo = 1 OR s.id_socio IS NOT NULL)'
+        return self::changeStatus(
+            $auth,
+            $id,
+            'ACTIVO',
+            $date ?: date('Y-m-d'),
+            $reason,
+            'REACTIVACION'
         );
-        $statement->execute([$partnerId ?? 0, $id]);
-        if (!$statement->fetch()) {
-            api_error('La localidad seleccionada no existe o está inactiva.', 'LOCALIDAD_INVALIDA');
+    }
+
+    private static function changeStatus(
+        array $auth,
+        int $id,
+        string $newStatus,
+        string $effectiveDate,
+        ?string $reason,
+        string $event
+    ): array {
+        $db = $auth['db'];
+        try {
+            $saved = transaction($db, static function () use (
+                $db,
+                $auth,
+                $id,
+                $newStatus,
+                $effectiveDate,
+                $reason,
+                $event
+            ): array {
+                $statement = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
+                $statement->execute([$id]);
+                $locked = $statement->fetch();
+                if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                $previous = (string)$locked['estado'];
+                if ($previous === $newStatus) {
+                    api_error(
+                        $newStatus === 'ACTIVO' ? 'El socio ya se encuentra activo.' : 'El socio ya se encuentra dado de baja.',
+                        'ESTADO_SIN_CAMBIOS',
+                        409
+                    );
+                }
+
+                $before = self::detalle($db, $id) ?? $locked;
+                $historyBefore = (int)$db->query(
+                    'SELECT COALESCE(MAX(id_historial_estado), 0) FROM socios_historial_estados'
+                )->fetchColumn();
+
+                self::setHistoryVariables($db, $auth['id_usuario'], $effectiveDate, $reason, null);
+                if ($newStatus === 'INACTIVO') {
+                    $db->prepare(
+                        'UPDATE socios
+                         SET estado = \'INACTIVO\', fecha_baja = ?, motivo_baja = ?
+                         WHERE id_socio = ?'
+                    )->execute([$effectiveDate, $reason, $id]);
+                } else {
+                    $db->prepare(
+                        'UPDATE socios
+                         SET estado = \'ACTIVO\', fecha_baja = NULL, motivo_baja = NULL
+                         WHERE id_socio = ?'
+                    )->execute([$id]);
+                }
+
+                self::ensureStateHistory(
+                    $db,
+                    $id,
+                    $event,
+                    $previous,
+                    $newStatus,
+                    $effectiveDate,
+                    $reason,
+                    null,
+                    $auth['id_usuario'],
+                    $historyBefore
+                );
+                self::clearHistoryVariables($db);
+
+                $after = self::detalle($db, $id);
+                $module = ($after['tipo_socio'] ?? $before['tipo_socio'] ?? 'PERSONA') === 'EMPRESA' ? 'EMPRESAS' : 'SOCIOS';
+                audit_change(
+                    $db,
+                    $auth,
+                    $module,
+                    $newStatus === 'ACTIVO' ? 'REACTIVAR' : 'DAR_BAJA',
+                    'socios',
+                    $id,
+                    $newStatus === 'ACTIVO' ? 'Se reactivó el socio.' : 'Se dio de baja el socio.',
+                    $before,
+                    $after
+                );
+                return $after ?? [];
+            });
+        } catch (Throwable $error) {
+            self::clearHistoryVariablesSilently($db);
+            throw $error;
+        }
+
+        return ['item' => $saved];
+    }
+
+    private static function validatePerson(array $body): array
+    {
+        $dni = preg_replace('/\D+/', '', (string)($body['dni'] ?? '')) ?? '';
+        if ($dni !== '' && !preg_match('/^[0-9]{7,8}$/', $dni)) {
+            api_error('El DNI debe tener 7 u 8 dígitos.', 'VALIDATION_ERROR', 422, ['campo' => 'dni']);
+        }
+
+        return [
+            'apellido' => required_text($body, 'apellido', 'apellido', 100),
+            'nombre' => required_text($body, 'nombre', 'nombre', 100),
+            'dni' => $dni === '' ? null : $dni,
+            'domicilio' => optional_text($body['domicilio'] ?? null, 150),
+            'numero_domicilio' => optional_text($body['numero_domicilio'] ?? null, 20),
+            'localidad' => optional_text($body['localidad'] ?? null, 100),
+            'telefono' => optional_text($body['telefono'] ?? null, 30, false),
+            'email' => self::optionalEmail($body['email'] ?? null),
+            'domicilio_alternativo' => optional_text($body['domicilio_alternativo'] ?? null, 255),
+        ];
+    }
+
+    private static function validateCompany(PDO $db, array $body, ?array $current): array
+    {
+        $cuit = preg_replace('/\D+/', '', (string)($body['cuit'] ?? '')) ?? '';
+        if ($cuit !== '' && !preg_match('/^[0-9]{11}$/', $cuit)) {
+            api_error('El CUIT debe tener 11 dígitos.', 'VALIDATION_ERROR', 422, ['campo' => 'cuit']);
+        }
+
+        $taxConditionId = self::optionalForeignId(
+            $db,
+            $body['id_condicion_iva'] ?? null,
+            'condiciones_iva',
+            'id_condicion_iva',
+            'condición de IVA',
+            $current['id_condicion_iva'] ?? null
+        );
+
+        return [
+            'razon_social' => required_text($body, 'razon_social', 'razón social', 255),
+            'cuit' => $cuit === '' ? null : $cuit,
+            'domicilio' => optional_text($body['domicilio'] ?? null, 255),
+            'telefono' => optional_text($body['telefono'] ?? null, 30, false),
+            'email' => self::optionalEmail($body['email'] ?? null),
+            'domicilio_alternativo' => optional_text($body['domicilio_alternativo'] ?? null, 255),
+            'id_condicion_iva' => $taxConditionId,
+        ];
+    }
+
+    private static function optionalEmail(mixed $value): ?string
+    {
+        $email = trim((string)$value);
+        if ($email === '') return null;
+        if (strlen($email) > 190 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            api_error('El correo electrónico no es válido.', 'VALIDATION_ERROR', 422, ['campo' => 'email']);
+        }
+        return strtolower($email);
+    }
+
+    private static function optionalForeignId(
+        PDO $db,
+        mixed $value,
+        string $table,
+        string $column,
+        string $label,
+        ?int $currentId = null
+    ): ?int {
+        if ($value === null || $value === '' || (string)$value === '0') return null;
+        $id = positive_id($value, $label);
+        $statement = $db->prepare("SELECT activo FROM {$table} WHERE {$column} = ? LIMIT 1");
+        $statement->execute([$id]);
+        $row = $statement->fetch();
+        if (!$row) api_error("La {$label} seleccionada no existe.", 'VALIDATION_ERROR');
+        if (!(bool)$row['activo'] && $id !== $currentId) {
+            api_error("La {$label} seleccionada está inactiva.", 'VALIDATION_ERROR');
         }
         return $id;
     }
 
-    private static function validarCategorias(PDO $db, mixed $value, ?int $partnerId): array
+    private static function booleanValue(mixed $value): bool
     {
-        $ids = id_list($value);
-        if ($ids === []) return [];
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $statement = $db->prepare(
-            "SELECT c.id_categoria
-             FROM categorias c
-             WHERE c.id_categoria IN ({$placeholders})
-               AND (
-                    c.activo = 1
-                    OR EXISTS (
-                        SELECT 1 FROM socio_categorias sc
-                        WHERE sc.id_socio = ? AND sc.id_categoria = c.id_categoria AND sc.activo = 1
-                    )
-               )"
-        );
-        $statement->execute([...$ids, $partnerId ?? 0]);
-        $valid = array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
-        sort($valid);
-        $expected = $ids;
-        sort($expected);
-        if ($valid !== $expected) {
-            api_error('Una categoría seleccionada no existe o está inactiva.', 'CATEGORIA_INACTIVA');
-        }
-        return $ids;
+        if (is_bool($value)) return $value;
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'si', 'sí', 'on'], true);
     }
 
-    private static function sincronizarCategorias(PDO $db, int $partnerId, array $categoryIds, string $admissionDate, bool $isNew): void
+    private static function nextLegacyCompanyId(PDO $db, int $partnerId): int
     {
-        $currentStatement = $db->prepare(
-            'SELECT id_socio_categoria, id_categoria, activo, fecha_desde
-             FROM socio_categorias WHERE id_socio = ? AND activo = 1 FOR UPDATE'
-        );
-        $currentStatement->execute([$partnerId]);
-        $current = [];
-        foreach ($currentStatement->fetchAll() as $row) $current[(int)$row['id_categoria']] = $row;
-        $selected = array_fill_keys($categoryIds, true);
-        $today = date('Y-m-d');
-        $currentMonthStart = date('Y-m-01');
-        $previousMonthEnd = (new DateTimeImmutable($currentMonthStart))
-            ->modify('-1 day')
-            ->format('Y-m-d');
-        $currentMonthEnd = (new DateTimeImmutable($currentMonthStart))
-            ->modify('last day of this month')
-            ->format('Y-m-d');
-        $paymentHistory = $db->prepare(
-            'SELECT 1 FROM pagos WHERE id_socio = ? AND id_categoria = ? LIMIT 1'
-        );
-        $registrationHistory = $db->prepare(
-            'SELECT 1 FROM pagos_inscripciones WHERE id_socio = ? AND id_categoria = ? LIMIT 1'
-        );
+        $sameId = $db->prepare('SELECT 1 FROM socios_empresas WHERE id_empresa_anterior = ? LIMIT 1');
+        $sameId->execute([$partnerId]);
+        if (!$sameId->fetchColumn()) return $partnerId;
 
-        foreach ($current as $categoryId => $row) {
-            if (!isset($selected[$categoryId])) {
-                $paymentHistory->execute([$partnerId, $categoryId]);
-                $hasHistory = (bool)$paymentHistory->fetchColumn();
-                if (!$hasHistory) {
-                    $registrationHistory->execute([$partnerId, $categoryId]);
-                    $hasHistory = (bool)$registrationHistory->fetchColumn();
-                }
+        // Bloquea el extremo superior del índice UNIQUE para serializar altas
+        // concurrentes que necesiten un ID alternativo.
+        $last = $db->query(
+            'SELECT id_empresa_anterior
+             FROM socios_empresas
+             ORDER BY id_empresa_anterior DESC
+             LIMIT 1
+             FOR UPDATE'
+        )->fetchColumn();
+        return ((int)($last ?: 0)) + 1;
+    }
 
-                // Si se agregó y se quitó dentro del mismo mes sin registrar
-                // nada, no existe una vigencia histórica real: se elimina la
-                // asignación y desaparecen inmediatamente todas sus deudas.
-                if ((string)$row['fecha_desde'] >= $currentMonthStart && !$hasHistory) {
-                    $db->prepare('DELETE FROM socio_categorias WHERE id_socio_categoria = ?')
-                        ->execute([$row['id_socio_categoria']]);
-                    continue;
-                }
+    private static function setHistoryVariables(
+        PDO $db,
+        int $userId,
+        ?string $date,
+        ?string $reason,
+        ?string $observations
+    ): void {
+        $statement = $db->prepare(
+            'SET @lalcec_id_usuario = ?, @lalcec_fecha_estado = ?, @lalcec_motivo_estado = ?, @lalcec_observaciones_estado = ?'
+        );
+        $statement->execute([$userId, $date, $reason, $observations]);
+    }
 
-                // Para una categoría con historia, la baja corta obligaciones
-                // desde el mes actual. Se conserva únicamente hasta el cierre
-                // del mes anterior. Si comenzó este mismo mes y ya tiene un
-                // pago, se conserva ese mes histórico sin generar meses futuros.
-                $until = (string)$row['fecha_desde'] <= $previousMonthEnd
-                    ? $previousMonthEnd
-                    : $currentMonthEnd;
-                $db->prepare(
-                    'UPDATE socio_categorias
-                     SET activo = 0, fecha_hasta = ?, id_categoria_activa = NULL
-                     WHERE id_socio_categoria = ?'
-                )->execute([$until, $row['id_socio_categoria']]);
-            }
+    private static function clearHistoryVariables(PDO $db): void
+    {
+        $db->exec(
+            'SET @lalcec_id_usuario = NULL, @lalcec_fecha_estado = NULL, @lalcec_motivo_estado = NULL, @lalcec_observaciones_estado = NULL'
+        );
+    }
+
+    private static function clearHistoryVariablesSilently(PDO $db): void
+    {
+        try {
+            self::clearHistoryVariables($db);
+        } catch (Throwable) {
+            // No oculta el error principal.
         }
-        foreach ($categoryIds as $categoryId) {
-            if (isset($current[$categoryId])) continue;
-            $from = $isNew ? $admissionDate : max($admissionDate, $today);
-            $db->prepare('INSERT INTO socio_categorias (id_socio, id_categoria, fecha_desde, fecha_hasta, activo, id_categoria_activa) VALUES (?, ?, ?, NULL, 1, ?)')
-                ->execute([$partnerId, $categoryId, $from, $categoryId]);
+    }
+
+    private static function ensureStateHistory(
+        PDO $db,
+        int $partnerId,
+        string $event,
+        ?string $previousStatus,
+        string $newStatus,
+        ?string $date,
+        ?string $reason,
+        ?string $observations,
+        int $userId,
+        int $minimumHistoryId = 0
+    ): void {
+        $check = $db->prepare(
+            'SELECT id_historial_estado
+             FROM socios_historial_estados
+             WHERE id_socio = ? AND tipo_evento = ? AND id_historial_estado > ?
+             ORDER BY id_historial_estado DESC
+             LIMIT 1'
+        );
+        $check->execute([$partnerId, $event, $minimumHistoryId]);
+        if ($check->fetch()) return;
+
+        $db->prepare(
+            'INSERT INTO socios_historial_estados
+             (id_socio, tipo_evento, estado_anterior, estado_nuevo, fecha_efectiva, motivo, observaciones, id_usuario)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $partnerId,
+            $event,
+            $previousStatus,
+            $newStatus,
+            $date,
+            $reason,
+            $observations,
+            $userId,
+        ]);
+    }
+
+    private static function throwDuplicateSocioError(Throwable $error, string $type): never
+    {
+        $message = $error->getMessage();
+        if (str_contains($message, 'uq_socios_personas_dni')) {
+            api_error('Ya existe otro socio con ese DNI.', 'DNI_DUPLICADO', 409);
         }
+        if (str_contains($message, 'uq_socios_empresas_id_anterior')) {
+            api_error('No se pudo generar el identificador interno de la empresa. Volvé a intentar.', 'EMPRESA_ID_DUPLICADO', 409);
+        }
+        api_error(
+            $type === 'PERSONA'
+                ? 'No se pudo guardar el socio porque existe un dato único repetido.'
+                : 'No se pudo guardar la empresa porque existe un dato único repetido.',
+            'REGISTRO_DUPLICADO',
+            409
+        );
     }
 }

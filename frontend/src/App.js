@@ -50,7 +50,12 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/panel" element={<Dashboard />} />
 
-          <Route path="/socios" element={<Socios />} />
+          <Route
+            path="/socios"
+            element={<Navigate to="/socios/personas" replace />}
+          />
+          <Route path="/socios/personas" element={<Socios tipo="PERSONA" />} />
+          <Route path="/socios/empresas" element={<Socios tipo="EMPRESA" />} />
           <Route path="/socios/familias" element={<Familias />} />
 
           <Route path="/cuotas" element={<Cuotas />} />

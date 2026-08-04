@@ -40,3 +40,13 @@
   justify-content: center;
   text-align: center;
 }
+
+@media (max-width: 1040px) {
+  .familias-table .entity-table-wrap {
+    overflow-x: auto;
+  }
+
+  .familias-grid {
+    min-width: 900px;
+  }
+}

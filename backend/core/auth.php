@@ -43,8 +43,8 @@ function require_auth(): array
         'SELECT
             s.idSesion, s.idUsuario, s.expira_en,
             u.usuario, u.rol, u.activo AS usuario_activo
-         FROM sesiones s
-         INNER JOIN usuarios_sistema u ON u.idUsuario = s.idUsuario
+         FROM sis_sesiones s
+         INNER JOIN sis_usuarios u ON u.idUsuario = s.idUsuario
          WHERE s.session_key = :session_key AND s.activo = 1
          LIMIT 1'
     );
@@ -54,16 +54,16 @@ function require_auth(): array
     if (!$row) api_error('La sesión no existe o fue cerrada.', 'SESSION_REQUIRED', 401);
 
     if (strtotime((string)$row['expira_en']) <= time()) {
-        $db->prepare('UPDATE sesiones SET activo = 0 WHERE idSesion = ?')->execute([(int)$row['idSesion']]);
+        $db->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idSesion = ?')->execute([(int)$row['idSesion']]);
         api_error('La sesión venció. Iniciá sesión nuevamente.', 'SESSION_EXPIRED', 401);
     }
 
     if (!(bool)$row['usuario_activo']) {
-        $db->prepare('UPDATE sesiones SET activo = 0 WHERE idUsuario = ?')->execute([(int)$row['idUsuario']]);
+        $db->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idUsuario = ?')->execute([(int)$row['idUsuario']]);
         api_error('El usuario se encuentra deshabilitado.', 'USER_DISABLED', 403);
     }
 
-    $db->prepare('UPDATE sesiones SET ultimo_uso = NOW() WHERE idSesion = ?')->execute([(int)$row['idSesion']]);
+    $db->prepare('UPDATE sis_sesiones SET ultimo_uso = NOW() WHERE idSesion = ?')->execute([(int)$row['idSesion']]);
 
     $organization = application_profile();
     $userId = (int)$row['idUsuario'];
