@@ -22,7 +22,6 @@ import {
 } from "../_shared/auth/session";
 import { apiPost } from "../_shared/api/apiClient";
 import { BOT_PANEL_ROUTE } from "../../config/config";
-import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
 import "./principal.css";
 
 const APP_NAME = "Gestión de Socios";
@@ -77,6 +76,13 @@ const NAV_ITEMS = [
       { key: "contable-egresos", label: "Egresos", path: "/contable/egresos" },
       { key: "contable-resumen", label: "Resumen", path: "/contable/resumen" },
     ],
+  },
+  {
+    key: "panel-bot",
+    label: "Panel Bot",
+    path: BOT_PANEL_ROUTE,
+    icon: faRobot,
+    external: true,
   },
 ];
 
@@ -147,6 +153,7 @@ export default function Principal() {
     getGroupKeyForPath(location.pathname),
   );
   const groupClickTimer = useRef(null);
+  const logoutInProgress = useRef(false);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -184,15 +191,19 @@ export default function Principal() {
     return "Administración";
   }, [location.pathname]);
 
-  const logout = async () => {
-    try {
-      await apiPost("auth_logout", {});
-    } catch {
-      // El cierre local se completa aunque el servidor ya haya vencido la sesión.
-    } finally {
-      clearSession();
-      navigate("/", { replace: true });
-    }
+  const logout = () => {
+    if (logoutInProgress.current) return;
+    logoutInProgress.current = true;
+    setLogoutOpen(false);
+
+    // apiPost toma el token antes del primer await. El cierre local puede ser
+    // inmediato y la invalidación del servidor queda como una tarea best-effort.
+    void apiPost("auth_logout", {}).catch(() => {
+      // La sesión local ya se cerró aunque el servidor la hubiera vencido.
+    });
+
+    clearSession();
+    navigate("/", { replace: true });
   };
 
   const clearGroupClickTimer = () => {
@@ -242,26 +253,14 @@ export default function Principal() {
             <FontAwesomeIcon icon={faBars} />
           </button>
           <div className="mov-topbar__logo mov-topbar__appBrand">
-            <span className="mov-topbar__appBrandMark mov-topbar__appBrandMark--image">
-              <img src={logoLalcec} alt="Logo LALCEC" />
+            <span className="mov-topbar__appBrandMark">
+              <FontAwesomeIcon icon={faUsers} />
             </span>
-            <span className="mov-topbar__brandText">
-              <strong>LALCEC</strong>
-              <small>Sistema Gestión de Socios</small>
-            </span>
+            <span>{APP_NAME}</span>
           </div>
         </div>
         <div className="mov-topbar__right">
           <div className="mov-topbar__section">{activeLabel}</div>
-          <button
-            className="pp-topbarBot"
-            type="button"
-            onClick={() => openAuthenticatedTab(BOT_PANEL_ROUTE)}
-            title="Abrir bot de WhatsApp"
-            aria-label="Abrir bot de WhatsApp"
-          >
-            <FontAwesomeIcon icon={faRobot} />
-          </button>
           <button
             className={`pp-topbarConfig ${location.pathname.startsWith("/configuracion") ? "is-active" : ""}`}
             type="button"
@@ -301,8 +300,8 @@ export default function Principal() {
             role="button"
             tabIndex={0}
           >
-            <div className="pp-drawerBrand__mark pp-drawerBrand__mark--image">
-              <img src={logoLalcec} alt="Logo LALCEC" />
+            <div className="pp-drawerBrand__mark">
+              <FontAwesomeIcon icon={faChartLine} />
             </div>
             <div className="pp-drawerBrand__txt">
               <div className="pp-drawerBrand__t">{APP_NAME}</div>
@@ -324,8 +323,8 @@ export default function Principal() {
           role="button"
           tabIndex={0}
         >
-          <div className="pp-brand__mark pp-brand__mark--image">
-            <img className="pp-brand__logo" src={logoLalcec} alt="Logo LALCEC" />
+          <div className="pp-brand__mark">
+            <FontAwesomeIcon icon={faChartLine} />
           </div>
           <div className="pp-brand__text">
             <div className="pp-brand__title">{APP_NAME}</div>
