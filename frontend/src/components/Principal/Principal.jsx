@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBars,
-  faCashRegister,
   faChartLine,
   faGear,
   faReceipt,
@@ -47,7 +46,6 @@ const NAV_ITEMS = [
     ],
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
-  { key: "ventas", label: "Ventas", path: "/ventas", icon: faCashRegister },
   {
     key: "categorias",
     label: "Categorías",
@@ -171,10 +169,8 @@ export default function Principal() {
   const activeLabel = useMemo(() => {
     const configurationLabels = {
       "/configuracion": "Configuración",
-      "/configuracion/cuotas": "Cuotas y cobros",
-      "/configuracion/socios": "Configuración de socios",
-      "/configuracion/contable": "Configuración contable",
-      "/configuracion/usuarios": "Configuración de usuarios",
+      "/configuracion/usuarios": "Usuarios y roles",
+      "/configuracion/catalogos": "Catálogos generales",
     };
     if (configurationLabels[location.pathname]) {
       return configurationLabels[location.pathname];

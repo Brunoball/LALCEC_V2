@@ -3,11 +3,18 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowTrendDown,
   faArrowTrendUp,
+  faBell,
+  faBuilding,
   faCalendarDays,
   faCircleCheck,
+  faClock,
+  faReceipt,
+  faRotate,
   faRotateRight,
   faTags,
   faTriangleExclamation,
+  faUserMinus,
+  faUserPlus,
   faUsers,
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
@@ -21,18 +28,27 @@ const money = (value) =>
     minimumFractionDigits: 2,
   }).format(Number(value || 0));
 
+const formatDate = (value) => {
+  if (!value) return "—";
+  const [year, month, day] = String(value).slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
+};
+
 const EMPTY = {
   periodo: {},
   socios: {},
   familias: {},
-  categorias: {},
+  categorias: { distribucion: [] },
+  cuotas: {},
   contable: {},
   estado: {},
-  serie: [],
-  movimientos_recientes: [],
+  actividad: {},
+  serie_cuotas: [],
+  pagos_recientes: [],
+  fuentes: {},
 };
 
-function MetricCard({ icon, title, value, tone = "default" }) {
+function MetricCard({ icon, title, value, detail, tone = "default" }) {
   return (
     <article className={`admin-dashboard__metric is-${tone}`}>
       <div className="admin-dashboard__metricIcon">
@@ -41,6 +57,7 @@ function MetricCard({ icon, title, value, tone = "default" }) {
       <div className="admin-dashboard__metricBody">
         <span>{title}</span>
         <strong>{value}</strong>
+        {detail ? <small>{detail}</small> : null}
       </div>
     </article>
   );
@@ -69,16 +86,9 @@ function ProgressItem({ icon, label, value, detail }) {
   );
 }
 
-function Chart({ items }) {
+function PaymentChart({ items }) {
   const maximum = useMemo(
-    () =>
-      Math.max(
-        1,
-        ...items.flatMap((item) => [
-          Number(item.ingresos || 0),
-          Number(item.egresos || 0),
-        ]),
-      ),
+    () => Math.max(1, ...items.map((item) => Number(item.pagadas || 0))),
     [items],
   );
 
@@ -86,7 +96,7 @@ function Chart({ items }) {
     <div
       className="admin-dashboard__chart"
       role="img"
-      aria-label="Ingresos y egresos de los últimos seis meses"
+      aria-label="Cuotas registradas durante los últimos seis períodos"
     >
       <div className="admin-dashboard__chartGrid" aria-hidden="true">
         <i />
@@ -96,24 +106,16 @@ function Chart({ items }) {
       </div>
       <div className="admin-dashboard__chartColumns">
         {items.map((item) => {
-          const incomeValue = Number(item.ingresos || 0);
-          const expenseValue = Number(item.egresos || 0);
-          const incomeHeight =
-            incomeValue > 0 ? Math.max(3, (incomeValue / maximum) * 100) : 0;
-          const expenseHeight =
-            expenseValue > 0 ? Math.max(3, (expenseValue / maximum) * 100) : 0;
+          const paid = Number(item.pagadas || 0);
+          const height = paid > 0 ? Math.max(5, (paid / maximum) * 100) : 0;
           return (
             <div className="admin-dashboard__chartMonth" key={item.periodo}>
+              <strong className="admin-dashboard__chartValue">{paid}</strong>
               <div className="admin-dashboard__bars">
                 <i
-                  className="is-income"
-                  style={{ height: `${incomeHeight}%` }}
-                  title={`Ingresos: ${money(item.ingresos)}`}
-                />
-                <i
-                  className="is-expense"
-                  style={{ height: `${expenseHeight}%` }}
-                  title={`Egresos: ${money(item.egresos)}`}
+                  className="is-paid"
+                  style={{ height: `${height}%` }}
+                  title={`${paid} cuota${paid === 1 ? "" : "s"} registrada${paid === 1 ? "" : "s"}`}
                 />
               </div>
               <strong>{item.etiqueta}</strong>
@@ -123,6 +125,20 @@ function Chart({ items }) {
         })}
       </div>
     </div>
+  );
+}
+
+function ActivityItem({ icon, label, value, tone = "default" }) {
+  return (
+    <article className={`admin-dashboard__activityItem is-${tone}`}>
+      <span>
+        <FontAwesomeIcon icon={icon} />
+      </span>
+      <div>
+        <strong>{Number(value || 0)}</strong>
+        <small>{label}</small>
+      </div>
+    </article>
   );
 }
 
@@ -153,31 +169,37 @@ export default function Dashboard() {
     return () => controller.abort();
   }, [reloadKey]);
 
-  const { socios, contable, estado, periodo } = summary;
+  const {
+    socios,
+    familias,
+    cuotas,
+    contable,
+    estado,
+    actividad,
+    periodo,
+    fuentes,
+  } = summary;
   const balance = Number(contable.saldo_mes || 0);
-  const complete = Boolean(estado.configuracion_completa);
-  const pendingConfig = estado.configuracion_pendientes || [];
+  const currentCompliance = Number(cuotas.cumplimiento_mes || 0);
 
   const statusItems = [
-    {
-      icon: faUsers,
-      label: "Socios con familia",
-      value: estado.socios_con_familia,
-      detail: `${Number(socios.con_familia || 0)} de ${Number(socios.activos || 0)} socios activos`,
-    },
     {
       icon: faTags,
       label: "Socios con categoría",
       value: estado.socios_con_categoria,
-      detail: `${Number(socios.con_categoria || 0)} socios con al menos una categoría activa`,
+      detail: `${Number(socios.con_categoria || 0)} de ${Number(socios.activos || 0)} socios activos`,
     },
     {
-      icon: complete ? faCircleCheck : faTriangleExclamation,
-      label: "Configuración contable",
-      value: estado.configuracion_contable,
-      detail: complete
-        ? "Listas y medios de pago listos para operar"
-        : `${pendingConfig.length} lista${pendingConfig.length === 1 ? "" : "s"} pendiente${pendingConfig.length === 1 ? "" : "s"}`,
+      icon: faUsers,
+      label: "Personas con familia",
+      value: estado.socios_con_familia,
+      detail: `${Number(socios.con_familia || 0)} de ${Number(socios.personas_activas || 0)} personas activas`,
+    },
+    {
+      icon: faBell,
+      label: "Recordatorios habilitados",
+      value: estado.socios_con_recordatorio,
+      detail: `${Number(socios.con_recordatorio || 0)} socios reciben aviso de pago`,
     },
   ];
 
@@ -186,6 +208,7 @@ export default function Dashboard() {
       <header className="admin-dashboard__header">
         <div>
           <h1>Panel de gestión</h1>
+          <p>Resumen actualizado con información registrada en la base.</p>
         </div>
         <div className="admin-dashboard__period">
           <FontAwesomeIcon icon={faCalendarDays} />
@@ -215,24 +238,65 @@ export default function Dashboard() {
             icon={faUsers}
             title="Socios activos"
             value={Number(socios.activos || 0)}
+            detail={`${Number(socios.inactivos || 0)} de baja`}
           />
           <MetricCard
-            icon={faArrowTrendUp}
-            title="Ingresos del mes"
-            value={money(contable.ingresos_mes)}
-            tone="income"
+            icon={faUsers}
+            title="Personas activas"
+            value={Number(socios.personas_activas || 0)}
+            detail={`${Number(familias.activas || 0)} familias activas`}
           />
           <MetricCard
-            icon={faArrowTrendDown}
-            title="Egresos del mes"
-            value={money(contable.egresos_mes)}
-            tone="expense"
+            icon={faBuilding}
+            title="Empresas activas"
+            value={Number(socios.empresas_activas || 0)}
+            detail="Socios de tipo empresa"
+          />
+          <MetricCard
+            icon={faCircleCheck}
+            title="Cuotas pagadas"
+            value={Number(cuotas.pagadas_mes || 0)}
+            detail={`Período ${periodo.mes_nombre || "actual"}`}
+            tone="success"
+          />
+          <MetricCard
+            icon={faClock}
+            title="Cuotas pendientes"
+            value={Number(cuotas.pendientes_mes || 0)}
+            detail={`${currentCompliance}% de cumplimiento`}
+            tone={Number(cuotas.pendientes_mes || 0) > 0 ? "warning" : "success"}
           />
           <MetricCard
             icon={faWallet}
             title="Saldo del mes"
             value={money(contable.saldo_mes)}
+            detail={`${Number(cuotas.cobros_registrados_mes || 0)} cobros registrados`}
             tone={balance < 0 ? "danger" : "balance"}
+          />
+        </section>
+
+        <section className="admin-dashboard__activity" aria-label="Actividad del mes">
+          <ActivityItem
+            icon={faUserPlus}
+            label="Altas del mes"
+            value={actividad.altas_mes}
+            tone="success"
+          />
+          <ActivityItem
+            icon={faUserMinus}
+            label="Bajas del mes"
+            value={actividad.bajas_mes}
+            tone="danger"
+          />
+          <ActivityItem
+            icon={faRotate}
+            label="Reactivaciones"
+            value={actividad.reactivaciones_mes}
+          />
+          <ActivityItem
+            icon={faReceipt}
+            label="Cobros cargados"
+            value={actividad.cobros_mes}
           />
         </section>
 
@@ -240,35 +304,23 @@ export default function Dashboard() {
           <article className="admin-dashboard__panel admin-dashboard__panel--chart">
             <header className="admin-dashboard__panelHead">
               <div>
-                <h2>Movimiento contable</h2>
-                <p>Ingresos y egresos de los últimos seis meses.</p>
+                <h2>Cuotas registradas</h2>
+                <p>Cantidad de períodos pagados durante los últimos seis meses.</p>
               </div>
-              <div className="admin-dashboard__legend">
-                <span>
-                  <i className="is-income" /> Ingresos
-                </span>
-                <span>
-                  <i className="is-expense" /> Egresos
-                </span>
-              </div>
+              <span className="admin-dashboard__statusChip is-complete">
+                <FontAwesomeIcon icon={faCircleCheck} />
+                {Number(cuotas.pagadas_mes || 0)} pagadas este mes
+              </span>
             </header>
-            <Chart items={summary.serie || []} />
+            <PaymentChart items={summary.serie_cuotas || []} />
           </article>
 
           <aside className="admin-dashboard__panel admin-dashboard__panel--status">
-            <header className="admin-dashboard__panelHead admin-dashboard__panelHead--status">
+            <header className="admin-dashboard__panelHead">
               <div>
-                <h2>Estado de la administración</h2>
-                <p>Controles rápidos sobre la información principal.</p>
+                <h2>Calidad de los datos</h2>
+                <p>Controles sobre socios activos.</p>
               </div>
-              <span
-                className={`admin-dashboard__statusChip ${complete ? "is-complete" : "is-pending"}`}
-              >
-                <FontAwesomeIcon
-                  icon={complete ? faCircleCheck : faTriangleExclamation}
-                />
-                {complete ? "Contable listo" : "Configuración pendiente"}
-              </span>
             </header>
             <div className="admin-dashboard__progressList">
               {statusItems.map((item) => (
@@ -276,6 +328,105 @@ export default function Dashboard() {
               ))}
             </div>
           </aside>
+        </div>
+
+        <div className="admin-dashboard__secondaryGrid">
+          <article className="admin-dashboard__panel admin-dashboard__finance">
+            <header className="admin-dashboard__panelHead">
+              <div>
+                <h2>Resumen económico del mes</h2>
+                <p>Importes que efectivamente tienen monto informado.</p>
+              </div>
+            </header>
+            <div className="admin-dashboard__financeRows">
+              <div>
+                <span>
+                  <FontAwesomeIcon icon={faArrowTrendUp} /> Cuotas cobradas
+                </span>
+                <strong>{money(contable.ingresos_socios_mes)}</strong>
+              </div>
+              <div>
+                <span>
+                  <FontAwesomeIcon icon={faArrowTrendUp} /> Otros ingresos
+                </span>
+                <strong>{money(contable.otros_ingresos_mes)}</strong>
+              </div>
+              <div>
+                <span>
+                  <FontAwesomeIcon icon={faArrowTrendDown} /> Egresos
+                </span>
+                <strong>{money(contable.egresos_mes)}</strong>
+              </div>
+              <div className={balance < 0 ? "is-negative" : "is-total"}>
+                <span>
+                  <FontAwesomeIcon icon={faWallet} /> Resultado
+                </span>
+                <strong>{money(contable.saldo_mes)}</strong>
+              </div>
+            </div>
+            {!fuentes.contable_disponible ? (
+              <p className="admin-dashboard__notice">
+                <FontAwesomeIcon icon={faTriangleExclamation} /> Los otros
+                ingresos y egresos se mostrarán cuando estén disponibles las
+                tablas del módulo Contable.
+              </p>
+            ) : null}
+            {Number(cuotas.cobros_sin_importe_mes || 0) > 0 ? (
+              <p className="admin-dashboard__notice is-warning">
+                <FontAwesomeIcon icon={faTriangleExclamation} /> Hay {" "}
+                {Number(cuotas.cobros_sin_importe_mes || 0)} cobro
+                {Number(cuotas.cobros_sin_importe_mes || 0) === 1 ? "" : "s"}
+                sin monto; no se suman al resultado.
+              </p>
+            ) : null}
+          </article>
+
+          <article className="admin-dashboard__panel admin-dashboard__recent">
+            <header className="admin-dashboard__panelHead">
+              <div>
+                <h2>Últimos pagos registrados</h2>
+                <p>Movimientos más recientes de socios y empresas.</p>
+              </div>
+            </header>
+            <div className="admin-dashboard__recentList">
+              {(summary.pagos_recientes || []).length ? (
+                summary.pagos_recientes.map((payment) => (
+                  <div
+                    className="admin-dashboard__recentItem"
+                    key={payment.id_pago}
+                  >
+                    <span className="admin-dashboard__recentIcon">
+                      <FontAwesomeIcon
+                        icon={
+                          payment.tipo_socio === "EMPRESA"
+                            ? faBuilding
+                            : faUsers
+                        }
+                      />
+                    </span>
+                    <div className="admin-dashboard__recentMain">
+                      <strong>{payment.socio}</strong>
+                      <small>
+                        {payment.mes_nombre} {String(payment.periodo).slice(-4)}
+                        {" · "}
+                        {payment.medio_pago}
+                      </small>
+                    </div>
+                    <div className="admin-dashboard__recentAmount">
+                      <strong>
+                        {payment.monto === null ? "Sin importe" : money(payment.monto)}
+                      </strong>
+                      <small>{formatDate(payment.fecha_pago)}</small>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="admin-dashboard__empty">
+                  Todavía no hay pagos registrados.
+                </div>
+              )}
+            </div>
+          </article>
         </div>
       </div>
     </section>

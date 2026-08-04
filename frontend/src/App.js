@@ -12,11 +12,8 @@ import Ingresos from "./components/Contable/secciones/Ingresos";
 import Egresos from "./components/Contable/secciones/Egresos";
 import Resumen from "./components/Contable/secciones/Resumen";
 import Configuracion from "./components/Configuracion/Configuracion";
-import CuotasCobros from "./components/Configuracion/secciones/CuotasCobros";
-import SociosConfiguracion from "./components/Configuracion/secciones/SociosConfiguracion";
-import ContableConfiguracion from "./components/Configuracion/secciones/ContableConfiguracion";
 import Usuarios from "./components/Configuracion/secciones/Usuarios";
-import Ventas from "./components/Ventas/Ventas";
+import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
 import BotPanel from "./components/BotPanel/BotPanel";
 import { BOT_PANEL_ROUTE } from "./config/config";
 import { isAuthenticated } from "./components/_shared/auth/session";
@@ -59,8 +56,6 @@ export default function App() {
           <Route path="/socios/familias" element={<Familias />} />
 
           <Route path="/cuotas" element={<Cuotas />} />
-          <Route path="/ventas" element={<Ventas />} />
-
           <Route path="/categorias" element={<Categorias />} />
           <Route
             path="/categorias/descuentos"
@@ -76,16 +71,11 @@ export default function App() {
           <Route path="/contable/resumen" element={<Resumen />} />
 
           <Route path="/configuracion" element={<Configuracion />} />
-          <Route path="/configuracion/cuotas" element={<CuotasCobros />} />
-          <Route
-            path="/configuracion/socios"
-            element={<SociosConfiguracion />}
-          />
-          <Route
-            path="/configuracion/contable"
-            element={<ContableConfiguracion />}
-          />
           <Route path="/configuracion/usuarios" element={<Usuarios />} />
+          <Route
+            path="/configuracion/catalogos"
+            element={<CatalogosConfiguracion />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/panel" replace />} />
       </Routes>

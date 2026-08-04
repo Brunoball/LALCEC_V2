@@ -75,6 +75,10 @@ export default function UsuariosConfiguracion({ onBack }) {
   const [deleteModal, setDeleteModal] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
+  const handleModalToast = useCallback((type, message, duration) => {
+    setFeedback({ type, message, duration });
+  }, []);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
@@ -241,6 +245,7 @@ export default function UsuariosConfiguracion({ onBack }) {
         <ModuleFeedback
           type={feedback?.type || "error"}
           message={feedback?.message || ""}
+          duration={feedback?.duration}
           onClose={() => setFeedback(null)}
         />
 
@@ -467,6 +472,7 @@ export default function UsuariosConfiguracion({ onBack }) {
         ] : []}
         onClose={() => setStateModal(null)}
         onConfirm={confirmState}
+        onToast={handleModalToast}
         loading={saving}
       />
 
@@ -488,6 +494,7 @@ export default function UsuariosConfiguracion({ onBack }) {
         ] : []}
         onClose={() => setDeleteModal(null)}
         onConfirm={confirmDelete}
+        onToast={handleModalToast}
         loading={saving}
       />
     </>
