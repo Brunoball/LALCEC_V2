@@ -263,12 +263,45 @@ function cleanupLoginAuditByPrefix(prefix) {
   return runDbCleanup('login-prefix', prefix);
 }
 
+function cleanupCategoriesByPrefix(prefix) {
+  if (!String(prefix).startsWith('PW E2E CAT ')) {
+    throw new Error('La limpieza de categorías solo admite el prefijo PW E2E CAT.');
+  }
+  return runDbCleanup('category-prefix', prefix);
+}
+
+function cleanupDiscountsByThresholds(thresholds) {
+  const values = Array.isArray(thresholds)
+    ? [...new Set(thresholds.map(Number))].filter(
+        (value) => Number.isInteger(value) && value >= 2 && value <= 50,
+      )
+    : [];
+  if (values.length === 0) {
+    throw new Error('La limpieza de descuentos requiere umbrales válidos entre 2 y 50.');
+  }
+  return runDbCleanup('discount-thresholds', values.join(','));
+}
+
+function readAuditActions(table, id) {
+  if (!['categorias', 'descuentos_familiares'].includes(String(table))) {
+    throw new Error('Tabla de auditoría no permitida.');
+  }
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    throw new Error('ID de auditoría inválido.');
+  }
+  const output = runDbCleanup('audit-actions', `${table}:${numericId}`);
+  return output ? JSON.parse(output) : [];
+}
+
 module.exports = {
   AUTH_FILE,
   actionUrl,
   apiCall,
   apiResult,
   cleanupCatalogByName,
+  cleanupCategoriesByPrefix,
+  cleanupDiscountsByThresholds,
   cleanupFamilyByPrefix,
   cleanupLoginAuditByPrefix,
   cleanupSocioByDocument,
@@ -280,5 +313,6 @@ module.exports = {
   findSocioByDocument,
   findUserByUsername,
   normalizedApiBase,
+  readAuditActions,
   readAuthSession,
 };

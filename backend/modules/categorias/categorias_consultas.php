@@ -14,7 +14,7 @@ trait CategoriasConsultas
         $where = [];
         $params = [];
         if ($search !== '') {
-            $where[] = '(c.nombre LIKE :buscar_nombre OR c.descripcion LIKE :buscar_descripcion)';
+            $where[] = '(c.nombre LIKE :buscar_nombre OR COALESCE(c.descripcion, \'\') LIKE :buscar_descripcion)';
             $term = '%' . $search . '%';
             $params['buscar_nombre'] = $term;
             $params['buscar_descripcion'] = $term;
@@ -24,39 +24,41 @@ trait CategoriasConsultas
         $sqlWhere = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
 
         $statement = $db->prepare(
-            "SELECT c.id_categoria, c.nombre, c.descripcion, c.monto_actual, c.activo,
-                    c.created_at, c.updated_at,
-                    COUNT(DISTINCT CASE WHEN sc.activo = 1 AND s.activo = 1 THEN sc.id_socio END) AS cantidad_socios
+            "SELECT c.id_categoria,
+                    c.nombre,
+                    c.descripcion,
+                    c.monto_cuota AS monto_actual,
+                    c.activo,
+                    c.creado_en AS created_at,
+                    c.actualizado_en AS updated_at,
+                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' THEN s.id_socio END) AS cantidad_socios
              FROM categorias c
-             LEFT JOIN socio_categorias sc ON sc.id_categoria = c.id_categoria
-             LEFT JOIN socios s ON s.id_socio = sc.id_socio
+             LEFT JOIN socios s ON s.id_categoria = c.id_categoria
              {$sqlWhere}
-             GROUP BY c.id_categoria
+             GROUP BY c.id_categoria, c.nombre, c.descripcion, c.monto_cuota,
+                      c.activo, c.creado_en, c.actualizado_en
              ORDER BY c.activo DESC, c.nombre ASC"
         );
         $statement->execute($params);
         $items = $statement->fetchAll();
-        foreach ($items as &$item) {
-            $item['id_categoria'] = (int)$item['id_categoria'];
-            $item['cantidad_socios'] = (int)$item['cantidad_socios'];
-            $item['activo'] = (bool)$item['activo'];
-        }
+        foreach ($items as &$item) self::castCategoria($item);
         unset($item);
 
         $summary = $db->query(
             'SELECT COUNT(*) AS total,
-                    SUM(activo = 1) AS activas,
-                    SUM(activo = 0) AS inactivas,
-                    COALESCE(AVG(CASE WHEN activo = 1 THEN monto_actual END), 0) AS promedio
+                    COALESCE(SUM(activo = 1), 0) AS activas,
+                    COALESCE(SUM(activo = 0), 0) AS inactivas,
+                    COALESCE(AVG(CASE WHEN activo = 1 THEN monto_cuota END), 0) AS promedio
              FROM categorias'
         )->fetch();
+
         return [
             'items' => $items,
             'resumen' => [
                 'total' => (int)($summary['total'] ?? 0),
                 'activas' => (int)($summary['activas'] ?? 0),
                 'inactivas' => (int)($summary['inactivas'] ?? 0),
-                'promedio' => (string)($summary['promedio'] ?? '0.00'),
+                'promedio' => number_format((float)($summary['promedio'] ?? 0), 2, '.', ''),
             ],
         ];
     }
@@ -70,33 +72,63 @@ trait CategoriasConsultas
 
     private static function historialDatos(PDO $db, int $id): array
     {
-        if (!self::detalle($db, $id)) api_error('La categoría no existe.', 'CATEGORIA_NO_ENCONTRADA', 404);
+        if (!self::detalle($db, $id)) {
+            api_error('La categoría no existe.', 'CATEGORIA_NO_ENCONTRADA', 404);
+        }
+
         $statement = $db->prepare(
-            'SELECT id_historial, monto_anterior, monto_nuevo, vigente_desde, vigente_hasta, motivo, created_at
-             FROM categorias_precios_historial WHERE id_categoria = ?
-             ORDER BY vigente_desde DESC, id_historial DESC'
+            'SELECT id_historial_precio AS id_historial,
+                    monto_anterior,
+                    monto_nuevo,
+                    fecha_cambio,
+                    DATE(fecha_cambio) AS vigente_desde,
+                    NULL AS vigente_hasta,
+                    fecha_cambio AS created_at
+             FROM categorias_historial_precios
+             WHERE id_categoria = ?
+             ORDER BY fecha_cambio DESC, id_historial_precio DESC'
         );
         $statement->execute([$id]);
-        return ['items' => $statement->fetchAll()];
+        $items = $statement->fetchAll();
+        foreach ($items as &$item) {
+            $item['id_historial'] = (int)$item['id_historial'];
+            $item['monto_anterior'] = number_format((float)$item['monto_anterior'], 2, '.', '');
+            $item['monto_nuevo'] = number_format((float)$item['monto_nuevo'], 2, '.', '');
+        }
+        unset($item);
+
+        return ['items' => $items];
     }
 
     private static function detalle(PDO $db, int $id): ?array
     {
         $statement = $db->prepare(
-            'SELECT c.*,
-                    COUNT(DISTINCT CASE WHEN sc.activo = 1 AND s.activo = 1 THEN sc.id_socio END) AS cantidad_socios
+            "SELECT c.id_categoria,
+                    c.nombre,
+                    c.descripcion,
+                    c.monto_cuota AS monto_actual,
+                    c.activo,
+                    c.creado_en AS created_at,
+                    c.actualizado_en AS updated_at,
+                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' THEN s.id_socio END) AS cantidad_socios
              FROM categorias c
-             LEFT JOIN socio_categorias sc ON sc.id_categoria = c.id_categoria
-             LEFT JOIN socios s ON s.id_socio = sc.id_socio
+             LEFT JOIN socios s ON s.id_categoria = c.id_categoria
              WHERE c.id_categoria = ?
-             GROUP BY c.id_categoria'
+             GROUP BY c.id_categoria, c.nombre, c.descripcion, c.monto_cuota,
+                      c.activo, c.creado_en, c.actualizado_en"
         );
         $statement->execute([$id]);
         $category = $statement->fetch();
         if (!$category) return null;
+        self::castCategoria($category);
+        return $category;
+    }
+
+    private static function castCategoria(array &$category): void
+    {
         $category['id_categoria'] = (int)$category['id_categoria'];
         $category['cantidad_socios'] = (int)$category['cantidad_socios'];
         $category['activo'] = (bool)$category['activo'];
-        return $category;
+        $category['monto_actual'] = number_format((float)$category['monto_actual'], 2, '.', '');
     }
 }

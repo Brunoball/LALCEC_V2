@@ -7,7 +7,10 @@ export const categoriasApi = {
   darBaja: (id) => apiPost("categorias_eliminar", { id }),
   reactivar: (id) => apiPost("categorias_reactivar", { id }),
   historial: (id) => apiGet("categorias_historial", { id }),
-  listarDescuentosFamiliares: () => apiGet("descuentos_familiares_listar"),
-  guardarDescuentoFamiliar: (payload) => apiPost("descuentos_familiares_guardar", payload),
-  eliminarDescuentoFamiliar: (id) => apiPost("descuentos_familiares_eliminar", { id }),
+  listarDescuentosFamiliares: (params) =>
+    apiGet("descuentos_familiares_listar", params),
+  guardarDescuentoFamiliar: (payload) =>
+    apiPost("descuentos_familiares_guardar", payload),
+  eliminarDescuentoFamiliar: (id) =>
+    apiPost("descuentos_familiares_eliminar", { id }),
 };

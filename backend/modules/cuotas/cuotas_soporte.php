@@ -290,10 +290,10 @@ abstract class CuotasSoporte
         if ($categoryIds === []) return [];
         $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
         $statement = $db->prepare(
-            "SELECT id_categoria, monto_nuevo, vigente_desde, vigente_hasta
-             FROM categorias_precios_historial
+            "SELECT id_categoria, monto_anterior, monto_nuevo, fecha_cambio
+             FROM categorias_historial_precios
              WHERE id_categoria IN ({$placeholders})
-             ORDER BY id_categoria, vigente_desde DESC, id_historial DESC"
+             ORDER BY id_categoria, fecha_cambio DESC, id_historial_precio DESC"
         );
         $statement->execute($categoryIds);
         $map = [];
@@ -305,31 +305,59 @@ abstract class CuotasSoporte
     {
         $start = sprintf('%04d-%02d-01', $year, $month);
         $end = (new DateTimeImmutable($start))->modify('last day of this month')->format('Y-m-d');
+
+        // El historial original guarda cambios puntuales, no intervalos. Para el
+        // período pedido se toma el último monto nuevo cuyo cambio ya ocurrió.
         foreach ($history as $row) {
-            if ($row['vigente_desde'] <= $end && ($row['vigente_hasta'] === null || $row['vigente_hasta'] >= $start)) {
+            if (substr((string)$row['fecha_cambio'], 0, 10) <= $end) {
                 return (float)$row['monto_nuevo'];
             }
         }
+
+        // Si el período es anterior al primer cambio registrado, el monto
+        // anterior de la fila más antigua representa el valor vigente entonces.
+        if ($history !== []) {
+            $oldest = $history[count($history) - 1];
+            return (float)$oldest['monto_anterior'];
+        }
+
         return $fallback;
     }
 
     protected static function discountRules(PDO $db): array
     {
-        $rows = $db->query('SELECT cantidad_integrantes, porcentaje_descuento FROM descuentos_familiares ORDER BY cantidad_integrantes ASC')->fetchAll();
+        $statement = $db->prepare(
+            'SELECT cantidad_integrantes_desde,
+                    cantidad_integrantes_hasta,
+                    porcentaje_descuento
+             FROM descuentos_familiares
+             WHERE activo = 1
+               AND vigencia_desde <= CURDATE()
+               AND (vigencia_hasta IS NULL OR vigencia_hasta >= CURDATE())
+             ORDER BY cantidad_integrantes_desde ASC,
+                      COALESCE(cantidad_integrantes_hasta, 65535) ASC'
+        );
+        $statement->execute();
+
         return array_map(static fn(array $row): array => [
-            'cantidad' => (int)$row['cantidad_integrantes'],
+            'desde' => (int)$row['cantidad_integrantes_desde'],
+            'hasta' => $row['cantidad_integrantes_hasta'] === null
+                ? null
+                : (int)$row['cantidad_integrantes_hasta'],
             'porcentaje' => (float)$row['porcentaje_descuento'],
-        ], $rows);
+        ], $statement->fetchAll());
     }
 
     protected static function discountForCount(array $rules, int $count): float
     {
-        $percentage = 0.0;
         foreach ($rules as $rule) {
-            if ($rule['cantidad'] > $count) break;
-            $percentage = $rule['porcentaje'];
+            $from = (int)$rule['desde'];
+            $to = $rule['hasta'] === null ? null : (int)$rule['hasta'];
+            if ($count >= $from && ($to === null || $count <= $to)) {
+                return (float)$rule['porcentaje'];
+            }
         }
-        return $percentage;
+        return 0.0;
     }
 
     protected static function amountWithFamilyDiscount(float $baseAmount, float $familyPercentage): float

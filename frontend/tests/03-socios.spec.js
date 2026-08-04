@@ -22,14 +22,12 @@ function tableRow(page, tableName, text) {
 }
 
 async function permanentDeleteCurrentPartner(page, row) {
-  await row.getByTitle('Dar de baja o eliminar').click();
-  const stateDialog = page.getByRole('dialog').filter({ hasText: /Dar de baja o eliminar/i });
-  await expect(stateDialog).toBeVisible();
-  await stateDialog.getByRole('button', { name: 'Elegir eliminar' }).click();
+  await row.getByTitle(/Eliminar definitivamente/i).click();
 
-  const deleteDialog = page.getByRole('dialog').filter({ hasText: /Eliminar definitivamente/i });
+  const deleteDialog = page
+    .getByRole('dialog')
+    .filter({ hasText: /Eliminar definitivamente/i });
   await expect(deleteDialog).toBeVisible();
-  await deleteDialog.getByPlaceholder('ELIMINAR').fill('ELIMINAR');
   await deleteDialog
     .getByRole('button', { name: 'Eliminar definitivamente' })
     .click();
@@ -124,8 +122,8 @@ test.describe('Socios, empresas y familias', () => {
     await expect(row).toContainText(person.nombreEditado);
     await expect(row).toContainText('WHATSAPP');
 
-    await row.getByTitle('Dar de baja o eliminar').click();
-    let stateDialog = page.getByRole('dialog').filter({ hasText: /Dar de baja o eliminar socio/i });
+    await row.getByTitle('Dar de baja').click();
+    let stateDialog = page.getByRole('dialog').filter({ hasText: /Dar de baja.*socio/i });
     await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
     await expectToast(page, 'Tenés que completar el motivo para continuar.');
     await dismissPersistentToast(page);
@@ -194,8 +192,8 @@ test.describe('Socios, empresas y familias', () => {
 
     row = tableRow(page, 'Listado de empresas', company.cuit);
     await expect(row).toContainText(company.razonSocialEditada);
-    await row.getByTitle('Dar de baja o eliminar').click();
-    let stateDialog = page.getByRole('dialog').filter({ hasText: /Dar de baja o eliminar empresa/i });
+    await row.getByTitle('Dar de baja').click();
+    let stateDialog = page.getByRole('dialog').filter({ hasText: /Dar de baja.*empresa/i });
     await stateDialog.getByLabel('Motivo de baja *').fill('BAJA E2E DE EMPRESA');
     await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
     await expectToast(page, 'Registro dado de baja correctamente.');

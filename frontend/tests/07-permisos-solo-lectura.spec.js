@@ -42,6 +42,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
     let companyItem;
     let familyItem;
     let catalogItem;
+    let categoryItem;
     let userItem;
     let viewSession;
     let context;
@@ -54,6 +55,11 @@ test.describe('Permisos de usuario de solo lectura', () => {
       companyItem = await createCompany(request, company);
       familyItem = await createFamily(request, family, [personItem]);
       userItem = await createUser(request, user, { rol: 'vista' });
+      const categories = await apiCall(request, 'categorias_listar', {
+        params: { estado: 'activo' },
+      });
+      categoryItem = (categories.items || [])[0];
+      expect(categoryItem).toBeTruthy();
 
       viewSession = await createApiSession(request, {
         username: user.username,
@@ -69,6 +75,10 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['socios_historial', { params: { id: personItem.id_socio } }],
         ['familias_listar', { params: { estado: 'activo' } }],
         ['familias_obtener', { params: { id: familyItem.id_familia } }],
+        ['categorias_listar', { params: { estado: 'activo' } }],
+        ['categorias_obtener', { params: { id: categoryItem.id_categoria } }],
+        ['categorias_historial', { params: { id: categoryItem.id_categoria } }],
+        ['descuentos_familiares_listar'],
         ['configuracion_obtener'],
       ]) {
         const body = await apiCall(request, action, { ...options, session: viewSession });
@@ -90,6 +100,11 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['familias_guardar', { nombre: 'NO PERMITIDA', integrantes: [] }],
         ['familias_eliminar', { id: familyItem.id_familia }],
         ['familias_reactivar', { id: familyItem.id_familia }],
+        ['categorias_guardar', { nombre: 'NO PERMITIDA', monto_actual: 1000, vigente_desde: '2026-08-04' }],
+        ['categorias_eliminar', { id: categoryItem.id_categoria }],
+        ['categorias_reactivar', { id: categoryItem.id_categoria }],
+        ['descuentos_familiares_guardar', { cantidad_integrantes_desde: 49, cantidad_integrantes_hasta: 49, porcentaje_descuento: 10 }],
+        ['descuentos_familiares_eliminar', { id: 1 }],
         ['configuracion_lista_guardar', { lista: 'medios_pago', nombre: 'NO PERMITIDO' }],
         ['configuracion_lista_eliminar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['configuracion_lista_reactivar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
@@ -128,7 +143,8 @@ test.describe('Permisos de usuario de solo lectura', () => {
       await expect(row).toBeVisible();
       await expect(row.getByTitle('Ver ficha e historial')).toBeVisible();
       await expect(row.getByTitle('Editar')).toHaveCount(0);
-      await expect(row.getByTitle('Dar de baja o eliminar')).toHaveCount(0);
+      await expect(row.getByTitle('Dar de baja')).toHaveCount(0);
+      await expect(row.getByTitle(/Eliminar definitivamente/i)).toHaveCount(0);
 
       await page.goto('/socios/empresas');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
@@ -147,6 +163,23 @@ test.describe('Permisos de usuario de solo lectura', () => {
       await expect(row).toBeVisible();
       await expect(row.getByTitle('Ver integrantes e historial')).toBeVisible();
       await expect(row.locator('button')).toHaveCount(1);
+
+      await page.goto('/categorias');
+      await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Nueva categoría' })).toHaveCount(0);
+      await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(categoryItem.nombre);
+      row = rowByText(page, 'Listado de categorías', categoryItem.nombre);
+      await expect(row).toBeVisible();
+      await expect(row.getByTitle('Ver historial de precios')).toBeVisible();
+      await expect(row.getByTitle('Editar')).toHaveCount(0);
+      await expect(row.getByTitle('Dar de baja')).toHaveCount(0);
+
+      await page.goto('/categorias/descuentos');
+      await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Nuevo descuento' })).toHaveCount(0);
+      await expect(
+        page.getByRole('table', { name: 'Descuentos familiares' }).locator('button'),
+      ).toHaveCount(0);
 
       await page.goto('/configuracion/catalogos');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();

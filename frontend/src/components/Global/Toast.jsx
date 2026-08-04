@@ -27,6 +27,7 @@ const normalizarTipo = (tipo) => {
 const Toast = ({ tipo, mensaje, onClose, duracion }) => {
   const [desapareciendo, setDesapareciendo] = useState(false);
   const cierreEjecutadoRef = useRef(false);
+  const cierreTimerRef = useRef(null);
   const tipoNormalizado = useMemo(() => normalizarTipo(tipo), [tipo]);
   const esPersistente = useMemo(
     () => TIPOS_PERSISTENTES.has(tipoNormalizado),
@@ -39,10 +40,18 @@ const Toast = ({ tipo, mensaje, onClose, duracion }) => {
     cierreEjecutadoRef.current = true;
     setDesapareciendo(true);
 
-    window.setTimeout(() => {
+    cierreTimerRef.current = window.setTimeout(() => {
+      cierreTimerRef.current = null;
       if (typeof onClose === "function") onClose();
     }, 280);
   }, [onClose]);
+
+  useEffect(() => () => {
+    if (cierreTimerRef.current !== null) {
+      window.clearTimeout(cierreTimerRef.current);
+      cierreTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const cerrarConEscape = (event) => {

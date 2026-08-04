@@ -57,7 +57,7 @@ final class Categorias
     public static function listarDescuentos(): never
     {
         $auth = auth_context();
-        api_success(['items' => self::listarDescuentosDatos($auth['db'])]);
+        api_success(['items' => self::listarDescuentosDatos($auth['db'], $_GET)]);
     }
 
     public static function guardarDescuento(): never

@@ -23,7 +23,7 @@
 }
 
 .categorias-modal--discount.entity-modal {
-  width: min(580px, 100%);
+  width: min(780px, 100%);
 }
 
 .categorias-discount-form .entity-form-panel {
@@ -32,6 +32,7 @@
 
 .categorias-discount-panel__body {
   gap: 13px;
+  align-items: start;
 }
 
 .categorias-info-modal.entity-modal {

@@ -25,7 +25,7 @@ function parse_env_file(string $path): array {
 
 $operation = $argv[1] ?? '';
 $value = $argv[2] ?? '';
-$allowed = ['family-prefix', 'user-prefix', 'login-prefix'];
+$allowed = ['family-prefix', 'user-prefix', 'login-prefix', 'category-prefix', 'discount-thresholds', 'audit-actions'];
 if (!in_array($operation, $allowed, true)) fail('Operación de limpieza no válida.');
 
 if ($operation === 'family-prefix' && !str_starts_with($value, 'PW E2E FAM ')) {
@@ -33,6 +33,21 @@ if ($operation === 'family-prefix' && !str_starts_with($value, 'PW E2E FAM ')) {
 }
 if (in_array($operation, ['user-prefix', 'login-prefix'], true) && !str_starts_with($value, 'pw_e2e_')) {
     fail('Prefijo de usuarios inválido.');
+}
+if ($operation === 'category-prefix' && !str_starts_with($value, 'PW E2E CAT ')) {
+    fail('Prefijo de categorías inválido.');
+}
+if ($operation === 'discount-thresholds') {
+    $thresholds = array_values(array_unique(array_filter(
+        array_map('intval', explode(',', $value)),
+        static fn(int $item): bool => $item >= 2 && $item <= 50
+    )));
+    if ($thresholds === [] || count($thresholds) > 49) {
+        fail('Umbrales de descuentos inválidos.');
+    }
+}
+if ($operation === 'audit-actions' && !preg_match('/^(categorias|descuentos_familiares):([1-9][0-9]*)$/', $value, $auditMatch)) {
+    fail('Consulta de auditoría inválida.');
 }
 
 $backendDir = getenv('PW_BACKEND_DIR') ?: realpath(__DIR__ . '/../../../backend');
@@ -63,8 +78,70 @@ $pdo = new PDO(
     ]
 );
 
+if ($operation === 'audit-actions') {
+    [$auditTable, $auditId] = explode(':', $value, 2);
+    $statement = $pdo->prepare(
+        'SELECT accion, descripcion, creado_en
+         FROM auditoria
+         WHERE tabla_afectada = ? AND id_registro = ?
+         ORDER BY id_auditoria ASC'
+    );
+    $statement->execute([$auditTable, $auditId]);
+    echo json_encode($statement->fetchAll(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+    exit(0);
+}
+
 $pdo->beginTransaction();
 try {
+    if ($operation === 'category-prefix') {
+        $find = $pdo->prepare('SELECT id_categoria FROM categorias WHERE nombre LIKE ? FOR UPDATE');
+        $find->execute([$value . '%']);
+        $ids = array_map('intval', array_column($find->fetchAll(), 'id_categoria'));
+        if ($ids !== []) {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $auditParams = array_merge(['categorias'], array_map('strval', $ids));
+            $pdo->prepare(
+                "DELETE FROM auditoria WHERE tabla_afectada = ? AND id_registro IN ({$placeholders})"
+            )->execute($auditParams);
+            $pdo->prepare(
+                "DELETE FROM categorias_historial_precios WHERE id_categoria IN ({$placeholders})"
+            )->execute($ids);
+            $pdo->prepare("DELETE FROM categorias WHERE id_categoria IN ({$placeholders})")->execute($ids);
+        }
+        $pdo->commit();
+        echo 'Categorías eliminadas: ' . count($ids) . PHP_EOL;
+        exit(0);
+    }
+
+    if ($operation === 'discount-thresholds') {
+        $placeholders = implode(',', array_fill(0, count($thresholds), '?'));
+        $find = $pdo->prepare(
+            "SELECT id_descuento_familiar FROM descuentos_familiares
+             WHERE cantidad_integrantes_desde IN ({$placeholders})
+               AND descripcion LIKE 'PW E2E DESCUENTO GLOBAL %'
+             FOR UPDATE"
+        );
+        $find->execute($thresholds);
+        $ids = array_map('intval', array_column($find->fetchAll(), 'id_descuento_familiar'));
+        if ($ids !== []) {
+            $idPlaceholders = implode(',', array_fill(0, count($ids), '?'));
+            $auditParams = array_merge(['descuentos_familiares'], array_map('strval', $ids));
+            $pdo->prepare(
+                "DELETE FROM auditoria WHERE tabla_afectada = ? AND id_registro IN ({$idPlaceholders})"
+            )->execute($auditParams);
+        }
+        $delete = $pdo->prepare(
+            "DELETE FROM descuentos_familiares
+             WHERE cantidad_integrantes_desde IN ({$placeholders})
+               AND descripcion LIKE 'PW E2E DESCUENTO GLOBAL %'"
+        );
+        $delete->execute($thresholds);
+        $count = $delete->rowCount();
+        $pdo->commit();
+        echo 'Descuentos eliminados: ' . $count . PHP_EOL;
+        exit(0);
+    }
+
     if ($operation === 'family-prefix') {
         $find = $pdo->prepare('SELECT id_familia FROM familias WHERE nombre LIKE ? FOR UPDATE');
         $find->execute([$value . '%']);

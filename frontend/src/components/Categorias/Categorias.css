@@ -27,19 +27,21 @@
 
 .categorias-discountsGrid {
   grid-template-columns:
-    minmax(0, 1fr)
     minmax(0, 0.8fr)
-    minmax(0, 1.5fr)
-    minmax(0, 0.8fr)
+    minmax(0, 0.7fr)
+    minmax(0, 0.65fr)
+    minmax(0, 1.05fr)
+    minmax(0, 1.25fr)
+    minmax(0, 0.7fr)
     minmax(0, 0.65fr);
   width: 100%;
-  min-width: 0;
+  min-width: 980px;
 }
 
-.categorias-discountsGrid > :nth-child(1),
 .categorias-discountsGrid > :nth-child(2),
-.categorias-discountsGrid > :nth-child(4),
-.categorias-discountsGrid > :nth-child(5) {
+.categorias-discountsGrid > :nth-child(3),
+.categorias-discountsGrid > :nth-child(6),
+.categorias-discountsGrid > :nth-child(7) {
   justify-content: center;
   text-align: center;
 }
@@ -52,9 +54,13 @@
   max-width: 100%;
 }
 
-.categorias-table .entity-table-wrap,
-.categorias-discountsTable .entity-table-wrap {
+.categorias-table .entity-table-wrap {
   overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.categorias-discountsTable .entity-table-wrap {
+  overflow-x: auto;
   overflow-y: auto;
 }
 
@@ -72,8 +78,10 @@
   gap: 4px;
 }
 
-.categorias-discountNotice {
-  margin: 14px;
+.categorias-discount-vigencia {
+  display: grid;
+  gap: 2px;
+  font-size: 0.82rem;
 }
 
 .categorias-updating {
