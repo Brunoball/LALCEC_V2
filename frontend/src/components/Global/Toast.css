@@ -10,11 +10,11 @@
   align-items: center;
   padding: 14px 20px !important;
   transform: translateX(-50%);
-  border: 1px solid rgba(58, 46, 43, 0.12) !important;
+  border: 1px solid var(--border-color) !important;
   border-radius: 14px !important;
   background: #fff !important;
-  box-shadow: 0 18px 40px rgba(58, 46, 43, 0.14) !important;
-  color: #3a2e2b !important;
+  box-shadow: var(--shadow-xl) !important;
+  color: var(--text-primary) !important;
   font-family:
     Inter,
     system-ui,
@@ -34,20 +34,20 @@
 }
 
 .toast-exito .toast-icon {
-  color: #22ad5c !important;
+  color: var(--success-500) !important;
 }
 
 .toast-error .toast-icon {
-  color: #e13d45 !important;
+  color: var(--danger-500) !important;
 }
 
 .toast-advertencia .toast-icon {
-  color: #f59e0b !important;
+  color: var(--warning-500) !important;
 }
 
 .toast-cargando .toast-icon,
 .toast-info .toast-icon {
-  color: #c48b3b !important;
+  color: var(--primary-color) !important;
 }
 
 .toast-message {
@@ -63,8 +63,8 @@
   justify-content: center;
   border: 0;
   border-radius: 999px;
-  background: rgba(58, 46, 43, 0.06);
-  color: #3a2e2b;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  color: var(--text-primary);
   font-size: 1.25rem;
   font-weight: 500;
   line-height: 1;
@@ -76,11 +76,11 @@
 
 .toast-close:hover {
   transform: translateY(-1px);
-  background: rgba(58, 46, 43, 0.1);
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
 }
 
 .toast-close:focus-visible {
-  outline: 2px solid rgba(196, 139, 59, 0.35);
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
   outline-offset: 2px;
 }
 

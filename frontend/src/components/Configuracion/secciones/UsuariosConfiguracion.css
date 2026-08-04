@@ -1,10 +1,10 @@
 .config-usersSchemaNotice {
   margin: 14px 20px 0;
   padding: 10px 13px;
-  border: 1px solid rgba(196, 139, 59, 0.3);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
   border-radius: 12px;
   color: var(--balto-midnight);
-  background: rgba(196, 139, 59, 0.08);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
   font-size: 11px;
   font-weight: 650;
 }
@@ -14,7 +14,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
 }
 
 .config-usersStat {
@@ -26,10 +26,10 @@
   gap: 13px;
   overflow: hidden;
   padding: 16px;
-  border: 1px solid rgba(58, 46, 43, 0.11);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 11%, transparent);
   border-radius: 17px;
   background: #fff;
-  box-shadow: 0 12px 25px -24px rgba(58, 46, 43, 0.65);
+  box-shadow: 0 12px 25px -24px rgb(15 23 42 / 0.65);
 }
 
 .config-usersStat__icon {
@@ -50,7 +50,7 @@
 
 .config-usersStat small {
   display: block;
-  color: #748294;
+  color: var(--gray-500);
   font-size: 9.5px;
   font-weight: 820;
   letter-spacing: 0.08em;
@@ -67,7 +67,7 @@
 .config-usersStat p {
   margin: 5px 0 0;
   overflow: hidden;
-  color: #6e7c8d;
+  color: var(--gray-500);
   font-size: 10.5px;
   font-weight: 620;
   text-overflow: ellipsis;
@@ -86,38 +86,38 @@
 
 .config-usersStat--total .config-usersStat__icon {
   color: var(--balto-action);
-  background: rgba(196, 139, 59, 0.11);
+  background: color-mix(in srgb, var(--primary-color) 11%, transparent);
 }
 
 .config-usersStat--total .config-usersStat__decoration {
-  background: rgba(196, 139, 59, 0.12);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .config-usersStat--active .config-usersStat__icon {
-  color: #1da960;
-  background: rgba(29, 169, 96, 0.12);
+  color: var(--success-700);
+  background: color-mix(in srgb, var(--success-500) 12%, transparent);
 }
 
 .config-usersStat--active .config-usersStat__decoration {
-  background: rgba(29, 169, 96, 0.14);
+  background: color-mix(in srgb, var(--success-500) 14%, transparent);
 }
 
 .config-usersStat--inactive .config-usersStat__icon {
-  color: #e13d45;
-  background: rgba(225, 61, 69, 0.11);
+  color: var(--danger-500);
+  background: color-mix(in srgb, var(--danger-500) 11%, transparent);
 }
 
 .config-usersStat--inactive .config-usersStat__decoration {
-  background: rgba(225, 61, 69, 0.13);
+  background: color-mix(in srgb, var(--danger-500) 13%, transparent);
 }
 
 .config-usersStat--admin .config-usersStat__icon {
-  color: #7445e8;
-  background: rgba(116, 69, 232, 0.11);
+  color: var(--secondary-600);
+  background: color-mix(in srgb, var(--secondary-600) 11%, transparent);
 }
 
 .config-usersStat--admin .config-usersStat__decoration {
-  background: rgba(116, 69, 232, 0.13);
+  background: color-mix(in srgb, var(--secondary-600) 13%, transparent);
 }
 
 .config-usersPanel {
@@ -133,11 +133,11 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
 }
 
 .config-usersPanel__toolbar > strong {
-  color: #8a7e79;
+  color: var(--text-secondary);
   font-size: 10.5px;
   font-weight: 700;
 }
@@ -147,7 +147,7 @@
   align-items: center;
   gap: 3px;
   padding: 4px;
-  border: 1px solid rgba(58, 46, 43, 0.13);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 13%, transparent);
   border-radius: 999px;
   background: #fff;
 }
@@ -157,7 +157,7 @@
   padding: 6px 15px;
   border: 0;
   border-radius: 999px;
-  color: #655b57;
+  color: var(--gray-600);
   background: transparent;
   font: inherit;
   font-size: 10.5px;
@@ -168,7 +168,7 @@
 .config-usersTabs button.is-active {
   color: var(--balto-action);
   background: #fff;
-  box-shadow: 0 4px 12px -9px rgba(58, 46, 43, 0.72);
+  box-shadow: 0 4px 12px -9px rgb(15 23 42 / 0.72);
 }
 
 .config-usersTable {
@@ -209,14 +209,14 @@
 .config-usersTable__row {
   min-height: 68px;
   padding: 9px 16px;
-  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
   color: var(--balto-midnight);
   background: #fff;
   font-size: 11px;
 }
 
 .config-usersTable__row.is-inactive {
-  background: rgba(120, 102, 97, 0.035);
+  background: color-mix(in srgb, var(--gray-500) 3.5%, transparent);
 }
 
 .config-usersIdentity {
@@ -234,7 +234,7 @@
   place-items: center;
   border-radius: 13px;
   color: #fff;
-  background: linear-gradient(135deg, var(--balto-midnight), var(--balto-action));
+  background: var(--gradient-primary);
   font-size: 12px;
   font-weight: 750;
 }
@@ -268,7 +268,7 @@
 
 .config-usersEmail span,
 .config-usersCreated {
-  color: #958b87;
+  color: var(--gray-500);
 }
 
 .config-usersRole,
@@ -277,25 +277,25 @@
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  border: 1px solid rgba(196, 139, 59, 0.25);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
   border-radius: 999px;
   color: var(--balto-action);
-  background: rgba(196, 139, 59, 0.07);
+  background: color-mix(in srgb, var(--primary-color) 7%, transparent);
   font-size: 9.5px;
   font-weight: 760;
   white-space: nowrap;
 }
 
 .config-usersRole--vista {
-  color: #56697d;
-  border-color: rgba(86, 105, 125, 0.2);
-  background: rgba(86, 105, 125, 0.07);
+  color: var(--gray-600);
+  border-color: color-mix(in srgb, var(--gray-600) 20%, transparent);
+  background: color-mix(in srgb, var(--gray-600) 7%, transparent);
 }
 
 .config-usersState {
-  color: #188f4e;
-  border-color: rgba(29, 169, 96, 0.24);
-  background: rgba(29, 169, 96, 0.08);
+  color: var(--success-700);
+  border-color: color-mix(in srgb, var(--success-500) 24%, transparent);
+  background: color-mix(in srgb, var(--success-500) 8%, transparent);
 }
 
 .config-usersState i {
@@ -306,9 +306,9 @@
 }
 
 .config-usersState.is-inactive {
-  color: #c63d45;
-  border-color: rgba(225, 61, 69, 0.21);
-  background: rgba(225, 61, 69, 0.07);
+  color: var(--danger-600);
+  border-color: color-mix(in srgb, var(--danger-500) 21%, transparent);
+  background: color-mix(in srgb, var(--danger-500) 7%, transparent);
 }
 
 .config-usersActions {
@@ -322,7 +322,7 @@
   height: 32px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(58, 46, 43, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   color: var(--balto-midnight);
   background: #fff;
@@ -330,12 +330,12 @@
 }
 
 .config-usersActions button:hover:not(:disabled) {
-  border-color: rgba(196, 139, 59, 0.36);
+  border-color: color-mix(in srgb, var(--primary-color) 36%, transparent);
   color: var(--balto-action);
 }
 
 .config-usersActions button.is-warning {
-  color: #7b5e50;
+  color: var(--warning-500);
 }
 
 .config-usersActions button.is-success {
@@ -366,9 +366,9 @@
 .config-usersForm__roleHelp {
   min-height: 66px;
   padding: 11px 12px;
-  border: 1px dashed rgba(58, 46, 43, 0.16);
+  border: 1px dashed color-mix(in srgb, var(--text-primary) 16%, transparent);
   border-radius: 12px;
-  background: rgba(253, 251, 247, 0.72);
+  background: color-mix(in srgb, var(--primary-50) 72%, transparent);
 }
 
 .config-usersForm__roleHelp strong {

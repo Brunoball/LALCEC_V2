@@ -1,14 +1,26 @@
 /* Medidas y alineaciones exclusivas de la tabla de Socios. */
-.socios-grid {
+.socios-grid--persona {
   grid-template-columns:
-    minmax(0, 1.4fr)
+    minmax(0, 2.1fr)
     minmax(0, 0.65fr)
-    minmax(0, 1fr)
+    minmax(0, 0.55fr)
+    minmax(0, 1.1fr)
+    minmax(0, 0.75fr)
+    minmax(0, 0.82fr);
+}
+
+.socios-grid--empresa {
+  grid-template-columns:
+    minmax(0, 1.75fr)
     minmax(0, 0.9fr)
-    minmax(0, 1fr)
-    minmax(0, 0.7fr)
-    minmax(0, 0.6fr)
-    minmax(0, 0.7fr);
+    minmax(0, 1.25fr)
+    minmax(0, 0.55fr)
+    minmax(0, 1.15fr)
+    minmax(0, 0.75fr)
+    minmax(0, 0.9fr);
+}
+
+.socios-grid {
   width: 100%;
   min-width: 0;
 }
@@ -54,14 +66,41 @@
 
 .socios-grid .mov-actionsInline {
   max-width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 
-.socios-grid > :nth-child(2),
-.socios-grid > :nth-child(6),
-.socios-grid > :nth-child(7),
-.socios-grid > :nth-child(8) {
+.socios-state-action.is-deactivation {
+  border-color: color-mix(in srgb, var(--warning-500, #f59e0b) 34%, #fff);
+  color: color-mix(in srgb, var(--warning-500, #f59e0b) 78%, #7c2d12);
+}
+
+.socios-state-action.is-deactivation:hover {
+  border-color: color-mix(in srgb, var(--warning-500, #f59e0b) 52%, #fff);
+  color: color-mix(in srgb, var(--warning-500, #f59e0b) 76%, #7c2d12);
+  background: color-mix(in srgb, var(--warning-500, #f59e0b) 11%, #fff);
+}
+
+.socios-state-action.is-reactivation {
+  border-color: color-mix(in srgb, var(--success-500, #10b981) 30%, #fff);
+  color: var(--success-700, #047857);
+}
+
+.socios-state-action.is-reactivation:hover {
+  border-color: color-mix(in srgb, var(--success-500, #10b981) 45%, #fff);
+  color: var(--success-700, #047857);
+  background: color-mix(in srgb, var(--success-500, #10b981) 9%, #fff);
+}
+
+.socios-grid--persona > :nth-child(2),
+.socios-grid--persona > :nth-child(3),
+.socios-grid--persona > :nth-child(5),
+.socios-grid--persona > :nth-child(6),
+.socios-grid--empresa > :nth-child(2),
+.socios-grid--empresa > :nth-child(3),
+.socios-grid--empresa > :nth-child(4),
+.socios-grid--empresa > :nth-child(6),
+.socios-grid--empresa > :nth-child(7) {
   justify-content: center;
   text-align: center;
 }
@@ -110,15 +149,15 @@
 }
 
 .socios-reminder-chip.is-enabled {
-  color: #128c52;
-  border-color: rgba(18, 140, 82, 0.22);
-  background: rgba(18, 140, 82, 0.08);
+  color: var(--success-700);
+  border-color: color-mix(in srgb, var(--success-500) 24%, transparent);
+  background: color-mix(in srgb, var(--success-500) 9%, transparent);
 }
 
 .socios-reminder-chip.is-disabled {
-  color: #817873;
-  border-color: rgba(58, 46, 43, 0.12);
-  background: rgba(58, 46, 43, 0.045);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+  background: var(--surface-secondary);
 }
 
 .socios-reminder-chip svg {
@@ -130,10 +169,14 @@
   display: grid;
   gap: 14px;
   padding: 14px;
-  border: 1px solid rgba(58, 46, 43, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: linear-gradient(180deg, #fff 0%, #fbfaf8 100%);
-  box-shadow: 0 14px 30px -28px rgba(58, 46, 43, 0.7);
+  background: linear-gradient(
+    180deg,
+    var(--surface-color) 0%,
+    var(--primary-50) 100%
+  );
+  box-shadow: 0 14px 30px -28px rgb(15 23 42 / 0.42);
 }
 
 .socios-payments-toolbar {
@@ -149,10 +192,10 @@
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
-  border: 1px solid rgba(58, 46, 43, 0.08);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 20px -22px rgba(58, 46, 43, 0.65);
+  background: var(--surface-color);
+  box-shadow: 0 8px 20px -22px rgb(15 23 42 / 0.4);
 }
 
 .socios-payments-control > strong {
@@ -171,7 +214,7 @@
   min-width: 45px;
   height: 27px;
   padding: 0 9px;
-  border: 1px solid rgba(58, 46, 43, 0.14);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
   color: var(--entity-modal-text);
   background: #fff;
@@ -199,16 +242,16 @@
 
 .socios-payment-status.is-success,
 .socios-payments-heading .is-success {
-  color: #149763;
-  border-color: rgba(20, 151, 99, 0.2);
-  background: rgba(20, 151, 99, 0.08);
+  color: var(--success-600);
+  border-color: color-mix(in srgb, var(--success-500) 22%, transparent);
+  background: color-mix(in srgb, var(--success-500) 9%, transparent);
 }
 
 .socios-payment-status.is-danger,
 .socios-payments-heading .is-danger {
-  color: #e5525d;
-  border-color: rgba(229, 82, 93, 0.2);
-  background: rgba(229, 82, 93, 0.07);
+  color: var(--danger-600);
+  border-color: color-mix(in srgb, var(--danger-500) 22%, transparent);
+  background: color-mix(in srgb, var(--danger-500) 8%, transparent);
 }
 
 .socios-payments-legend {
@@ -223,7 +266,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border: 1px solid rgba(58, 46, 43, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
   color: var(--entity-modal-text);
   background: #fff;
@@ -234,15 +277,15 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(58, 46, 43, 0.04);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gray-500) 8%, transparent);
 }
 
 .socios-payments-legend i.is-paid {
-  background: #66d6b0;
+  background: var(--success-400);
 }
 
 .socios-payments-legend i.is-pending {
-  background: #ff8f98;
+  background: var(--danger-400);
 }
 
 .socios-payments-heading {
@@ -288,14 +331,14 @@
   align-content: center;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid rgba(58, 46, 43, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 13px;
   background: #fff;
 }
 
 .socios-payment-month > strong {
   overflow: hidden;
-  color: #3e4959;
+  color: var(--text-primary);
   font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -316,43 +359,51 @@
 }
 
 .socios-payment-month.is-paid {
-  border-color: rgba(65, 199, 154, 0.32);
-  background: linear-gradient(135deg, rgba(65, 199, 154, 0.09), rgba(255, 255, 255, 0.92));
+  border-color: color-mix(in srgb, var(--success-500) 32%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--success-500) 9%, var(--surface-color)),
+    var(--surface-color)
+  );
 }
 
 .socios-payment-month.is-paid > span {
-  background: #61d1aa;
-  box-shadow: 0 0 0 3px rgba(97, 209, 170, 0.13);
+  background: var(--success-400);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-400) 14%, transparent);
 }
 
 .socios-payment-month.is-pending {
-  border-color: rgba(255, 117, 126, 0.34);
-  background: linear-gradient(135deg, rgba(255, 117, 126, 0.08), rgba(255, 255, 255, 0.92));
+  border-color: color-mix(in srgb, var(--danger-500) 32%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger-500) 8%, var(--surface-color)),
+    var(--surface-color)
+  );
 }
 
 .socios-payment-month.is-pending > span {
-  background: #ff8790;
-  box-shadow: 0 0 0 3px rgba(255, 135, 144, 0.13);
+  background: var(--danger-400);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger-400) 14%, transparent);
 }
 
 .socios-payment-month.is-future {
   border-style: dashed;
-  color: #8b8480;
-  background: rgba(58, 46, 43, 0.025);
+  color: var(--text-muted);
+  background: var(--gray-50);
 }
 
 .socios-payment-month.is-future > span {
-  background: #c8c2be;
+  background: var(--gray-300);
 }
 
 .socios-payment-month.is-not-applicable {
   opacity: 0.58;
   border-style: dashed;
-  background: rgba(58, 46, 43, 0.018);
+  background: color-mix(in srgb, var(--gray-100) 64%, transparent);
 }
 
 .socios-payment-month.is-not-applicable > span {
-  background: #d7d2cf;
+  background: var(--gray-300);
 }
 
 /* Historial de estados. */
@@ -380,7 +431,7 @@
   top: 19px;
   bottom: -2px;
   left: 7px;
-  background: rgba(58, 46, 43, 0.11);
+  background: var(--gray-200);
 }
 
 .socios-state-event__dot {
@@ -391,15 +442,15 @@
   margin-top: 2px;
   border: 4px solid #fff;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(58, 46, 43, 0.12);
+  box-shadow: 0 0 0 1px var(--border-color);
 }
 
 .socios-state-event.is-active .socios-state-event__dot {
-  background: #35bb79;
+  background: var(--success-500);
 }
 
 .socios-state-event.is-inactive .socios-state-event__dot {
-  background: #ef636d;
+  background: var(--danger-500);
 }
 
 .socios-state-event__content {
@@ -435,136 +486,108 @@
   line-height: 1.4;
 }
 
-/* Baja recomendada + eliminación definitiva con doble confirmación. */
-.socios-deactivation-options {
+.socios-deactivation-modal.gdel-modal {
+  width: min(520px, 100%);
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 22px 20px 17px;
 }
 
-.socios-delete-option {
-  display: grid;
-  gap: 10px;
-  padding: 11px;
-  border: 1px solid rgba(225, 61, 69, 0.2);
-  border-radius: 13px;
-  background: rgba(225, 61, 69, 0.045);
+.socios-deactivation-modal .gdel-heading,
+.socios-deactivation-modal .gdel-card,
+.socios-deactivation-modal .gdel-extraContent,
+.socios-deactivation-modal .gdel-reason,
+.socios-deactivation-modal .gdel-actions {
+  grid-column: 1;
 }
 
-.socios-delete-option > div {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
+.socios-deactivation-modal .gdel-heading {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
-.socios-delete-option > div > svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--balto-danger, #e13d45);
+.socios-deactivation-modal .gdel-card,
+.socios-deactivation-modal .gdel-extraContent,
+.socios-deactivation-modal .gdel-reason,
+.socios-deactivation-modal .gdel-actions {
+  margin-top: 0;
 }
 
-.socios-delete-option span {
-  display: grid;
-  gap: 3px;
+.socios-deactivation-modal .gdel-card {
+  align-content: start;
+  height: auto;
+  padding: 9px 12px;
+  border-color: rgba(15, 23, 42, 0.1);
+  background: #f8fafc;
 }
 
-.socios-delete-option strong {
-  color: #b72e36;
-  font-size: 11.5px;
+.socios-deactivation-modal .gdel-extraContent {
+  min-width: 0;
+  height: auto;
 }
 
-.socios-delete-option small {
-  color: #785f61;
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.socios-delete-option button {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 7px 11px;
-  border: 1px solid rgba(225, 61, 69, 0.25);
-  border-radius: 10px;
-  color: #c53039;
+.socios-deactivation-modal .gdel-date-field {
+  height: auto;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 11px;
   background: #fff;
-  font-size: 10.5px;
-  font-weight: 750;
-  cursor: pointer;
 }
 
-.socios-delete-option button:hover {
-  color: #fff;
-  background: var(--balto-danger, #e13d45);
-}
-
-.socios-delete-confirmation {
-  display: grid;
-  gap: 10px;
-}
-
-.socios-delete-confirmation__warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 10px 11px;
-  border: 1px solid rgba(225, 61, 69, 0.2);
-  border-radius: 12px;
-  color: #9f2b32;
-  background: rgba(225, 61, 69, 0.055);
-}
-
-.socios-delete-confirmation__warning svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-.socios-delete-confirmation__warning p {
-  display: grid;
-  gap: 2px;
-  margin: 0;
+.socios-deactivation-modal .gdel-date-field > span {
+  color: var(--gray-500, #64748b);
   font-size: 10px;
-  line-height: 1.35;
-}
-
-.socios-delete-confirmation label {
-  display: grid;
-  gap: 6px;
-  color: #614f4c;
-  font-size: 10.5px;
-  font-weight: 700;
-}
-
-.socios-delete-confirmation input {
-  min-height: 38px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid rgba(225, 61, 69, 0.28);
-  border-radius: 10px;
-  color: #9f2b32;
-  background: #fff;
-  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  outline: none;
+  letter-spacing: 0.075em;
 }
 
-.socios-delete-confirmation input:focus {
-  border-color: var(--balto-danger, #e13d45);
-  box-shadow: 0 0 0 3px rgba(225, 61, 69, 0.1);
+.socios-deactivation-modal .gdel-date-field input {
+  min-height: 41px;
+  border-radius: 11px;
+  color: var(--balto-ink, #0f172a);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.socios-deactivation-modal .gdel-reason textarea {
+  min-height: 72px;
+  max-height: 110px;
+  background: #fff;
+}
+
+.socios-deactivation-modal .gdel-actions {
+  margin-top: 0;
 }
 
 .socios-delete-confirmation__error {
   margin: 0;
   padding: 8px 10px;
   border-radius: 10px;
-  color: #a42d35;
-  background: rgba(225, 61, 69, 0.08);
+  color: var(--danger-600);
+  background: color-mix(in srgb, var(--danger-500) 9%, transparent);
   font-size: 10.5px;
 }
 
 @media (max-width: 720px) {
+  .socios-deactivation-modal.gdel-modal {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 20px 17px 16px;
+  }
+
+  .socios-deactivation-modal .gdel-heading,
+  .socios-deactivation-modal .gdel-reason,
+  .socios-deactivation-modal .gdel-actions {
+    grid-column: auto;
+  }
+
+  .socios-deactivation-modal .gdel-heading {
+    padding-bottom: 14px;
+  }
+
   .socios-payments-legend {
     width: 100%;
     margin-left: 0;
@@ -594,7 +617,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 10px 14px;
-  border: 1px solid rgba(58, 46, 43, 0.1);
+  border: 1px solid var(--border-color);
   border-top: 0;
   border-radius: 0 0 15px 15px;
   background: #fff;
@@ -606,18 +629,18 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  color: #726965;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .socios-pagination__summary strong {
-  color: #3a2e2b;
+  color: var(--text-primary);
   font-weight: 800;
 }
 
 .socios-pagination__summary span {
   margin-left: 6px;
-  color: #c8872d;
+  color: var(--primary-600);
   font-size: 10px;
   font-weight: 750;
 }
@@ -633,26 +656,29 @@
   min-width: 34px;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid rgba(58, 46, 43, 0.14);
+  border: 1px solid var(--border-color);
   border-radius: 9px;
-  color: #4f4541;
+  color: var(--text-secondary);
   background: #fff;
   font-size: 11px;
   font-weight: 750;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
 .socios-pagination__controls button:hover:not(:disabled) {
-  color: #b87520;
-  border-color: rgba(200, 135, 45, 0.45);
-  background: rgba(200, 135, 45, 0.07);
+  color: var(--primary-700);
+  border-color: color-mix(in srgb, var(--primary-500) 45%, transparent);
+  background: var(--primary-50);
 }
 
 .socios-pagination__controls button.is-active {
   color: #fff;
-  border-color: #c8872d;
-  background: #c8872d;
+  border-color: var(--primary-600);
+  background: var(--gradient-primary);
 }
 
 .socios-pagination__controls button:disabled {
@@ -662,7 +688,7 @@
 
 .socios-pagination__ellipsis {
   min-width: 22px;
-  color: #8b817c;
+  color: var(--text-muted);
   text-align: center;
   font-weight: 800;
 }

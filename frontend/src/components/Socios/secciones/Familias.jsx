@@ -43,7 +43,8 @@ const PARTNER_STATUS_STORAGE_KEY = "lalcec_socios_estado_seleccionado";
 function readSharedFamilyStatus() {
   if (typeof window === "undefined") return "activo";
   try {
-    return window.sessionStorage.getItem(PARTNER_STATUS_STORAGE_KEY) === "INACTIVO"
+    return window.sessionStorage.getItem(PARTNER_STATUS_STORAGE_KEY) ===
+      "INACTIVO"
       ? "inactivo"
       : "activo";
   } catch (_error) {
@@ -192,7 +193,10 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
           tag="Nombre obligatorio"
           bodyClassName="familias-form-panel__body--details"
         >
-          <FloatingField label="Nombre de la familia *" active={Boolean(form.nombre)}>
+          <FloatingField
+            label="Nombre de la familia *"
+            active={Boolean(form.nombre)}
+          >
             <input
               value={form.nombre}
               onChange={(event) =>
@@ -227,8 +231,8 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
           <div className="familias-form-note">
             <FontAwesomeIcon icon={faCircleInfo} />
             <span>
-              Las empresas no pueden integrar familias. Cada persona puede tener un
-              solo vínculo familiar activo.
+              Las empresas no pueden integrar familias. Cada persona puede tener
+              un solo vínculo familiar activo.
             </span>
           </div>
         </EntityFormPanel>
@@ -385,7 +389,8 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
                           ...current,
                           integrantes: current.integrantes.filter(
                             (entry) =>
-                              Number(entry.id_socio) !== Number(member.id_socio),
+                              Number(entry.id_socio) !==
+                              Number(member.id_socio),
                           ),
                         }))
                       }
@@ -401,12 +406,13 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
           {removedCount > 0 ? (
             <div className="familias-unlink-panel">
               <strong>
-                {removedCount} integrante{removedCount === 1 ? " será" : "s serán"}{" "}
-                desvinculado{removedCount === 1 ? "" : "s"}
+                {removedCount} integrante
+                {removedCount === 1 ? " será" : "s serán"} desvinculado
+                {removedCount === 1 ? "" : "s"}
               </strong>
               <p>
-                La relación no se elimina: se cierra el período y queda disponible en
-                el historial.
+                La relación no se elimina: se cierra el período y queda
+                disponible en el historial.
               </p>
               <div className="entity-form__grid">
                 <FloatingField label="Fecha de desvinculación *" active>
@@ -502,7 +508,10 @@ export default function Familias() {
     event.preventDefault();
     if (!form.nombre.trim()) {
       setFormTab(FORM_TAB_DETAILS);
-      setFeedback({ type: "error", message: "Completá el nombre de la familia." });
+      setFeedback({
+        type: "error",
+        message: "Completá el nombre de la familia.",
+      });
       return;
     }
     if (!form.integrantes.length) {
@@ -523,7 +532,8 @@ export default function Familias() {
       setFormTab(FORM_TAB_MEMBERS);
       setFeedback({
         type: "error",
-        message: "Indicá el motivo de desvinculación de los integrantes quitados.",
+        message:
+          "Indicá el motivo de desvinculación de los integrantes quitados.",
       });
       return;
     }
@@ -631,6 +641,9 @@ export default function Familias() {
           bodyClassName="entity-table-wrap"
           gridClassName="familias-grid"
           ariaLabel="Listado de familias"
+          loading={loading}
+          loadingLabel="Cargando familias..."
+          skeletonRows={6}
           columns={[
             "Familia",
             "Descripción",
@@ -640,12 +653,6 @@ export default function Familias() {
             "Acciones",
           ]}
         >
-          {loading && !items.length ? (
-            <div className="module-empty">
-              <strong>Cargando familias...</strong>
-              <span>Consultando grupos e integrantes activos.</span>
-            </div>
-          ) : null}
           {!loading && !error && !items.length ? (
             <div className="module-empty">
               <strong>Sin familias para mostrar</strong>
@@ -663,9 +670,13 @@ export default function Familias() {
                 <small>ID {item.id_familia}</small>
               </div>
               <div className="mov-gridCell">
-                <span className="entity-wrap-text">{item.descripcion || "—"}</span>
+                <span className="entity-wrap-text">
+                  {item.descripcion || "—"}
+                </span>
               </div>
-              <div className="mov-gridCell">{item.titular || "SIN TITULAR"}</div>
+              <div className="mov-gridCell">
+                {item.titular || "SIN TITULAR"}
+              </div>
               <div className="mov-gridCell is-strong">
                 {Number(item.cantidad_integrantes || 0)}
               </div>
@@ -808,21 +819,21 @@ export default function Familias() {
                     <InfoRow
                       key={member.id_familia_socio}
                       title={member.denominacion}
-                      detail={
-                        [
-                          `DNI ${member.dni || "—"}`,
-                          member.parentesco,
-                          member.es_titular ? "TITULAR" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      }
+                      detail={[
+                        `DNI ${member.dni || "—"}`,
+                        member.parentesco,
+                        member.es_titular ? "TITULAR" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                       meta={`DESDE ${formatDate(member.fecha_incorporacion)}`}
                       tone={member.activo ? "success" : ""}
                     />
                   ))
                 ) : (
-                  <InfoEmpty>La familia no tiene integrantes activos.</InfoEmpty>
+                  <InfoEmpty>
+                    La familia no tiene integrantes activos.
+                  </InfoEmpty>
                 )}
               </InfoSection>
               {detailModal.data.descripcion ? (
@@ -842,15 +853,13 @@ export default function Familias() {
                   <InfoRow
                     key={member.id_familia_socio}
                     title={member.denominacion}
-                    detail={
-                      [
-                        member.parentesco,
-                        member.es_titular ? "TITULAR" : null,
-                        member.motivo_desvinculacion,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    }
+                    detail={[
+                      member.parentesco,
+                      member.es_titular ? "TITULAR" : null,
+                      member.motivo_desvinculacion,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                     meta={`${formatDate(member.fecha_incorporacion)} → ${member.fecha_desvinculacion ? formatDate(member.fecha_desvinculacion) : "ACTUALIDAD"}`}
                     tone={member.activo ? "success" : ""}
                   />
@@ -867,7 +876,9 @@ export default function Familias() {
         open={Boolean(stateModal)}
         operacion={stateModal?.activo ? "baja" : "alta"}
         row={stateModal}
-        title={stateModal?.activo ? "Dar de baja la familia" : "Reactivar familia"}
+        title={
+          stateModal?.activo ? "Dar de baja la familia" : "Reactivar familia"
+        }
         message={
           stateModal?.activo
             ? "Se cerrarán los vínculos activos de todos sus integrantes. La familia y su historial se conservarán."
@@ -886,7 +897,10 @@ export default function Familias() {
                   label: "Integrantes activos",
                   value: stateModal.cantidad_integrantes,
                 },
-                { label: "Estado actual", value: stateModal.activo ? "ACTIVA" : "BAJA" },
+                {
+                  label: "Estado actual",
+                  value: stateModal.activo ? "ACTIVA" : "BAJA",
+                },
               ]
             : []
         }

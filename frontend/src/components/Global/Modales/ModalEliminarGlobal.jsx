@@ -72,6 +72,25 @@ const OPERATION_CONFIG = {
 const safeText = (value) => String(value ?? "").trim() || "—";
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
 
+function openDatePickerFromInput(event) {
+  const input = event.target;
+  if (
+    !(input instanceof HTMLInputElement) ||
+    input.type !== "date" ||
+    input.disabled ||
+    input.readOnly ||
+    typeof input.showPicker !== "function"
+  ) {
+    return;
+  }
+
+  try {
+    input.showPicker();
+  } catch {
+    input.focus();
+  }
+}
+
 function normalizeDetails(details) {
   if (!Array.isArray(details)) return [];
   return details
@@ -113,6 +132,7 @@ export default function ModalEliminarGlobal({
   initialReason = "",
   closeOnSuccess = true,
   confirmDisabled = false,
+  modalClassName = "",
 }) {
   const cancelRef = useRef(null);
   const reasonRef = useRef(null);
@@ -132,6 +152,7 @@ export default function ModalEliminarGlobal({
   const resolvedLoadingMessage = loadingMessage || config.loadingMessage;
   const resolvedSuccessMessage = successMessage || config.successMessage;
   const resolvedErrorMessage = errorMessage || config.errorMessage;
+  const showSubtitle = operacion !== "baja" && operacion !== "eliminar";
 
   const resolvedDetails = useMemo(() => {
     const custom = normalizeDetails(details);
@@ -283,9 +304,14 @@ export default function ModalEliminarGlobal({
         aria-modal="true"
         aria-labelledby="gdel-title"
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          openDatePickerFromInput(event);
+        }}
       >
-        <div className={`gdel-modal gdel-modal--${resolvedTone}`}>
+        <div
+          className={`gdel-modal gdel-modal--${resolvedTone} ${modalClassName}`.trim()}
+        >
           <button
             type="button"
             className="gdel-close"
@@ -295,27 +321,34 @@ export default function ModalEliminarGlobal({
           >
             <FontAwesomeIcon icon={faTimes} />
           </button>
-          <div
-            className={`gdel-icon gdel-icon--${resolvedTone}`}
-            aria-hidden="true"
-          >
-            <FontAwesomeIcon icon={resolvedIcon} />
+          <div className="gdel-heading">
+            <div
+              className={`gdel-icon gdel-icon--${resolvedTone}`}
+              aria-hidden="true"
+            >
+              <FontAwesomeIcon icon={resolvedIcon} />
+            </div>
+            <div className="gdel-heading__copy">
+              <h3
+                id="gdel-title"
+                className={`gdel-title gdel-title--${resolvedTone}`}
+              >
+                {resolvedTitle}
+              </h3>
+              {showSubtitle ? (
+                <p className="gdel-body">{resolvedMessage}</p>
+              ) : null}
+              {resolvedWarning ? (
+                <div className="gdel-note">
+                  <FontAwesomeIcon
+                    icon={faExclamationTriangle}
+                    aria-hidden="true"
+                  />
+                  <span>{resolvedWarning}</span>
+                </div>
+              ) : null}
+            </div>
           </div>
-          <h3
-            id="gdel-title"
-            className={`gdel-title gdel-title--${resolvedTone}`}
-          >
-            {resolvedTitle}
-          </h3>
-          <p className="gdel-body">
-            {resolvedMessage}
-            {resolvedWarning ? (
-              <>
-                <br />
-                <span>{resolvedWarning}</span>
-              </>
-            ) : null}
-          </p>
           {!hideDefaultCard && resolvedDetails.length ? (
             <div className="gdel-card">
               {resolvedDetails.map((detail) => (

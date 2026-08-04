@@ -24,17 +24,17 @@
   gap: 13px;
   margin: 12px 18px 18px;
   padding: 14px 16px;
-  border: 1px solid rgba(196, 139, 59, 0.18);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 18%, transparent);
   border-radius: 16px;
   background:
     linear-gradient(
       135deg,
-      rgba(253, 251, 247, 0.96),
+      color-mix(in srgb, var(--primary-50) 72%, #fff),
       rgba(255, 255, 255, 0.88)
     ),
     radial-gradient(
       circle at top left,
-      rgba(196, 139, 59, 0.15),
+      color-mix(in srgb, var(--primary-color) 15%, transparent),
       transparent 38%
     );
 }
@@ -48,12 +48,8 @@
   place-items: center;
   border-radius: 13px;
   color: #fff;
-  background: linear-gradient(
-    135deg,
-    var(--balto-midnight),
-    var(--balto-action)
-  );
-  box-shadow: 0 13px 24px -17px rgba(58, 46, 43, 0.62);
+  background: var(--gradient-primary);
+  box-shadow: 0 13px 24px -17px rgb(249 115 22 / 0.5);
   font-size: 16px;
 }
 
@@ -114,11 +110,11 @@
   row-gap: 0;
   align-items: start;
   padding: 14px;
-  border: 1px solid rgba(58, 46, 43, 0.13);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 13%, transparent);
   border-radius: 15px;
   color: inherit;
   background: #fff;
-  box-shadow: 0 12px 28px -27px rgba(58, 46, 43, 0.55);
+  box-shadow: 0 12px 28px -27px rgb(15 23 42 / 0.55);
   text-align: left;
   cursor: pointer;
   transition:
@@ -130,14 +126,14 @@
 
 .config-accessCard:hover {
   transform: translateY(-2px);
-  border-color: rgba(196, 139, 59, 0.35);
+  border-color: color-mix(in srgb, var(--primary-color) 35%, transparent);
   background: color-mix(in srgb, var(--balto-bg) 38%, #fff);
-  box-shadow: 0 18px 31px -25px rgba(58, 46, 43, 0.42);
+  box-shadow: 0 18px 31px -25px rgb(15 23 42 / 0.42);
 }
 
 .config-accessCard:focus-visible {
   outline: none;
-  border-color: rgba(196, 139, 59, 0.48);
+  border-color: color-mix(in srgb, var(--primary-color) 48%, transparent);
   box-shadow: var(--mov-focus);
 }
 
@@ -148,10 +144,10 @@
   min-width: 42px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid rgba(196, 139, 59, 0.17);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 17%, transparent);
   border-radius: 12px;
   color: var(--balto-action);
-  background: rgba(196, 139, 59, 0.08);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
   font-size: 15px;
 }
 
@@ -174,10 +170,10 @@
   align-items: center;
   flex: 0 0 auto;
   padding: 3px 8px;
-  border: 1px solid rgba(34, 173, 92, 0.18);
+  border: 1px solid color-mix(in srgb, var(--success-500) 18%, transparent);
   border-radius: 999px;
-  color: color-mix(in srgb, var(--balto-success) 78%, #213629);
-  background: rgba(34, 173, 92, 0.08);
+  color: var(--success-700);
+  background: color-mix(in srgb, var(--success-500) 8%, transparent);
   font-size: 9.5px;
   font-weight: 760;
   white-space: nowrap;
@@ -202,7 +198,7 @@
   align-self: end;
   margin-top: 13px;
   padding-top: 10px;
-  border-top: 1px solid rgba(58, 46, 43, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 .config-accessCard__meta span {
@@ -231,7 +227,7 @@
   min-width: 29px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid rgba(58, 46, 43, 0.1);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
   border-radius: 9px;
   color: var(--balto-text);
   background: var(--balto-bg);
@@ -246,7 +242,7 @@
 
 .config-accessCard:hover .config-accessCard__arrow {
   transform: translateX(2px);
-  border-color: rgba(196, 139, 59, 0.25);
+  border-color: color-mix(in srgb, var(--primary-color) 25%, transparent);
   color: var(--balto-action);
 }
 
@@ -254,7 +250,7 @@
   flex: 1;
   min-height: 0;
   margin: 0 18px 18px;
-  border: 1px solid rgba(58, 46, 43, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 17px;
   background: #fff;
   overflow: hidden;
@@ -272,7 +268,7 @@
   align-items: center;
   gap: 13px;
   padding-bottom: 18px;
-  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
 }
 
 .config-detailPanel__lead h2,
@@ -307,9 +303,9 @@
   flex-direction: column;
   justify-content: center;
   padding: 8px 13px;
-  border: 1px dashed rgba(58, 46, 43, 0.18);
+  border: 1px dashed color-mix(in srgb, var(--text-primary) 18%, transparent);
   border-radius: 13px;
-  background: rgba(253, 251, 247, 0.75);
+  background: color-mix(in srgb, var(--primary-50) 75%, transparent);
 }
 
 .config-amountPreview small {
@@ -336,8 +332,8 @@
   align-items: center;
   gap: 13px;
   padding: 16px 17px;
-  border-bottom: 1px solid rgba(58, 46, 43, 0.09);
-  background: linear-gradient(180deg, rgba(253, 251, 247, 0.82), #fff);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-50) 82%, #fff), #fff);
 }
 
 .config-listSummary__count {
@@ -346,9 +342,9 @@
   flex-direction: column;
   align-items: flex-end;
   padding: 8px 10px;
-  border: 1px solid rgba(196, 139, 59, 0.16);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 16%, transparent);
   border-radius: 12px;
-  background: rgba(196, 139, 59, 0.07);
+  background: color-mix(in srgb, var(--primary-color) 7%, transparent);
 }
 
 .config-listSummary__count strong {
@@ -382,14 +378,14 @@
   align-items: center;
   gap: 10px;
   padding: 11px 12px;
-  border: 1px solid rgba(58, 46, 43, 0.1);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
   border-radius: 13px;
-  background: rgba(253, 251, 247, 0.58);
+  background: color-mix(in srgb, var(--gray-50) 58%, transparent);
 }
 
 .config-list__item.is-inactive {
   opacity: 0.67;
-  background: rgba(120, 102, 97, 0.05);
+  background: color-mix(in srgb, var(--gray-500) 5%, transparent);
 }
 
 .config-list__main {
@@ -423,7 +419,7 @@
   height: 32px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(58, 46, 43, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   color: var(--balto-midnight);
   background: #fff;
@@ -436,7 +432,7 @@
 
 .config-iconButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(196, 139, 59, 0.32);
+  border-color: color-mix(in srgb, var(--primary-color) 32%, transparent);
   color: var(--balto-action);
 }
 
@@ -458,12 +454,12 @@
 
 .config-status.is-active {
   color: var(--balto-success);
-  background: rgba(34, 173, 92, 0.1);
+  background: color-mix(in srgb, var(--success-500) 10%, transparent);
 }
 
 .config-status.is-inactive {
   color: var(--balto-danger);
-  background: rgba(225, 61, 69, 0.09);
+  background: color-mix(in srgb, var(--danger-500) 9%, transparent);
 }
 
 .config-list__empty {
@@ -473,7 +469,7 @@
   flex: 1;
   margin: 14px 16px 16px;
   padding: 28px 16px;
-  border: 1px dashed rgba(58, 46, 43, 0.16);
+  border: 1px dashed color-mix(in srgb, var(--text-primary) 16%, transparent);
   border-radius: 14px;
   color: var(--balto-text);
   font-size: 12px;

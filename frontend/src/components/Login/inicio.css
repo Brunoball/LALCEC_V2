@@ -1,23 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
 
 .ini_contenedor-principal {
-  --ini-primary: var(--blue-inst-primary, #3A2E2B);
-  --ini-action: var(--blue-inst-primary-light, #C48B3B);
-  --ini-action-soft: rgba(196, 139, 59, 0.12);
-  --ini-bg: var(--blue-inst-light, #FDFBF7);
-  --ini-text: var(--blue-inst-gray-700, #786661);
-  --ini-muted: var(--blue-inst-gray-500, #786661);
-  --ini-border: var(--blue-inst-gray-200, #E8DED3);
-  --ini-border-strong: var(--blue-inst-gray-300, #D8C9BB);
+  --ini-primary: var(--text-primary, #0f172a);
+  --ini-action: var(--primary-color, #f97316);
+  --ini-action-soft: color-mix(in srgb, var(--primary-color, #f97316) 12%, transparent);
+  --ini-bg: var(--background-color, #f8fafc);
+  --ini-text: var(--text-secondary, #475569);
+  --ini-muted: var(--gray-500, #64748b);
+  --ini-border: var(--border-color, #e2e8f0);
+  --ini-border-strong: var(--gray-300, #cbd5e1);
   --ini-white: #FFFFFF;
-  --ini-danger: var(--blue-inst-danger, #E13D45);
+  --ini-danger: var(--danger-500, #ef4444);
   --ini-radius: var(--blue-inst-radius, 12px);
   --ini-radius-lg: var(--blue-inst-radius-lg, 18px);
   --ini-radius-xl: var(--blue-inst-radius-xl, 22px);
   --ini-transition: var(--blue-inst-transition, 180ms ease);
-  --ini-shadow-sm: var(--blue-inst-shadow-sm, 0 1px 2px rgba(58, 46, 43, .06));
-  --ini-shadow-md: var(--blue-inst-shadow-md, 0 14px 34px -22px rgba(58, 46, 43, .28));
-  --ini-shadow-xl: var(--blue-inst-shadow-xl, 0 28px 64px -24px rgba(58, 46, 43, .28));
+  --ini-shadow-sm: var(--shadow-sm, 0 1px 2px rgb(15 23 42 / .06));
+  --ini-shadow-md: var(--shadow-md, 0 14px 34px -22px rgb(15 23 42 / .28));
+  --ini-shadow-xl: var(--shadow-xl, 0 28px 64px -24px rgb(15 23 42 / .28));
 
   position: relative;
   width: 100%;
@@ -28,9 +28,9 @@
   padding: clamp(18px, 3vh, 34px) clamp(22px, 4vw, 54px);
   color: var(--ini-primary);
   background:
-    radial-gradient(circle at 11% 16%, rgba(196, 139, 59, .16), transparent 34%),
-    radial-gradient(circle at 86% 12%, rgba(58, 46, 43, .09), transparent 30%),
-    linear-gradient(135deg, #ffffff 0%, #FFFCF7 44%, rgba(196, 139, 59, .17) 100%);
+    radial-gradient(circle at 11% 16%, color-mix(in srgb, var(--primary-color) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--primary-700) 10%, transparent), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, var(--primary-50) 44%, color-mix(in srgb, var(--primary-200) 62%, #fff) 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;
   isolation: isolate;
@@ -57,7 +57,7 @@
   height: 310px;
   left: -126px;
   bottom: -124px;
-  background: rgba(196, 139, 59, .12);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .ini_contenedor-principal::after {
@@ -65,7 +65,7 @@
   height: 240px;
   right: -90px;
   top: -84px;
-  background: rgba(58, 46, 43, .10);
+  background: color-mix(in srgb, var(--primary-700) 10%, transparent);
 }
 
 .ini_login-shell {
@@ -102,7 +102,7 @@
   right: -30%;
   bottom: -20%;
   border-radius: 50%;
-  background: rgba(196, 139, 59, .075);
+  background: color-mix(in srgb, var(--primary-color) 7.5%, transparent);
 }
 
 .ini_brand-glow {
@@ -112,7 +112,7 @@
   left: -92px;
   top: 13%;
   border-radius: 50%;
-  background: rgba(196, 139, 59, .10);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
   filter: blur(6px);
 }
 
@@ -141,15 +141,15 @@
 
 .ini_brand-kicker {
   color: var(--ini-action);
-  background: rgba(196, 139, 59, .08);
-  border: 1px solid rgba(196, 139, 59, .12);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .ini_brand-logo {
   display: block;
   width: min(420px, 100%);
   object-fit: contain;
-  filter: drop-shadow(0 18px 34px rgba(58, 46, 43, .14));
+  filter: drop-shadow(0 18px 34px rgb(15 23 42 / .14));
   user-select: none;
   pointer-events: none;
 }
@@ -194,7 +194,7 @@
   background: rgba(255, 255, 255, .88);
   border: 1px solid rgba(217, 226, 239, .86);
   border-radius: 24px;
-  box-shadow: 0 28px 70px -34px rgba(58, 46, 43, .42);
+  box-shadow: 0 28px 70px -34px rgb(15 23 42 / .42);
   backdrop-filter: blur(18px);
   overflow: visible;
 }
@@ -209,8 +209,8 @@
 
 .ini_login-badge {
   color: var(--ini-action);
-  background: rgba(196, 139, 59, .08);
-  border: 1px solid rgba(196, 139, 59, .12);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .ini_titulo {
@@ -254,7 +254,7 @@
   border: 1px solid var(--ini-border);
   border-radius: 14px;
   outline: none;
-  box-shadow: 0 1px 2px rgba(58, 46, 43, .04);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .04);
   caret-color: var(--ini-action);
   font-family: 'Inter', sans-serif;
   font-size: .96rem;
@@ -273,7 +273,7 @@
 .ini_input:focus {
   border-color: var(--ini-action);
   background: #fff;
-  box-shadow: 0 0 0 4px var(--ini-action-soft), 0 10px 24px -20px rgba(58, 46, 43, .36);
+  box-shadow: 0 0 0 4px var(--ini-action-soft), 0 10px 24px -20px rgb(15 23 42 / .36);
 }
 
 .ini_campo::before {
@@ -329,7 +329,7 @@
 
 .ini_toggle-password:hover {
   color: var(--ini-action);
-  background: rgba(196, 139, 59, .08);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
 }
 
 .ini_check-row {
@@ -429,7 +429,7 @@
   background: var(--ini-action);
   border: 1px solid var(--ini-action);
   border-radius: 14px;
-  box-shadow: 0 14px 28px -18px rgba(196, 139, 59, .65);
+  box-shadow: 0 14px 28px -18px rgb(249 115 22 / .65);
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   font-size: .96rem;
   font-weight: 600;
@@ -441,7 +441,7 @@
 .ini_boton:hover:not(:disabled) {
   transform: translateY(-2px);
   background: color-mix(in srgb, var(--ini-action) 88%, var(--ini-primary));
-  box-shadow: 0 18px 34px -18px rgba(196, 139, 59, .72);
+  box-shadow: 0 18px 34px -18px rgb(249 115 22 / .72);
 }
 
 .ini_boton:active:not(:disabled) {
@@ -460,7 +460,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(58, 46, 43, .48);
+  background: rgb(15 23 42 / .48);
   backdrop-filter: blur(4px);
 }
 
@@ -470,7 +470,7 @@
   background: #fff;
   border: 1px solid rgba(217, 226, 239, .86);
   border-radius: 22px;
-  box-shadow: 0 32px 78px -30px rgba(58, 46, 43, .44);
+  box-shadow: 0 32px 78px -30px rgb(15 23 42 / .44);
   animation: iniModalIn .18s ease-out;
 }
 
@@ -495,8 +495,8 @@
   display: grid;
   place-items: center;
   color: var(--ini-action);
-  background: rgba(196, 139, 59, .08);
-  border: 1px solid rgba(196, 139, 59, .12);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 12%, transparent);
   border-radius: 14px;
 }
 
@@ -535,7 +535,7 @@
 
 .ini_modal-close:hover:not(:disabled) {
   color: var(--ini-primary);
-  background: rgba(58, 46, 43, .06);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
 }
 
 .ini_modal-close:disabled {
@@ -618,7 +618,7 @@
 .ini_modal-btn-pri {
   color: #fff;
   background: var(--ini-action);
-  box-shadow: 0 14px 28px -18px rgba(196, 139, 59, .68);
+  box-shadow: 0 14px 28px -18px rgb(249 115 22 / .68);
 }
 
 .ini_modal-btn-pri:hover:not(:disabled) {
@@ -752,7 +752,7 @@
   align-items: center;
   gap: 18px;
   color: var(--ini-primary);
-  filter: drop-shadow(0 18px 34px rgba(58,46,43,.14));
+  filter: drop-shadow(0 18px 34px rgb(15 23 42 / .14));
 }
 .ini_brand-logo--placeholder .brand-mark {
   width: 104px;
@@ -761,8 +761,8 @@
   place-items: center;
   border-radius: 28px;
   color: #fff;
-  background: linear-gradient(145deg, var(--ini-primary), color-mix(in srgb, var(--ini-primary) 72%, var(--ini-action)));
-  box-shadow: 0 20px 45px -20px rgba(58,46,43,.6);
+  background: var(--gradient-primary, linear-gradient(145deg, #f97316, #c2410c));
+  box-shadow: 0 20px 45px -20px rgb(124 45 18 / .5);
   font-size: 46px;
 }
 .ini_brand-logo--placeholder .brand-word strong { display:block; font-family:'Plus Jakarta Sans', sans-serif; font-size:clamp(2rem,5vw,4rem); letter-spacing:-.06em; }

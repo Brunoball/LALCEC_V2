@@ -5,13 +5,13 @@
    ========================================================= */
 
 :root {
-  --entity-modal-ink: var(--balto-ink, #3a2e2b);
-  --entity-modal-action: var(--balto-action, #c48b3b);
-  --entity-modal-bg: var(--balto-bg, #fdfbf7);
-  --entity-modal-text: var(--balto-text, #786661);
-  --entity-modal-danger: var(--balto-danger, #e13d45);
-  --entity-modal-border: var(--mov-border, rgba(58, 46, 43, 0.14));
-  --entity-modal-focus: var(--mov-focus, 0 0 0 4px rgba(196, 139, 59, 0.14));
+  --entity-modal-ink: var(--balto-ink, #0f172a);
+  --entity-modal-action: var(--balto-action, #f97316);
+  --entity-modal-bg: var(--balto-bg, #f8fafc);
+  --entity-modal-text: var(--balto-text, #475569);
+  --entity-modal-danger: var(--balto-danger, #ef4444);
+  --entity-modal-border: var(--mov-border, #e2e8f0);
+  --entity-modal-focus: var(--mov-focus, 0 0 0 4px rgb(249 115 22 / 0.14));
   --entity-modal-transition: var(
     --mov-trans,
     160ms cubic-bezier(0.4, 0, 0.2, 1)
@@ -19,7 +19,7 @@
   --entity-modal-radius: 20px;
   --entity-modal-field-radius: 11px;
   --entity-modal-shadow:
-    0 32px 80px rgba(58, 46, 43, 0.26), 0 2px 8px rgba(58, 46, 43, 0.08);
+    0 32px 80px rgb(15 23 42 / 0.26), 0 2px 8px rgb(15 23 42 / 0.08);
 }
 
 .entity-modal-overlay,
@@ -100,24 +100,11 @@
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   color: #fff;
-  background: linear-gradient(
-    135deg,
-    var(--entity-modal-ink) 0%,
-    color-mix(in srgb, var(--entity-modal-ink) 78%, var(--entity-modal-action))
-      100%
-  );
+  background: var(--entity-modal-action);
 }
 
 .entity-modal__header::after {
-  content: "";
-  position: absolute;
-  top: -44px;
-  right: -42px;
-  width: 164px;
-  height: 164px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.045);
-  pointer-events: none;
+  content: none;
 }
 
 .entity-modal__header > div,
@@ -286,6 +273,15 @@
 .entity-field textarea:disabled {
   opacity: 0.62;
   cursor: not-allowed;
+}
+
+.entity-field input[type="date"] {
+  cursor: pointer;
+}
+
+.entity-field input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.72;
 }
 
 .entity-checks,

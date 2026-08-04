@@ -8,7 +8,6 @@ import {
   faCircleInfo,
   faClockRotateLeft,
   faEnvelope,
-  faExclamationTriangle,
   faHouse,
   faIdCard,
   faPen,
@@ -56,7 +55,8 @@ const PARTNER_STATUS_STORAGE_KEY = "lalcec_socios_estado_seleccionado";
 function readSharedPartnerStatus() {
   if (typeof window === "undefined") return "ACTIVO";
   try {
-    return window.sessionStorage.getItem(PARTNER_STATUS_STORAGE_KEY) === "INACTIVO"
+    return window.sessionStorage.getItem(PARTNER_STATUS_STORAGE_KEY) ===
+      "INACTIVO"
       ? "INACTIVO"
       : "ACTIVO";
   } catch (_error) {
@@ -134,7 +134,9 @@ function PaymentCalendar({ payments = [], item }) {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  const admissionDate = item?.fecha_alta ? new Date(`${item.fecha_alta}T00:00:00`) : null;
+  const admissionDate = item?.fecha_alta
+    ? new Date(`${item.fecha_alta}T00:00:00`)
+    : null;
   const admissionYear = admissionDate?.getFullYear() || currentYear - 1;
   const admissionMonth = admissionDate?.getMonth() + 1 || 1;
   const years = Array.from(
@@ -156,7 +158,12 @@ function PaymentCalendar({ payments = [], item }) {
       .map((payment) => [Number(payment.mes), payment]),
   );
   const dueStart = selectedYear === admissionYear ? admissionMonth : 1;
-  const dueEnd = selectedYear < currentYear ? 12 : selectedYear === currentYear ? currentMonth : 0;
+  const dueEnd =
+    selectedYear < currentYear
+      ? 12
+      : selectedYear === currentYear
+        ? currentMonth
+        : 0;
   const dueMonths = Math.max(0, dueEnd - dueStart + 1);
   let paidDue = 0;
   for (let month = dueStart; month <= dueEnd; month += 1) {
@@ -195,20 +202,28 @@ function PaymentCalendar({ payments = [], item }) {
         </div>
         <div className="socios-payments-control">
           <strong>Estado</strong>
-          <span className={`socios-payment-status ${pendingDue ? "is-danger" : "is-success"}`}>
+          <span
+            className={`socios-payment-status ${pendingDue ? "is-danger" : "is-success"}`}
+          >
             {statusLabel}
           </span>
         </div>
         <div className="socios-payments-legend">
-          <span><i className="is-paid" /> Pagado</span>
-          <span><i className="is-pending" /> Pendiente</span>
+          <span>
+            <i className="is-paid" /> Pagado
+          </span>
+          <span>
+            <i className="is-pending" /> Pendiente
+          </span>
         </div>
       </div>
 
       <div className="socios-payments-heading">
         <strong>Meses — {selectedYear}</strong>
         <div>
-          <span className="is-success"><FontAwesomeIcon icon={faCheck} /> {paidTotal} pagados</span>
+          <span className="is-success">
+            <FontAwesomeIcon icon={faCheck} /> {paidTotal} pagados
+          </span>
           <span className="is-danger">× {pendingDue} pendientes</span>
         </div>
       </div>
@@ -217,8 +232,11 @@ function PaymentCalendar({ payments = [], item }) {
         {MONTHS.map((monthName, index) => {
           const month = index + 1;
           const payment = paymentMap.get(month);
-          const beforeAdmission = selectedYear === admissionYear && month < admissionMonth;
-          const future = selectedYear > currentYear || (selectedYear === currentYear && month > currentMonth);
+          const beforeAdmission =
+            selectedYear === admissionYear && month < admissionMonth;
+          const future =
+            selectedYear > currentYear ||
+            (selectedYear === currentYear && month > currentMonth);
           const stateClass = payment
             ? "is-paid"
             : beforeAdmission
@@ -234,7 +252,11 @@ function PaymentCalendar({ payments = [], item }) {
                 ? "Período todavía no vencido"
                 : "Período pendiente";
           return (
-            <article className={`socios-payment-month ${stateClass}`} key={monthName} title={title}>
+            <article
+              className={`socios-payment-month ${stateClass}`}
+              key={monthName}
+              title={title}
+            >
               <strong>{monthName}</strong>
               <span aria-hidden="true" />
               {payment ? <small>{formatDate(payment.fecha_pago)}</small> : null}
@@ -272,7 +294,9 @@ function StateHistory({ events = [] }) {
                   : `Estado inicial: ${event.estado_nuevo}`}
               </p>
               {event.motivo ? <small>Motivo: {event.motivo}</small> : null}
-              {event.observaciones ? <small>{event.observaciones}</small> : null}
+              {event.observaciones ? (
+                <small>{event.observaciones}</small>
+              ) : null}
               {event.usuario ? <em>Registrado por {event.usuario}</em> : null}
             </div>
           </article>
@@ -317,7 +341,14 @@ function activeOrCurrent(items, idKey, currentId) {
   );
 }
 
-function PartnerForm({ type, form, setForm, catalogs, activeTab, onTabChange }) {
+function PartnerForm({
+  type,
+  form,
+  setForm,
+  catalogs,
+  activeTab,
+  onTabChange,
+}) {
   const isCompany = type === COMPANY;
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -348,7 +379,9 @@ function PartnerForm({ type, form, setForm, catalogs, activeTab, onTabChange }) 
           tabValue={FORM_TAB_MAIN}
           idPrefix={`socio-${type.toLowerCase()}-form-tab`}
           eyebrow="Ficha principal"
-          title={isCompany ? "Identificación empresarial" : "Identificación personal"}
+          title={
+            isCompany ? "Identificación empresarial" : "Identificación personal"
+          }
           icon={isCompany ? faBuilding : faIdCard}
           tag="Datos obligatorios"
           bodyClassName="entity-form__grid"
@@ -467,7 +500,11 @@ function PartnerForm({ type, form, setForm, catalogs, activeTab, onTabChange }) 
           bodyClassName="socios-form-panel__body--membership"
         >
           <div className="entity-form__grid socios-contact-grid">
-            <FloatingField label="Domicilio" active={Boolean(form.domicilio)} wide>
+            <FloatingField
+              label="Domicilio"
+              active={Boolean(form.domicilio)}
+              wide
+            >
               <input
                 value={form.domicilio}
                 onChange={(event) =>
@@ -575,7 +612,9 @@ function PartnerForm({ type, form, setForm, catalogs, activeTab, onTabChange }) 
             </FloatingField>
           </div>
 
-          <label className="socios-reminder-option">
+          <label
+            className={`socios-reminder-option ${form.enviar_recordatorio ? "is-selected" : ""}`.trim()}
+          >
             <input
               type="checkbox"
               checked={Boolean(form.enviar_recordatorio)}
@@ -585,7 +624,9 @@ function PartnerForm({ type, form, setForm, catalogs, activeTab, onTabChange }) 
             />
             <span>
               <strong>Enviar recordatorios</strong>
-              <small>Permite incluir este socio en futuros avisos de cuota.</small>
+              <small>
+                Permite incluir este socio en futuros avisos de cuota.
+              </small>
             </span>
           </label>
 
@@ -694,7 +735,6 @@ export default function Socios({ tipo = PERSON }) {
   const [historyTab, setHistoryTab] = useState(INFO_TAB_SUMMARY);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [deleteModal, setDeleteModal] = useState(null);
-  const [deletePhrase, setDeletePhrase] = useState("");
   const [feedback, setFeedback] = useState(null);
 
   const title = isCompany ? "Empresas" : "Socios";
@@ -778,11 +818,8 @@ export default function Socios({ tipo = PERSON }) {
     return response;
   };
 
-  const openPermanentDelete = async () => {
-    if (!stateModal) return;
-    const item = stateModal;
-    setStateModal(null);
-    setDeletePhrase("");
+  const openPermanentDelete = async (item) => {
+    if (!item) return;
     setDeleteModal({ item, data: null, loading: true, error: "" });
     try {
       const response = await sociosApi.historial(item.id_socio);
@@ -792,16 +829,15 @@ export default function Socios({ tipo = PERSON }) {
         item,
         data: null,
         loading: false,
-        error: requestError.message || "No se pudo calcular el impacto de la eliminación.",
+        error:
+          requestError.message ||
+          "No se pudo calcular el impacto de la eliminación.",
       });
     }
   };
 
   const deletePermanently = async () => {
     if (!deleteModal?.item) return null;
-    if (deletePhrase.trim().toLocaleUpperCase("es-AR") !== "ELIMINAR") {
-      throw new Error("Escribí ELIMINAR para completar la segunda confirmación.");
-    }
     const response = await sociosApi.eliminarDefinitivo({
       id: deleteModal.item.id_socio,
       confirmacion: "ELIMINAR",
@@ -880,10 +916,13 @@ export default function Socios({ tipo = PERSON }) {
           onClose={() => setFeedback(null)}
         />
         <GlobalDivTable
-          className="socios-table"
+          className={`socios-table ${Number(paginacion?.total || 0) > 0 ? "has-bottom-pagination" : ""}`.trim()}
           bodyClassName="entity-table-wrap"
           gridClassName={`socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
           ariaLabel={`Listado de ${title.toLowerCase()}`}
+          loading={loading}
+          loadingLabel={`Cargando ${title.toLowerCase()}...`}
+          skeletonRows={7}
           columns={
             isCompany
               ? [
@@ -892,7 +931,6 @@ export default function Socios({ tipo = PERSON }) {
                   "Condición IVA",
                   "Categoría",
                   "Contacto",
-                  "Alta",
                   "Recordatorio",
                   "Acciones",
                 ]
@@ -900,20 +938,12 @@ export default function Socios({ tipo = PERSON }) {
                   "Socio",
                   "DNI",
                   "Categoría",
-                  "Familia",
                   "Contacto",
-                  "Alta",
                   "Recordatorio",
                   "Acciones",
                 ]
           }
         >
-          {loading && !items.length ? (
-            <div className="module-empty">
-              <strong>Cargando {title.toLowerCase()}...</strong>
-              <span>Consultando la base unificada de LALCEC.</span>
-            </div>
-          ) : null}
           {!loading && !error && !items.length ? (
             <div className="module-empty">
               <strong>Sin {title.toLowerCase()} para mostrar</strong>
@@ -942,14 +972,13 @@ export default function Socios({ tipo = PERSON }) {
               <div className="mov-gridCell">
                 {isCompany ? item.condicion_iva || "—" : item.categoria || "—"}
               </div>
-              <div className="mov-gridCell">
-                {isCompany ? item.categoria || "—" : item.familia || "—"}
-              </div>
+              {isCompany ? (
+                <div className="mov-gridCell">{item.categoria || "—"}</div>
+              ) : null}
               <div className="mov-gridCell entity-main-cell">
                 <span>{item.telefono || "—"}</span>
                 <small>{item.email || ""}</small>
               </div>
-              <div className="mov-gridCell">{formatDate(item.fecha_alta)}</div>
               <div className="mov-gridCell">
                 <span
                   className={`socios-reminder-chip ${item.enviar_recordatorio ? "is-enabled" : "is-disabled"}`}
@@ -960,7 +989,9 @@ export default function Socios({ tipo = PERSON }) {
                   }
                 >
                   <FontAwesomeIcon icon={faBell} />
-                  <span>{item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}</span>
+                  <span>
+                    {item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}
+                  </span>
                 </span>
               </div>
               <div className="mov-gridCell mov-gridCell--actions">
@@ -984,9 +1015,11 @@ export default function Socios({ tipo = PERSON }) {
                         <FontAwesomeIcon icon={faPen} />
                       </button>
                       <button
-                        className={`mov-iconBtn ${item.activo ? "mov-iconBtn--danger" : ""}`}
+                        className={`mov-iconBtn socios-state-action ${
+                          item.activo ? "is-deactivation" : "is-reactivation"
+                        }`}
                         type="button"
-                        title={item.activo ? "Dar de baja o eliminar" : "Reactivar"}
+                        title={item.activo ? "Dar de baja" : "Reactivar"}
                         onClick={() => {
                           setStateDate(today());
                           setStateModal(item);
@@ -995,6 +1028,15 @@ export default function Socios({ tipo = PERSON }) {
                         <FontAwesomeIcon
                           icon={item.activo ? faUserSlash : faRotateLeft}
                         />
+                      </button>
+                      <button
+                        className="mov-iconBtn mov-iconBtn--danger socios-delete-action"
+                        type="button"
+                        title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
+                        aria-label={`Eliminar definitivamente ${item.denominacion}`}
+                        onClick={() => openPermanentDelete(item)}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
                       </button>
                     </>
                   ) : null}
@@ -1005,9 +1047,13 @@ export default function Socios({ tipo = PERSON }) {
         </GlobalDivTable>
 
         {Number(paginacion?.total || 0) > 0 ? (
-          <nav className="socios-pagination" aria-label={`Paginación de ${title.toLowerCase()}`}>
+          <nav
+            className="socios-pagination"
+            aria-label={`Paginación de ${title.toLowerCase()}`}
+          >
             <p className="socios-pagination__summary">
-              Mostrando <strong>{paginacion.desde}</strong>–<strong>{paginacion.hasta}</strong> de{" "}
+              Mostrando <strong>{paginacion.desde}</strong>–
+              <strong>{paginacion.hasta}</strong> de{" "}
               <strong>{paginacion.total}</strong> {title.toLowerCase()}
               {loading ? <span>Cargando página...</span> : null}
             </p>
@@ -1034,7 +1080,11 @@ export default function Socios({ tipo = PERSON }) {
                     {item}
                   </button>
                 ) : (
-                  <span className="socios-pagination__ellipsis" key={item} aria-hidden="true">
+                  <span
+                    className="socios-pagination__ellipsis"
+                    key={item}
+                    aria-hidden="true"
+                  >
                     …
                   </span>
                 ),
@@ -1081,7 +1131,9 @@ export default function Socios({ tipo = PERSON }) {
 
       <InfoModal
         open={Boolean(historyModal)}
-        title={isCompany ? "Información de la Empresa" : "Información del Socio"}
+        title={
+          isCompany ? "Información de la Empresa" : "Información del Socio"
+        }
         subtitle={
           itemInfo
             ? `${isCompany ? "CUIT" : "DNI"}: ${isCompany ? itemInfo.cuit || "—" : itemInfo.dni || "—"} · ${itemInfo.denominacion}`
@@ -1135,7 +1187,9 @@ export default function Socios({ tipo = PERSON }) {
                   },
                   {
                     label: "Recordatorio WhatsApp",
-                    value: itemInfo.enviar_recordatorio ? "HABILITADO" : "DESHABILITADO",
+                    value: itemInfo.enviar_recordatorio
+                      ? "HABILITADO"
+                      : "DESHABILITADO",
                     icon: faBell,
                     tone: itemInfo.enviar_recordatorio ? "success" : "",
                   },
@@ -1149,7 +1203,11 @@ export default function Socios({ tipo = PERSON }) {
                 >
                   <InfoRow
                     title={itemInfo.denominacion}
-                    detail={isCompany ? `CUIT ${itemInfo.cuit || "—"}` : `DNI ${itemInfo.dni || "—"}`}
+                    detail={
+                      isCompany
+                        ? `CUIT ${itemInfo.cuit || "—"}`
+                        : `DNI ${itemInfo.dni || "—"}`
+                    }
                   />
                   <InfoRow
                     title="Fecha de alta"
@@ -1185,7 +1243,10 @@ export default function Socios({ tipo = PERSON }) {
                     tone={itemInfo.enviar_recordatorio ? "success" : ""}
                   />
                   {itemInfo.observaciones ? (
-                    <InfoRow title="Observaciones" detail={itemInfo.observaciones} />
+                    <InfoRow
+                      title="Observaciones"
+                      detail={itemInfo.observaciones}
+                    />
                   ) : null}
                 </InfoSection>
               </div>
@@ -1201,7 +1262,10 @@ export default function Socios({ tipo = PERSON }) {
                       key={family.id_familia_socio}
                       title={family.familia}
                       detail={`${formatDate(family.fecha_incorporacion)} → ${family.fecha_desvinculacion ? formatDate(family.fecha_desvinculacion) : "ACTUALIDAD"}`}
-                      meta={family.parentesco || (family.es_titular ? "TITULAR" : "")}
+                      meta={
+                        family.parentesco ||
+                        (family.es_titular ? "TITULAR" : "")
+                      }
                       tone={family.activo ? "success" : ""}
                     />
                   ))}
@@ -1236,11 +1300,18 @@ export default function Socios({ tipo = PERSON }) {
               />
               <InfoSection title="Datos de contacto" icon={faAddressBook}>
                 <InfoRow title="Teléfono" detail={itemInfo.telefono || "—"} />
-                <InfoRow title="Correo electrónico" detail={itemInfo.email || "—"} />
+                <InfoRow
+                  title="Correo electrónico"
+                  detail={itemInfo.email || "—"}
+                />
                 <InfoRow
                   title="Domicilio principal"
                   detail={
-                    [itemInfo.domicilio, itemInfo.numero_domicilio, itemInfo.localidad]
+                    [
+                      itemInfo.domicilio,
+                      itemInfo.numero_domicilio,
+                      itemInfo.localidad,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "—"
                   }
@@ -1272,24 +1343,26 @@ export default function Socios({ tipo = PERSON }) {
         row={stateModal}
         title={
           stateModal?.activo
-            ? `Dar de baja o eliminar ${isCompany ? "empresa" : "socio"}`
+            ? `Dar de baja ${isCompany ? "la empresa" : "al socio"}`
             : `Reactivar ${isCompany ? "empresa" : "socio"}`
         }
         message={
           stateModal?.activo
-            ? "La opción recomendada es dar de baja: conserva pagos, familia e historial y permite un reingreso futuro."
+            ? "El registro dejará de estar activo, pero conservará sus pagos, vínculos familiares e historial para permitir un reingreso futuro."
             : "El registro volverá a estar disponible para operaciones nuevas y el reingreso quedará asentado en el historial."
         }
-        warning={
-          stateModal?.activo
-            ? "La eliminación definitiva está disponible abajo, pero borra todos los datos relacionados."
-            : ""
-        }
+        warning=""
         details={
           stateModal
             ? [
-                { label: isCompany ? "Empresa" : "Socio", value: stateModal.denominacion },
-                { label: isCompany ? "CUIT" : "DNI", value: isCompany ? stateModal.cuit : stateModal.dni },
+                {
+                  label: isCompany ? "Empresa" : "Socio",
+                  value: stateModal.denominacion,
+                },
+                {
+                  label: isCompany ? "CUIT" : "DNI",
+                  value: isCompany ? stateModal.cuit : stateModal.dni,
+                },
                 { label: "Estado actual", value: stateModal.estado },
               ]
             : []
@@ -1300,34 +1373,17 @@ export default function Socios({ tipo = PERSON }) {
         reasonPlaceholder="Indicá el motivo de la baja..."
         extraContent={
           stateModal?.activo ? (
-            <div className="socios-deactivation-options">
-              <label className="entity-field gdel-date-field">
-                <span>Fecha de baja *</span>
-                <input
-                  type="date"
-                  value={stateDate}
-                  min={stateModal.fecha_alta || undefined}
-                  max={today()}
-                  onChange={(event) => setStateDate(event.target.value)}
-                  required
-                />
-              </label>
-              <div className="socios-delete-option">
-                <div>
-                  <FontAwesomeIcon icon={faExclamationTriangle} />
-                  <span>
-                    <strong>Eliminar definitivamente</strong>
-                    <small>
-                      Borra el socio, sus pagos, vínculos familiares y todo el historial de estados.
-                    </small>
-                  </span>
-                </div>
-                <button type="button" onClick={openPermanentDelete}>
-                  <FontAwesomeIcon icon={faTrash} />
-                  Elegir eliminar
-                </button>
-              </div>
-            </div>
+            <label className="entity-field gdel-date-field">
+              <span>Fecha de baja *</span>
+              <input
+                type="date"
+                value={stateDate}
+                min={stateModal.fecha_alta || undefined}
+                max={today()}
+                onChange={(event) => setStateDate(event.target.value)}
+                required
+              />
+            </label>
           ) : null
         }
         confirmDisabled={Boolean(stateModal?.activo && !stateDate)}
@@ -1342,6 +1398,11 @@ export default function Socios({ tipo = PERSON }) {
             ? "Registro dado de baja correctamente."
             : "Registro reactivado correctamente."
         }
+        modalClassName={
+          stateModal?.activo
+            ? "socios-deactivation-modal"
+            : "socios-reactivation-modal"
+        }
       />
 
       <ModalEliminarGlobal
@@ -1349,51 +1410,47 @@ export default function Socios({ tipo = PERSON }) {
         operacion="eliminar"
         row={deleteModal?.item}
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
-        message="Esta es la segunda y última confirmación. La operación es irreversible."
+        message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."
         warning="Se perderán los pagos, los vínculos familiares y el historial de estados relacionados con este registro."
         details={
           deleteModal?.item
             ? [
-                { label: isCompany ? "Empresa" : "Socio", value: deleteModal.item.denominacion },
-                { label: isCompany ? "CUIT" : "DNI", value: isCompany ? deleteModal.item.cuit : deleteModal.item.dni },
-                { label: "Pagos que se borrarán", value: deleteImpact.pagos ?? "Calculando..." },
-                { label: "Estados que se borrarán", value: deleteImpact.historial_estados ?? "Calculando..." },
-                { label: "Vínculos familiares", value: deleteImpact.vinculos_familiares ?? "Calculando..." },
+                {
+                  label: isCompany ? "Empresa" : "Socio",
+                  value: deleteModal.item.denominacion,
+                },
+                {
+                  label: isCompany ? "CUIT" : "DNI",
+                  value: isCompany
+                    ? deleteModal.item.cuit
+                    : deleteModal.item.dni,
+                },
+                {
+                  label: "Pagos que se borrarán",
+                  value: deleteImpact.pagos ?? "Calculando...",
+                },
+                {
+                  label: "Estados que se borrarán",
+                  value: deleteImpact.historial_estados ?? "Calculando...",
+                },
+                {
+                  label: "Vínculos familiares",
+                  value: deleteImpact.vinculos_familiares ?? "Calculando...",
+                },
               ]
             : []
         }
         extraContent={
-          <div className="socios-delete-confirmation">
-            {deleteModal?.error ? (
-              <p className="socios-delete-confirmation__error">{deleteModal.error}</p>
-            ) : null}
-            <div className="socios-delete-confirmation__warning">
-              <FontAwesomeIcon icon={faExclamationTriangle} />
-              <p>
-                <strong>No hay recuperación automática.</strong>
-                La auditoría conservará que se realizó la eliminación, pero los datos funcionales desaparecerán.
-              </p>
-            </div>
-            <label>
-              <span>Escribí ELIMINAR para confirmar por segunda vez</span>
-              <input
-                value={deletePhrase}
-                onChange={(event) => setDeletePhrase(upper(event.target.value))}
-                placeholder="ELIMINAR"
-                autoComplete="off"
-              />
-            </label>
-          </div>
+          deleteModal?.error ? (
+            <p className="socios-delete-confirmation__error">
+              {deleteModal.error}
+            </p>
+          ) : null
         }
         confirmDisabled={
-          Boolean(deleteModal?.loading) ||
-          Boolean(deleteModal?.error) ||
-          deletePhrase.trim().toLocaleUpperCase("es-AR") !== "ELIMINAR"
+          Boolean(deleteModal?.loading) || Boolean(deleteModal?.error)
         }
-        onClose={() => {
-          setDeleteModal(null);
-          setDeletePhrase("");
-        }}
+        onClose={() => setDeleteModal(null)}
         onConfirm={deletePermanently}
         onToast={(typeFeedback, message, duration) =>
           setFeedback({ type: typeFeedback, message, duration })

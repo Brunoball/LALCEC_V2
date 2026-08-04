@@ -4,6 +4,25 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import "../Global_css/Global_Modals.css";
 
+function openDatePickerFromInput(event) {
+  const input = event.target;
+  if (
+    !(input instanceof HTMLInputElement) ||
+    input.type !== "date" ||
+    input.disabled ||
+    input.readOnly ||
+    typeof input.showPicker !== "function"
+  ) {
+    return;
+  }
+
+  try {
+    input.showPicker();
+  } catch {
+    input.focus();
+  }
+}
+
 export default function CrudModal({
   open,
   title,
@@ -63,7 +82,7 @@ export default function CrudModal({
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </header>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} onClick={openDatePickerFromInput}>
           <div className="entity-modal__body">{children}</div>
           {footerStart || !hideCancel || !hideSubmit ? (
             <footer className="entity-modal__footer">

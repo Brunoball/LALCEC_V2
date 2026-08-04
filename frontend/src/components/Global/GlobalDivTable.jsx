@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import DataTableSkeleton from "./DataTableSkeleton";
 
 /**
  * Estructura global para tablas construidas con divs.
@@ -14,8 +15,13 @@ export default function GlobalDivTable({
   className = "",
   columns = [],
   gridClassName = "",
+  loading = false,
+  loadingLabel = "Cargando registros...",
+  skeletonActionColumn = true,
+  skeletonRows = 6,
 }) {
   const bodyRef = useRef(null);
+  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
 
   useEffect(() => {
@@ -26,10 +32,11 @@ export default function GlobalDivTable({
     const updateScrollbar = () => {
       cancelAnimationFrame(animationFrame);
       animationFrame = requestAnimationFrame(() => {
-        const hasVerticalScroll = body.scrollHeight > body.clientHeight + 1;
-        const width = hasVerticalScroll
+        const hasOverflow = body.scrollHeight > body.clientHeight + 1;
+        const width = hasOverflow
           ? Math.max(0, body.offsetWidth - body.clientWidth)
           : 0;
+        setHasVerticalScroll(hasOverflow);
         setScrollbarWidth(width);
       });
     };
@@ -54,13 +61,26 @@ export default function GlobalDivTable({
     };
   }, []);
 
+  const actionColumnIndex =
+    typeof skeletonActionColumn === "number"
+      ? skeletonActionColumn
+      : skeletonActionColumn
+        ? Math.max(0, columns.length - 1)
+        : -1;
+
   return (
     <div
-      className={`global-divTable ${scrollbarWidth ? "has-y-scroll" : ""} ${className}`.trim()}
+      className={`global-divTable ${hasVerticalScroll ? "has-y-scroll" : ""} ${className}`.trim()}
       role="table"
       aria-label={ariaLabel}
+      aria-busy={loading}
       style={{ "--global-table-scrollbar-width": `${scrollbarWidth}px` }}
     >
+      {loading ? (
+        <span className="mov-skeletonStatus" role="status" aria-live="polite">
+          {loadingLabel}
+        </span>
+      ) : null}
       <div
         className={`mov-gridTable mov-gridTable--head global-divTable__head ${gridClassName}`.trim()}
         role="row"
@@ -80,7 +100,16 @@ export default function GlobalDivTable({
         className={`mov-tableWrap global-divTable__wrap global-divTable__body ${bodyClassName}`.trim()}
         role="rowgroup"
       >
-        {children}
+        {loading ? (
+          <DataTableSkeleton
+            actionColumnIndex={actionColumnIndex}
+            columnCount={columns.length}
+            gridClassName={gridClassName}
+            rows={skeletonRows}
+          />
+        ) : (
+          children
+        )}
       </div>
     </div>
   );
