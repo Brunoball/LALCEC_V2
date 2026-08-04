@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAddressBook,
@@ -29,7 +29,9 @@ import InfoModal, {
   InfoSummary,
 } from "../Global/Modales/InfoModal";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
+import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import ModuleFeedback from "../Global/ModuleFeedback";
+import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import {
   EntityFormPanel,
   EntityTabs,
@@ -97,6 +99,44 @@ const formatMoney = (value) =>
         currency: "ARS",
         minimumFractionDigits: 2,
       }).format(Number(value || 0));
+
+const PERSON_EXPORT_COLUMNS = [
+  { label: "N.º", value: (_item, index) => index + 1 },
+  { label: "Socio", key: "denominacion" },
+  { label: "DNI", value: (item) => item.dni || "—" },
+  { label: "Categoría", value: (item) => item.categoria || "SIN CATEGORÍA" },
+  { label: "Fecha de alta", value: (item) => formatDate(item.fecha_alta) },
+  { label: "Localidad", value: (item) => item.localidad || "—" },
+  { label: "Teléfono", value: (item) => item.telefono || "—" },
+  { label: "Correo", value: (item) => item.email || "—" },
+  {
+    label: "Estado",
+    value: (item) => item.estado || (item.activo ? "ACTIVO" : "BAJA"),
+  },
+  {
+    label: "Recordatorio",
+    value: (item) =>
+      item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO",
+  },
+];
+
+const COMPANY_EXPORT_COLUMNS = [
+  { label: "N.º", value: (_item, index) => index + 1 },
+  { label: "Empresa", key: "denominacion" },
+  { label: "CUIT", value: (item) => item.cuit || "—" },
+  {
+    label: "Condición IVA",
+    value: (item) => item.condicion_iva || "SIN INFORMAR",
+  },
+  { label: "Categoría", value: (item) => item.categoria || "SIN CATEGORÍA" },
+  { label: "Fecha de alta", value: (item) => formatDate(item.fecha_alta) },
+  { label: "Teléfono", value: (item) => item.telefono || "—" },
+  { label: "Correo", value: (item) => item.email || "—" },
+  {
+    label: "Estado",
+    value: (item) => item.estado || (item.activo ? "ACTIVA" : "BAJA"),
+  },
+];
 
 const MONTHS = [
   "ENERO",
@@ -735,11 +775,54 @@ export default function Socios({ tipo = PERSON }) {
   const [historyTab, setHistoryTab] = useState(INFO_TAB_SUMMARY);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [deleteModal, setDeleteModal] = useState(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   const title = isCompany ? "Empresas" : "Socios";
   const singular = isCompany ? "empresa" : "socio";
   const createTitle = isCompany ? "Nueva empresa" : "Nuevo socio";
+  const exportColumns = isCompany
+    ? COMPANY_EXPORT_COLUMNS
+    : PERSON_EXPORT_COLUMNS;
+  const exportFilterDescription = useMemo(() => {
+    const selectedCategory = (catalogos.categorias || []).find(
+      (item) => String(item.id_categoria) === String(category),
+    );
+    return [
+      status === "INACTIVO" ? "Bajas" : "Activos",
+      selectedCategory ? `Categoría: ${selectedCategory.nombre}` : "Todas las categorías",
+      debouncedSearch ? `Búsqueda: ${debouncedSearch}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }, [catalogos.categorias, category, debouncedSearch, status]);
+
+  const obtenerTodosParaExportar = useCallback(async () => {
+    const primeraRespuesta = await sociosApi.listar({
+      ...filters,
+      pagina: 1,
+      por_pagina: PAGE_SIZE,
+    });
+    const registros = [...(primeraRespuesta.items || [])];
+    const totalRegistros = Number(
+      primeraRespuesta.paginacion?.total || registros.length,
+    );
+    const totalPaginas = Number(
+      primeraRespuesta.paginacion?.total_paginas ||
+        Math.max(1, Math.ceil(totalRegistros / PAGE_SIZE)),
+    );
+
+    for (let paginaActual = 2; paginaActual <= totalPaginas; paginaActual += 1) {
+      const respuesta = await sociosApi.listar({
+        ...filters,
+        pagina: paginaActual,
+        por_pagina: PAGE_SIZE,
+      });
+      registros.push(...(respuesta.items || []));
+    }
+
+    return registros;
+  }, [filters]);
 
   const openNew = () => {
     setForm(emptyForm(type, catalogos));
@@ -901,6 +984,14 @@ export default function Socios({ tipo = PERSON }) {
         headFiltersClassName="socios-headFilters"
         primaryActionLabel={isCompany ? "Nueva empresa" : "Nuevo socio"}
         onPrimaryAction={openNew}
+        headerActions={
+          <BotonExportarGlobal
+            label="Exportar"
+            onClick={() => setExportModalOpen(true)}
+            disabled={loading || items.length === 0}
+            title={`Exportar ${title.toLowerCase()} en Excel o PDF`}
+          />
+        }
         canCreate={writable}
         stats={[]}
         notice={
@@ -1104,6 +1195,35 @@ export default function Socios({ tipo = PERSON }) {
         ) : null}
       </ModulePage>
 
+      <ModalExportarGlobal
+        open={exportModalOpen}
+        title={`Exportar ${title.toLowerCase()}`}
+        subtitle="Elegí el alcance y descargá la información en Excel o PDF."
+        tituloArchivo={title}
+        subtituloArchivoActual={`${exportFilterDescription} · Página ${page} de ${Math.max(1, totalPages)}`}
+        subtituloArchivoTodos={exportFilterDescription}
+        nombreArchivo={isCompany ? "empresas" : "socios"}
+        columnas={exportColumns}
+        registrosActuales={items}
+        obtenerRegistrosTodos={obtenerTodosParaExportar}
+        cantidadActual={items.length}
+        cantidadTodos={Number(paginacion?.total || items.length)}
+        mostrarAlcanceTodos={Number(paginacion?.total || 0) > items.length}
+        alcanceActualLabel={totalPages > 1 ? "Exportar esta página" : "Exportar registros visibles"}
+        alcanceActualDescription="Descarga los registros visibles con los filtros actuales."
+        alcanceTodosLabel={`Exportar todos los ${title.toLowerCase()}`}
+        alcanceTodosDescription="Descarga todas las páginas que coinciden con los filtros actuales."
+        totalLabelSingular={isCompany ? "empresa disponible" : "socio disponible"}
+        totalLabelPlural={isCompany ? "empresas disponibles" : "socios disponibles"}
+        onClose={() => setExportModalOpen(false)}
+        onSuccess={(message) =>
+          setFeedback({ type: "success", message, duration: 4200 })
+        }
+        onError={(message) =>
+          setFeedback({ type: "error", message, duration: 5200 })
+        }
+      />
+
       <CrudModal
         open={modalOpen}
         title={form.id_socio ? `Editar ${singular}` : createTitle}
@@ -1117,6 +1237,7 @@ export default function Socios({ tipo = PERSON }) {
         saving={saving}
         submitLabel={form.id_socio ? "Guardar cambios" : `Crear ${singular}`}
         modalClassName="socios-modal socios-modal--form"
+        closeOnBackdrop={false}
         wide
       >
         <PartnerForm
@@ -1161,6 +1282,7 @@ export default function Socios({ tipo = PERSON }) {
         loadingTitle="Cargando ficha..."
         loadingText="Consultando datos, estados, familias y pagos."
         modalClassName="socios-info-modal"
+        closeOnBackdrop={false}
       >
         {historyModal?.error ? (
           <ModuleFeedback type="error" message={historyModal.error} />
@@ -1411,7 +1533,6 @@ export default function Socios({ tipo = PERSON }) {
         row={deleteModal?.item}
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
         message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."
-        warning="Se perderán los pagos, los vínculos familiares y el historial de estados relacionados con este registro."
         details={
           deleteModal?.item
             ? [

@@ -17,6 +17,7 @@ export default function InfoModal({
   loadingTitle = "Cargando información...",
   loadingText = "Consultando los datos del registro.",
   modalClassName = "",
+  closeOnBackdrop = true,
   children,
 }) {
   return (
@@ -29,6 +30,7 @@ export default function InfoModal({
       hideCancel
       wide
       modalClassName={`entity-info-modal ${modalClassName}`.trim()}
+      closeOnBackdrop={closeOnBackdrop}
     >
       <div className="entity-info-layout">
         {tabs.length ? (

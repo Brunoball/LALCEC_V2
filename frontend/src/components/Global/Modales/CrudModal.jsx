@@ -40,6 +40,7 @@ export default function CrudModal({
   cancelLabel = "Cancelar",
   footerStart = null,
   modalClassName = "",
+  closeOnBackdrop = true,
 }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -58,7 +59,7 @@ export default function CrudModal({
     <div
       className="entity-modal-overlay"
       role="presentation"
-      onMouseDown={() => !saving && onClose?.()}
+      onMouseDown={() => closeOnBackdrop && !saving && onClose?.()}
     >
       <div
         className={`entity-modal ${wide ? "entity-modal--wide" : ""} ${modalClassName}`.trim()}

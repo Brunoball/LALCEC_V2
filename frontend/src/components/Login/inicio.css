@@ -661,6 +661,11 @@
     max-height: 150px;
   }
 
+  .ini_brand-logo--placeholder {
+    justify-content: center;
+    text-align: left;
+  }
+
   .ini_brand-copy h2 {
     font-size: 1.28rem;
   }
@@ -699,6 +704,29 @@
   .ini_brand-kicker,
   .ini_brand-copy {
     display: none;
+  }
+
+  .ini_brand-logo--placeholder {
+    width: 100%;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  .ini_brand-logo--placeholder .brand-mark {
+    width: 82px;
+    height: 82px;
+    padding: 10px;
+    border-radius: 22px;
+  }
+
+  .ini_brand-logo--placeholder .brand-word strong,
+  .ini_brand-logo--placeholder .brand-word .brand-word-title {
+    font-size: clamp(1.8rem, 8vw, 2.6rem);
+  }
+
+  .ini_brand-logo--placeholder .brand-word span {
+    font-size: .66rem;
+    letter-spacing: .14em;
   }
 
   .ini_access-panel {
@@ -755,18 +783,43 @@
   filter: drop-shadow(0 18px 34px rgb(15 23 42 / .14));
 }
 .ini_brand-logo--placeholder .brand-mark {
-  width: 104px;
-  height: 104px;
+  width: 112px;
+  height: 112px;
   display: grid;
   place-items: center;
+  padding: 12px;
   border-radius: 28px;
-  color: #fff;
-  background: var(--gradient-primary, linear-gradient(145deg, #f97316, #c2410c));
-  box-shadow: 0 20px 45px -20px rgb(124 45 18 / .5);
-  font-size: 46px;
+  background: rgba(255, 255, 255, .96);
+  border: 1px solid rgba(217, 226, 239, .9);
+  box-shadow: 0 20px 45px -20px rgb(124 45 18 / .28);
 }
-.ini_brand-logo--placeholder .brand-word strong { display:block; font-family:'Plus Jakarta Sans', sans-serif; font-size:clamp(2rem,5vw,4rem); letter-spacing:-.06em; }
-.ini_brand-logo--placeholder .brand-word span { display:block; margin-top:5px; color:var(--ini-action); font-weight:700; letter-spacing:.18em; font-size:.78rem; }
+
+.ini_brand-logo--placeholder .brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.ini_brand-logo--placeholder .brand-word strong,
+.ini_brand-logo--placeholder .brand-word .brand-word-title {
+  display: block;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-weight: 700;
+  letter-spacing: -.07em;
+  line-height: .95;
+}
+
+.ini_brand-logo--placeholder .brand-word span {
+  display: block;
+  margin-top: 8px;
+  color: var(--ini-action);
+  font-weight: 700;
+  letter-spacing: .2em;
+  font-size: .8rem;
+  text-transform: uppercase;
+}
 .ini_visual-note { margin: 0; color: var(--ini-muted); font-size: .78rem; line-height: 1.45; text-align: center; }
 
 .ini_mensaje-error { margin: 0; color: var(--ini-danger); font-size: .84rem; line-height: 1.4; }

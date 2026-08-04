@@ -23,7 +23,6 @@ const OPERATION_CONFIG = {
     tone: "danger",
     title: "Eliminar registro",
     message: "¿Seguro que querés eliminar este registro definitivamente?",
-    warning: "Esta acción no se puede deshacer.",
     confirmLabel: "Eliminar",
     loadingLabel: "Eliminando...",
     loadingMessage: "Eliminando registro…",

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { apiPost } from "../_shared/api/apiClient";
 import { saveSession } from "../_shared/auth/session";
+import logoLalcec from "./logo_lalcec_sf.png";
 import "./inicio.css";
 
 const APP_NAME = "Gestión de Socios";
@@ -82,9 +83,14 @@ export default function Inicio() {
         <section className="ini_brand-panel">
           <div className="ini_brand-glow" aria-hidden="true" />
           <div className="ini_brand-content">
-            <div className="ini_brand-logo--placeholder" aria-label={APP_NAME}>
-              <div className="brand-mark"><FontAwesomeIcon icon={faUsers} /></div>
-              <div className="brand-word"><strong>Socios</strong><span>GESTIÓN INTEGRAL</span></div>
+            <div className="ini_brand-logo--placeholder" aria-label="LALCEC San Francisco Córdoba">
+              <div className="brand-mark brand-mark--image">
+                <img src={logoLalcec} alt="Logo LALCEC San Francisco" />
+              </div>
+              <div className="brand-word">
+                <strong className="brand-word-title">Lalcec</strong>
+                <span>San Francisco Córdoba</span>
+              </div>
             </div>
             <div className="ini_brand-copy">
               <h2>Administración simple y centralizada</h2>
@@ -105,8 +111,9 @@ export default function Inicio() {
               </div>
               <div className="ini_campo ini_campo-password">
                 <input className="ini_input" type={visible ? "text" : "password"} value={contrasena} onChange={(e) => setContrasena(e.target.value)} placeholder="Contraseña" autoComplete="current-password" required maxLength={255} />
-                <button type="button" className="ini_toggle-password" onClick={() => setVisible((value) => !value)} aria-label="Mostrar u ocultar contraseña">
-                  {visible ? "×" : "●"}
+                <button type="button" className="ini_toggle-password" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={visible}>
+                  <FontAwesomeIcon icon={visible ? faEyeSlash : faEye} />
                 </button>
               </div>
               <div className="ini_check-row">

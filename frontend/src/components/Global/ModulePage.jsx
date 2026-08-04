@@ -171,6 +171,7 @@ export function ModulePage({
   primaryActionLabel = "Nuevo registro",
   onPrimaryAction,
   onRefresh,
+  headerActions = null,
   secondaryActions = [],
   primaryActionClassName = "",
   headFiltersClassName = "",
@@ -236,6 +237,7 @@ export function ModulePage({
           </div>
 
           <div className="mov-card__actions module-card__actions">
+            {headerActions}
             {secondaryActions.map((action) => (
               <button
                 type="button"

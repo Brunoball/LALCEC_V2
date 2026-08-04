@@ -22,7 +22,9 @@ import InfoModal, {
   InfoSummary,
 } from "../../Global/Modales/InfoModal";
 import ModalEliminarGlobal from "../../Global/Modales/ModalEliminarGlobal";
+import ModalExportarGlobal from "../../Global/Modales/ModalExportarGlobal";
 import ModuleFeedback from "../../Global/ModuleFeedback";
+import BotonExportarGlobal from "../../Global/Botones/BotonExportarGlobal";
 import {
   EntityFormPanel,
   EntityTabs,
@@ -77,6 +79,15 @@ const formatDate = (value) =>
         new Date(`${value}T00:00:00Z`),
       )
     : "—";
+
+const FAMILY_EXPORT_COLUMNS = [
+  { label: "N.º", value: (_item, index) => index + 1 },
+  { label: "Familia", key: "nombre" },
+  { label: "Descripción", value: (item) => item.descripcion || "—" },
+  { label: "Titular", value: (item) => item.titular || "SIN TITULAR" },
+  { label: "Integrantes", value: (item) => Number(item.cantidad_integrantes || 0) },
+  { label: "Estado", value: (item) => item.activo ? "ACTIVA" : "BAJA" },
+];
 
 function emptyForm() {
   return {
@@ -487,6 +498,7 @@ export default function Familias() {
   const [detailModal, setDetailModal] = useState(null);
   const [detailTab, setDetailTab] = useState(INFO_TAB_CURRENT);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   const openNew = () => {
@@ -623,6 +635,14 @@ export default function Familias() {
         tabsInTitle
         primaryActionLabel="Nueva familia"
         onPrimaryAction={openNew}
+        headerActions={
+          <BotonExportarGlobal
+            label="Exportar"
+            onClick={() => setExportModalOpen(true)}
+            disabled={loading || items.length === 0}
+            title="Exportar familias en Excel o PDF"
+          />
+        }
         canCreate={writable}
         notice={
           !writable
@@ -730,6 +750,35 @@ export default function Familias() {
           ))}
         </GlobalDivTable>
       </ModulePage>
+
+      <ModalExportarGlobal
+        open={exportModalOpen}
+        title="Exportar familias"
+        subtitle="Elegí el formato para descargar las familias filtradas."
+        tituloArchivo="Familias"
+        subtituloArchivoActual={[
+          status === "inactivo" ? "Bajas" : "Activas",
+          search.trim() ? `Búsqueda: ${search.trim()}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        nombreArchivo="familias"
+        columnas={FAMILY_EXPORT_COLUMNS}
+        registrosActuales={items}
+        cantidadActual={items.length}
+        mostrarAlcanceTodos={false}
+        alcanceActualLabel="Exportar familias filtradas"
+        alcanceActualDescription="Descarga las familias que coinciden con la vista actual."
+        totalLabelSingular="familia disponible"
+        totalLabelPlural="familias disponibles"
+        onClose={() => setExportModalOpen(false)}
+        onSuccess={(message) =>
+          setFeedback({ type: "success", message, duration: 4200 })
+        }
+        onError={(message) =>
+          setFeedback({ type: "error", message, duration: 5200 })
+        }
+      />
 
       <CrudModal
         open={modalOpen}
