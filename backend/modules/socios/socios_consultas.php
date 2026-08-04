@@ -85,19 +85,50 @@ trait SociosConsultas
             api_error('La fecha desde no puede ser posterior a la fecha hasta.', 'FILTRO_INVALIDO');
         }
 
+        $pageRaw = $filters['pagina'] ?? 1;
+        $page = filter_var($pageRaw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($page === false) {
+            api_error('La página solicitada no es válida.', 'PAGINA_INVALIDA');
+        }
+
+        // El módulo carga siempre como máximo 100 socios. Los filtros y la
+        // búsqueda se aplican en SQL antes del LIMIT, por lo que contemplan
+        // la totalidad de la base y no solamente los registros visibles.
+        $perPage = 100;
         $sqlWhere = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+        $countStatement = $db->prepare(
+            'SELECT COUNT(DISTINCT s.id_socio) ' . self::baseFrom($sqlWhere)
+        );
+        $countStatement->execute($params);
+        $total = (int)$countStatement->fetchColumn();
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 0;
+        $page = (int)$page;
+        $offset = ($page - 1) * $perPage;
+
         $statement = $db->prepare(
             self::baseQuery($sqlWhere)
             . " ORDER BY (s.estado = 'ACTIVO') DESC,
                        COALESCE(p.apellido, e.razon_social) ASC,
                        p.nombre ASC,
-                       s.id_socio ASC"
+                       s.id_socio ASC
+                LIMIT {$perPage} OFFSET {$offset}"
         );
         $statement->execute($params);
         $items = array_map(static fn(array $row): array => self::castSocio($row), $statement->fetchAll());
 
         return [
             'items' => $items,
+            'paginacion' => [
+                'pagina' => $page,
+                'por_pagina' => $perPage,
+                'total' => $total,
+                'total_paginas' => $totalPages,
+                'desde' => $total === 0 || $offset >= $total ? 0 : $offset + 1,
+                'hasta' => $total === 0 || $offset >= $total ? 0 : min($offset + $perPage, $total),
+                'tiene_anterior' => $page > 1,
+                'tiene_siguiente' => $page < $totalPages,
+            ],
             'resumen' => self::resumen($db, $type),
             'catalogos' => self::catalogos($db),
         ];
@@ -139,8 +170,7 @@ trait SociosConsultas
              FROM pagos p
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
              WHERE p.id_socio = ?
-             ORDER BY p.anio DESC, p.mes DESC, p.id_pago DESC
-             LIMIT 60'
+             ORDER BY p.anio DESC, p.mes DESC, p.id_pago DESC'
         );
         $payments->execute([$id]);
         $paymentRows = $payments->fetchAll();
@@ -179,6 +209,30 @@ trait SociosConsultas
             'historial_estados' => $stateRows,
             'pagos' => $paymentRows,
             'familias' => $familyRows,
+            'impacto_eliminacion' => self::impactoEliminacion($db, $id),
+        ];
+    }
+
+    private static function impactoEliminacion(PDO $db, int $id): array
+    {
+        $payments = $db->prepare('SELECT COUNT(*) FROM pagos WHERE id_socio = ?');
+        $payments->execute([$id]);
+
+        $states = $db->prepare('SELECT COUNT(*) FROM socios_historial_estados WHERE id_socio = ?');
+        $states->execute([$id]);
+
+        $families = $db->prepare('SELECT COUNT(*) FROM familias_socios WHERE id_socio = ?');
+        $families->execute([$id]);
+
+        $paymentCount = (int)$payments->fetchColumn();
+        $stateCount = (int)$states->fetchColumn();
+        $familyCount = (int)$families->fetchColumn();
+
+        return [
+            'pagos' => $paymentCount,
+            'historial_estados' => $stateCount,
+            'vinculos_familiares' => $familyCount,
+            'total_relaciones' => $paymentCount + $stateCount + $familyCount,
         ];
     }
 
@@ -290,8 +344,13 @@ trait SociosConsultas
                     e.email AS empresa_email, e.domicilio_alternativo AS empresa_domicilio_alternativo,
                     e.id_condicion_iva, ci.nombre AS condicion_iva,
                     f.id_familia, f.nombre AS familia,
-                    fs.parentesco, fs.es_titular
-                FROM socios s
+                    fs.parentesco, fs.es_titular "
+                . self::baseFrom($extraWhere);
+    }
+
+    private static function baseFrom(string $extraWhere = ''): string
+    {
+        return "FROM socios s
                 LEFT JOIN socios_personas p ON p.id_socio = s.id_socio
                 LEFT JOIN socios_empresas e ON e.id_socio = s.id_socio
                 LEFT JOIN categorias c ON c.id_categoria = s.id_categoria

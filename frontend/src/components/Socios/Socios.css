@@ -66,34 +66,6 @@
   text-align: center;
 }
 
-.socios-summary-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-
-.socios-summary-strip > span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-height: 34px;
-  padding: 7px 11px;
-  border: 1px solid rgba(41, 71, 93, 0.12);
-  border-radius: 999px;
-  color: #53616c;
-  background: #fff;
-  font-size: 11px;
-  font-weight: 650;
-  box-shadow: 0 8px 18px -18px rgba(31, 54, 71, 0.7);
-}
-
-.socios-summary-strip strong {
-  color: #21475f;
-  font-size: 14px;
-  font-weight: 800;
-}
-
 .entity-wrap-text {
   overflow: hidden;
   display: -webkit-box;
@@ -119,9 +91,591 @@
     width: 100%;
     max-width: none;
   }
+}
 
-  .socios-summary-strip > span {
-    flex: 1 1 calc(50% - 8px);
-    justify-content: center;
+/* Recordatorio del bot de WhatsApp en la grilla. */
+.socios-reminder-chip {
+  min-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+.socios-reminder-chip.is-enabled {
+  color: #128c52;
+  border-color: rgba(18, 140, 82, 0.22);
+  background: rgba(18, 140, 82, 0.08);
+}
+
+.socios-reminder-chip.is-disabled {
+  color: #817873;
+  border-color: rgba(58, 46, 43, 0.12);
+  background: rgba(58, 46, 43, 0.045);
+}
+
+.socios-reminder-chip svg {
+  font-size: 11px;
+}
+
+/* Estado de pagos estilo calendario. */
+.socios-payments-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(58, 46, 43, 0.1);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff 0%, #fbfaf8 100%);
+  box-shadow: 0 14px 30px -28px rgba(58, 46, 43, 0.7);
+}
+
+.socios-payments-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.socios-payments-control {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(58, 46, 43, 0.08);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 20px -22px rgba(58, 46, 43, 0.65);
+}
+
+.socios-payments-control > strong {
+  color: var(--entity-modal-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.socios-payments-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.socios-payments-years button {
+  min-width: 45px;
+  height: 27px;
+  padding: 0 9px;
+  border: 1px solid rgba(58, 46, 43, 0.14);
+  border-radius: 999px;
+  color: var(--entity-modal-text);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.socios-payments-years button.is-active {
+  color: var(--entity-modal-action);
+  border-color: color-mix(in srgb, var(--entity-modal-action) 45%, #fff);
+  background: color-mix(in srgb, var(--entity-modal-action) 7%, #fff);
+}
+
+.socios-payment-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 29px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 750;
+}
+
+.socios-payment-status.is-success,
+.socios-payments-heading .is-success {
+  color: #149763;
+  border-color: rgba(20, 151, 99, 0.2);
+  background: rgba(20, 151, 99, 0.08);
+}
+
+.socios-payment-status.is-danger,
+.socios-payments-heading .is-danger {
+  color: #e5525d;
+  border-color: rgba(229, 82, 93, 0.2);
+  background: rgba(229, 82, 93, 0.07);
+}
+
+.socios-payments-legend {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.socios-payments-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(58, 46, 43, 0.1);
+  border-radius: 999px;
+  color: var(--entity-modal-text);
+  background: #fff;
+  font-size: 10.5px;
+}
+
+.socios-payments-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(58, 46, 43, 0.04);
+}
+
+.socios-payments-legend i.is-paid {
+  background: #66d6b0;
+}
+
+.socios-payments-legend i.is-pending {
+  background: #ff8f98;
+}
+
+.socios-payments-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.socios-payments-heading > strong {
+  color: var(--entity-modal-ink);
+  font-size: 13px;
+}
+
+.socios-payments-heading > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.socios-payments-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 750;
+}
+
+.socios-payments-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.socios-payment-month {
+  min-width: 0;
+  min-height: 58px;
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(58, 46, 43, 0.12);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.socios-payment-month > strong {
+  overflow: hidden;
+  color: #3e4959;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.socios-payment-month > span {
+  width: 8px;
+  height: 8px;
+  position: absolute;
+  top: 13px;
+  right: 12px;
+  border-radius: 50%;
+}
+
+.socios-payment-month > small {
+  color: var(--entity-modal-text);
+  font-size: 9px;
+}
+
+.socios-payment-month.is-paid {
+  border-color: rgba(65, 199, 154, 0.32);
+  background: linear-gradient(135deg, rgba(65, 199, 154, 0.09), rgba(255, 255, 255, 0.92));
+}
+
+.socios-payment-month.is-paid > span {
+  background: #61d1aa;
+  box-shadow: 0 0 0 3px rgba(97, 209, 170, 0.13);
+}
+
+.socios-payment-month.is-pending {
+  border-color: rgba(255, 117, 126, 0.34);
+  background: linear-gradient(135deg, rgba(255, 117, 126, 0.08), rgba(255, 255, 255, 0.92));
+}
+
+.socios-payment-month.is-pending > span {
+  background: #ff8790;
+  box-shadow: 0 0 0 3px rgba(255, 135, 144, 0.13);
+}
+
+.socios-payment-month.is-future {
+  border-style: dashed;
+  color: #8b8480;
+  background: rgba(58, 46, 43, 0.025);
+}
+
+.socios-payment-month.is-future > span {
+  background: #c8c2be;
+}
+
+.socios-payment-month.is-not-applicable {
+  opacity: 0.58;
+  border-style: dashed;
+  background: rgba(58, 46, 43, 0.018);
+}
+
+.socios-payment-month.is-not-applicable > span {
+  background: #d7d2cf;
+}
+
+/* Historial de estados. */
+.socios-state-section .entity-info-section__body {
+  padding: 10px 16px 12px;
+}
+
+.socios-state-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.socios-state-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  padding: 5px 0 15px;
+}
+
+.socios-state-event:not(:last-child)::before {
+  content: "";
+  width: 2px;
+  position: absolute;
+  top: 19px;
+  bottom: -2px;
+  left: 7px;
+  background: rgba(58, 46, 43, 0.11);
+}
+
+.socios-state-event__dot {
+  width: 16px;
+  height: 16px;
+  position: relative;
+  z-index: 1;
+  margin-top: 2px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(58, 46, 43, 0.12);
+}
+
+.socios-state-event.is-active .socios-state-event__dot {
+  background: #35bb79;
+}
+
+.socios-state-event.is-inactive .socios-state-event__dot {
+  background: #ef636d;
+}
+
+.socios-state-event__content {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 2px;
+}
+
+.socios-state-event__content > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.socios-state-event__content strong {
+  color: var(--entity-modal-ink);
+  font-size: 12px;
+}
+
+.socios-state-event__content time,
+.socios-state-event__content em {
+  color: var(--entity-modal-text);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.socios-state-event__content p,
+.socios-state-event__content small {
+  margin: 0;
+  color: var(--entity-modal-text);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+/* Baja recomendada + eliminación definitiva con doble confirmación. */
+.socios-deactivation-options {
+  display: grid;
+  gap: 10px;
+}
+
+.socios-delete-option {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid rgba(225, 61, 69, 0.2);
+  border-radius: 13px;
+  background: rgba(225, 61, 69, 0.045);
+}
+
+.socios-delete-option > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.socios-delete-option > div > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--balto-danger, #e13d45);
+}
+
+.socios-delete-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.socios-delete-option strong {
+  color: #b72e36;
+  font-size: 11.5px;
+}
+
+.socios-delete-option small {
+  color: #785f61;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.socios-delete-option button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(225, 61, 69, 0.25);
+  border-radius: 10px;
+  color: #c53039;
+  background: #fff;
+  font-size: 10.5px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.socios-delete-option button:hover {
+  color: #fff;
+  background: var(--balto-danger, #e13d45);
+}
+
+.socios-delete-confirmation {
+  display: grid;
+  gap: 10px;
+}
+
+.socios-delete-confirmation__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid rgba(225, 61, 69, 0.2);
+  border-radius: 12px;
+  color: #9f2b32;
+  background: rgba(225, 61, 69, 0.055);
+}
+
+.socios-delete-confirmation__warning svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.socios-delete-confirmation__warning p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.socios-delete-confirmation label {
+  display: grid;
+  gap: 6px;
+  color: #614f4c;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.socios-delete-confirmation input {
+  min-height: 38px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(225, 61, 69, 0.28);
+  border-radius: 10px;
+  color: #9f2b32;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  outline: none;
+}
+
+.socios-delete-confirmation input:focus {
+  border-color: var(--balto-danger, #e13d45);
+  box-shadow: 0 0 0 3px rgba(225, 61, 69, 0.1);
+}
+
+.socios-delete-confirmation__error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #a42d35;
+  background: rgba(225, 61, 69, 0.08);
+  font-size: 10.5px;
+}
+
+@media (max-width: 720px) {
+  .socios-payments-legend {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .socios-payments-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .socios-payments-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 440px) {
+  .socios-payments-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Paginación real: el backend devuelve como máximo 100 registros por consulta. */
+.socios-pagination {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border: 1px solid rgba(58, 46, 43, 0.1);
+  border-top: 0;
+  border-radius: 0 0 15px 15px;
+  background: #fff;
+}
+
+.socios-pagination__summary {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: #726965;
+  font-size: 12px;
+}
+
+.socios-pagination__summary strong {
+  color: #3a2e2b;
+  font-weight: 800;
+}
+
+.socios-pagination__summary span {
+  margin-left: 6px;
+  color: #c8872d;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.socios-pagination__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.socios-pagination__controls button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(58, 46, 43, 0.14);
+  border-radius: 9px;
+  color: #4f4541;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.socios-pagination__controls button:hover:not(:disabled) {
+  color: #b87520;
+  border-color: rgba(200, 135, 45, 0.45);
+  background: rgba(200, 135, 45, 0.07);
+}
+
+.socios-pagination__controls button.is-active {
+  color: #fff;
+  border-color: #c8872d;
+  background: #c8872d;
+}
+
+.socios-pagination__controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.socios-pagination__ellipsis {
+  min-width: 22px;
+  color: #8b817c;
+  text-align: center;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .socios-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .socios-pagination__controls {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
 }

@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 trait SociosGestion
 {
+    abstract private static function detalle(PDO $db, int $id): ?array;
+
+    abstract private static function impactoEliminacion(PDO $db, int $id): array;
+
     private static function guardarDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
@@ -244,6 +248,62 @@ trait SociosGestion
             $reason,
             'REACTIVACION'
         );
+    }
+
+    private static function eliminarDefinitivoDatos(array $auth, int $id): array
+    {
+        $db = $auth['db'];
+
+        try {
+            return transaction($db, static function () use ($db, $auth, $id): array {
+                $lock = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
+                $lock->execute([$id]);
+                $locked = $lock->fetch();
+                if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+
+                $before = self::detalle($db, $id) ?? $locked;
+                $impact = self::impactoEliminacion($db, $id);
+                $module = ($before['tipo_socio'] ?? 'PERSONA') === 'EMPRESA' ? 'EMPRESAS' : 'SOCIOS';
+                $name = trim((string)($before['denominacion'] ?? '')) ?: "ID {$id}";
+
+                // Las FK del modelo son RESTRICT para evitar borrados accidentales.
+                // La eliminación definitiva solo existe detrás de una doble confirmación
+                // y limpia primero todas las relaciones conocidas, dentro de la misma transacción.
+                $db->prepare('DELETE FROM familias_socios WHERE id_socio = ?')->execute([$id]);
+                $db->prepare('DELETE FROM pagos WHERE id_socio = ?')->execute([$id]);
+                $db->prepare('DELETE FROM socios_historial_estados WHERE id_socio = ?')->execute([$id]);
+                $db->prepare('DELETE FROM socios WHERE id_socio = ?')->execute([$id]);
+
+                audit_change(
+                    $db,
+                    $auth,
+                    $module,
+                    'ELIMINAR_DEFINITIVO',
+                    'socios',
+                    $id,
+                    "Se eliminó definitivamente {$name}, junto con sus pagos, vínculos familiares e historial de estados.",
+                    [
+                        'socio' => $before,
+                        'impacto_eliminacion' => $impact,
+                    ],
+                    null
+                );
+
+                return [
+                    'id_socio' => $id,
+                    'impacto_eliminacion' => $impact,
+                ];
+            });
+        } catch (PDOException $error) {
+            if ((string)$error->getCode() === '23000') {
+                api_error(
+                    'No se pudo eliminar el socio porque existe otra relación protegida en la base. Revisá los datos vinculados.',
+                    'SOCIO_CON_RELACIONES_PROTEGIDAS',
+                    409
+                );
+            }
+            throw $error;
+        }
     }
 
     private static function changeStatus(

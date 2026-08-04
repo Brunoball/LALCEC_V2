@@ -60,4 +60,23 @@ final class Socios
         $reason = optional_text($body['motivo_reactivacion'] ?? null, 500);
         api_success(self::reactivarDatos($auth, $id, $date, $reason), 'Registro reactivado correctamente.');
     }
+
+    public static function eliminarDefinitivo(): never
+    {
+        $auth = require_admin();
+        $body = request_body();
+        $id = positive_id($body['id'] ?? null, 'socio');
+        $confirmation = strtoupper(trim((string)($body['confirmacion'] ?? '')));
+        if ($confirmation !== 'ELIMINAR') {
+            api_error(
+                'Escribí ELIMINAR para confirmar la eliminación definitiva.',
+                'CONFIRMACION_ELIMINACION_INVALIDA',
+                422
+            );
+        }
+        api_success(
+            self::eliminarDefinitivoDatos($auth, $id),
+            'El socio y toda su información relacionada fueron eliminados definitivamente.'
+        );
+    }
 }

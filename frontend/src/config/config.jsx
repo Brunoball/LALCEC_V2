@@ -28,3 +28,6 @@ export const BOT_PANEL_PUNTOS_URL = withoutTrailingSlash(
 
 export default BASE_URL;
 
+
+
+//php -c "C:\php\php.ini" -S localhost:3001

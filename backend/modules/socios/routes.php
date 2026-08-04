@@ -11,6 +11,7 @@ function register_socios_routes(Router $router): void
     $router->register('socios_historial', 'GET', [Socios::class, 'historial'], true);
     $router->register('socios_guardar', 'POST', [Socios::class, 'guardar'], true);
     $router->register('socios_eliminar', 'POST', [Socios::class, 'darBaja'], true);
+    $router->register('socios_eliminar_definitivo', 'POST', [Socios::class, 'eliminarDefinitivo'], true);
     $router->register('socios_reactivar', 'POST', [Socios::class, 'reactivar'], true);
 
     $router->register('familias_listar', 'GET', [Familias::class, 'listar'], true);

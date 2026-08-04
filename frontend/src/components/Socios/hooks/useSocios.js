@@ -3,7 +3,21 @@ import { sociosApi } from "../api/sociosApi";
 
 export function useSocios(filtros = {}) {
   const query = useMemo(() => JSON.stringify(filtros), [filtros]);
-  const [response, setResponse] = useState({ items: [], resumen: {}, catalogos: {} });
+  const [response, setResponse] = useState({
+    items: [],
+    resumen: {},
+    catalogos: {},
+    paginacion: {
+      pagina: 1,
+      por_pagina: 100,
+      total: 0,
+      total_paginas: 0,
+      desde: 0,
+      hasta: 0,
+      tiene_anterior: false,
+      tiene_siguiente: false,
+    },
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const requestId = useRef(0);
@@ -15,7 +29,21 @@ export function useSocios(filtros = {}) {
     try {
       const result = await sociosApi.listar(JSON.parse(query));
       if (currentRequest !== requestId.current) return null;
-      setResponse({ items: result.items || [], resumen: result.resumen || {}, catalogos: result.catalogos || {} });
+      setResponse({
+        items: result.items || [],
+        resumen: result.resumen || {},
+        catalogos: result.catalogos || {},
+        paginacion: result.paginacion || {
+          pagina: 1,
+          por_pagina: 100,
+          total: 0,
+          total_paginas: 0,
+          desde: 0,
+          hasta: 0,
+          tiene_anterior: false,
+          tiene_siguiente: false,
+        },
+      });
       return result;
     } catch (err) {
       if (currentRequest !== requestId.current) return null;

@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 trait FamiliasGestion
 {
+    abstract private static function familyDetail(PDO $db, int $id, bool $includeHistory = false): ?array;
+
     private static function guardarDatos(array $auth, array $body): array
     {
         $db = $auth['db'];

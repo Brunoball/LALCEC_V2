@@ -38,6 +38,30 @@ const FORM_TAB_DETAILS = "datos";
 const FORM_TAB_MEMBERS = "integrantes";
 const INFO_TAB_CURRENT = "actual";
 const INFO_TAB_HISTORY = "historial";
+const PARTNER_STATUS_STORAGE_KEY = "lalcec_socios_estado_seleccionado";
+
+function readSharedFamilyStatus() {
+  if (typeof window === "undefined") return "activo";
+  try {
+    return window.sessionStorage.getItem(PARTNER_STATUS_STORAGE_KEY) === "INACTIVO"
+      ? "inactivo"
+      : "activo";
+  } catch (_error) {
+    return "activo";
+  }
+}
+
+function saveSharedFamilyStatus(value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      PARTNER_STATUS_STORAGE_KEY,
+      value === "inactivo" ? "INACTIVO" : "ACTIVO",
+    );
+  } catch (_error) {
+    // La navegación sigue funcionando aunque el almacenamiento esté bloqueado.
+  }
+}
 
 const today = () => {
   const now = new Date();
@@ -442,13 +466,12 @@ function formFromFamily(item) {
 export default function Familias() {
   const writable = canWrite();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("activo");
+  const [status, setStatus] = useState(readSharedFamilyStatus);
   const filters = useMemo(
     () => ({ buscar: search, estado: status }),
     [search, status],
   );
-  const { items, resumen, catalogos, loading, error, cargar } =
-    useFamilias(filters);
+  const { items, catalogos, loading, error, cargar } = useFamilias(filters);
   const [form, setForm] = useState(emptyForm);
   const [formTab, setFormTab] = useState(FORM_TAB_DETAILS);
   const [modalOpen, setModalOpen] = useState(false);
@@ -563,7 +586,10 @@ export default function Familias() {
       type: "tabs",
       ariaLabel: "Estado de las familias",
       value: status,
-      onChange: setStatus,
+      onChange: (value) => {
+        saveSharedFamilyStatus(value);
+        setStatus(value);
+      },
       options: [
         { value: "activo", label: "Activas" },
         { value: "inactivo", label: "Bajas" },
@@ -600,17 +626,6 @@ export default function Familias() {
           duration={feedback?.duration}
           onClose={() => setFeedback(null)}
         />
-        <div className="socios-summary-strip" aria-label="Resumen de familias">
-          <span>
-            <strong>{Number(resumen.activas || 0)}</strong> activas
-          </span>
-          <span>
-            <strong>{Number(resumen.inactivas || 0)}</strong> bajas
-          </span>
-          <span>
-            <strong>{Number(resumen.integrantes_activos || 0)}</strong> integrantes activos
-          </span>
-        </div>
         <GlobalDivTable
           className="familias-table"
           bodyClassName="entity-table-wrap"
