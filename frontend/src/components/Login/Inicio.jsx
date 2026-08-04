@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { apiPost } from "../_shared/api/apiClient";
 import { saveSession } from "../_shared/auth/session";
-import logoLalcec from "./logo_lalcec_sf.png";
+import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
 import "./inicio.css";
 
 const APP_NAME = "Gestión de Socios";

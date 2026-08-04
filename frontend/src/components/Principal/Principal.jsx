@@ -22,7 +22,7 @@ import {
 } from "../_shared/auth/session";
 import { apiPost } from "../_shared/api/apiClient";
 import { BOT_PANEL_ROUTE } from "../../config/config";
-import logoLalcec from "./logo_lalcec_sf.png";
+import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
 import "./principal.css";
 
 const APP_NAME = "Gestión de Socios";
