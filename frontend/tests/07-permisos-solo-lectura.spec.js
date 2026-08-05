@@ -72,6 +72,13 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['dashboard_resumen'],
         ['cuotas_listar', { params: { tipo: 'PERSONA', estado: 'DEUDORES' } }],
         ['cuotas_catalogos'],
+        ['cuotas_contexto_pago', {
+          params: {
+            id_socio: personItem.id_socio,
+            anio: new Date().getFullYear(),
+            mes: new Date().getMonth() + 1,
+          },
+        }],
         ['socios_listar', { params: { tipo: 'PERSONA', estado: 'ACTIVO' } }],
         ['socios_obtener', { params: { id: personItem.id_socio } }],
         ['socios_historial', { params: { id: personItem.id_socio } }],
@@ -96,6 +103,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
 
       const mutationCases = [
         ['cuotas_registrar_pago', { id_socio: personItem.id_socio }],
+        ['cuotas_registrar_pagos', { pagos: [{ id_socio: personItem.id_socio }] }],
         ['cuotas_eliminar_pago', { id_pago: 1 }],
         ['socios_guardar', { tipo_socio: 'PERSONA' }],
         ['socios_eliminar', { id: personItem.id_socio }],

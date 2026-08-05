@@ -262,9 +262,14 @@ test.describe('Socios, empresas y familias', () => {
       name: new RegExp(familyMember.apellido, 'i'),
     });
     await memberCheckbox.check();
-    await dialog.getByRole('radio', { name: 'Titular' }).check();
-    await dialog.getByPlaceholder('Parentesco').fill('TITULAR');
-    await dialog.getByPlaceholder('Observaciones').fill('VÍNCULO E2E');
+    await dialog.getByRole('button', { name: /Agregar miembros \(1\)/ }).click();
+    const selectedMember = dialog.locator('.familias-selected-member').filter({
+      hasText: familyMember.apellido,
+    });
+    await expect(selectedMember).toBeVisible();
+    await selectedMember.getByRole('radio', { name: 'Titular' }).check();
+    await selectedMember.getByPlaceholder('Parentesco').fill('TITULAR');
+    await selectedMember.getByPlaceholder('Observaciones').fill('VÍNCULO E2E');
     await dialog.getByRole('button', { name: 'Crear familia' }).click();
     await expectToast(page, 'Familia creada correctamente.');
 

@@ -14,13 +14,6 @@ function metric(page, title) {
   return page.locator('.admin-dashboard__metric').filter({ hasText: title });
 }
 
-function activity(page, label) {
-  return page.locator('.admin-dashboard__activityItem').filter({ hasText: label });
-}
-
-function financeRow(page, label) {
-  return page.locator('.admin-dashboard__financeRows > div').filter({ hasText: label });
-}
 
 const emptySummary = {
   periodo: { mes_nombre: 'AGOSTO', anio: 2026 },
@@ -101,18 +94,13 @@ test.describe('Dashboard', () => {
     const balanceText = await metric(page, 'Saldo del mes').locator('strong').innerText();
     expect(normalizeUiText(balanceText)).toBe(normalizeUiText(ars(summary.contable.saldo_mes)));
 
-    await expect(activity(page, 'Altas del mes').locator('strong')).toHaveText(
-      String(Number(summary.actividad.altas_mes || 0)),
-    );
-    await expect(activity(page, 'Bajas del mes').locator('strong')).toHaveText(
-      String(Number(summary.actividad.bajas_mes || 0)),
-    );
-    await expect(activity(page, 'Reactivaciones').locator('strong')).toHaveText(
-      String(Number(summary.actividad.reactivaciones_mes || 0)),
-    );
-    await expect(activity(page, 'Cobros cargados').locator('strong')).toHaveText(
-      String(Number(summary.actividad.cobros_mes || 0)),
-    );
+    // Las secciones inferiores de actividad, finanzas y pagos recientes fueron
+    // eliminadas del dashboard. La vista vigente conserva métricas, gráfico y
+    // calidad de datos, por lo que validamos únicamente esos bloques reales.
+    await expect(page.locator('.admin-dashboard__activityItem')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__financeRows')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__recentItem')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__empty')).toHaveCount(0);
 
     await expect(
       page.getByLabel(
@@ -145,44 +133,6 @@ test.describe('Dashboard', () => {
       await expect(column).toContainText(item.etiqueta || '');
     }
 
-    await expect(financeRow(page, 'Cuotas cobradas').locator('strong')).toHaveText(
-      ars(summary.contable.ingresos_socios_mes),
-    );
-    await expect(financeRow(page, 'Otros ingresos').locator('strong')).toHaveText(
-      ars(summary.contable.otros_ingresos_mes),
-    );
-    await expect(financeRow(page, 'Egresos').locator('strong')).toHaveText(
-      ars(summary.contable.egresos_mes),
-    );
-    await expect(financeRow(page, 'Resultado').locator('strong')).toHaveText(
-      ars(summary.contable.saldo_mes),
-    );
-
-    if (!summary.fuentes?.contable_disponible) {
-      await expect(page.getByText(/se mostrarán cuando estén disponibles las tablas del módulo Contable/i)).toBeVisible();
-    }
-    if (Number(summary.cuotas.cobros_sin_importe_mes || 0) > 0) {
-      await expect(page.getByText(/cobro.*sin monto/i)).toBeVisible();
-    }
-
-    const recent = summary.pagos_recientes || [];
-    if (recent.length) {
-      await expect(page.locator('.admin-dashboard__recentItem')).toHaveCount(recent.length);
-      for (const [index, payment] of recent.entries()) {
-        const item = page.locator('.admin-dashboard__recentItem').nth(index);
-        await expect(item).toContainText(payment.socio);
-        await expect(item).toContainText(payment.mes_nombre);
-        await expect(item).toContainText(payment.medio_pago);
-        await expect(item).toContainText(
-          payment.monto === null ? 'Sin importe' : ars(payment.monto),
-        );
-      }
-    } else {
-      await expect(page.locator('.admin-dashboard__empty')).toContainText(
-        'Todavía no hay pagos registrados.',
-      );
-    }
-
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Panel de gestión' })).toBeVisible();
   });
@@ -203,10 +153,14 @@ test.describe('Dashboard', () => {
       page.getByRole('img', { name: 'Cuotas registradas durante los últimos seis períodos' })
         .locator('.admin-dashboard__chartMonth'),
     ).toHaveCount(0);
-    await expect(page.locator('.admin-dashboard__empty')).toHaveText(
-      'Todavía no hay pagos registrados.',
-    );
-    await expect(page.getByText(/tablas del módulo Contable/i)).toBeVisible();
+    await expect(page.locator('.admin-dashboard__empty')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__activityItem')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__financeRows')).toHaveCount(0);
+    await expect(page.locator('.admin-dashboard__recentItem')).toHaveCount(0);
+    await expect(page.getByText(/tablas del módulo Contable/i)).toHaveCount(0);
+    await expect(page.getByLabel('Socios con categoría: 0%')).toBeVisible();
+    await expect(page.getByLabel('Personas con familia: 0%')).toBeVisible();
+    await expect(page.getByLabel('Recordatorios habilitados: 0%')).toBeVisible();
   });
 
   test('muestra el error del backend y permite reintentar sin recargar la aplicación', async ({ page }) => {

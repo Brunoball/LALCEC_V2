@@ -154,3 +154,329 @@
     grid-template-columns: 1fr;
   }
 }
+
+.cuotas-grid--selecting {
+  grid-template-columns:
+    64px
+    minmax(230px, 1.5fr)
+    minmax(100px, 0.72fr)
+    minmax(120px, 0.75fr)
+    minmax(130px, 0.8fr)
+    minmax(130px, 0.82fr)
+    minmax(145px, 0.85fr);
+  min-width: 1060px;
+}
+
+.cuotas-grid.is-selected {
+  background: color-mix(in srgb, var(--balto-action, #b52d35) 7%, #fff);
+}
+
+.cuotas-select-cell {
+  display: grid;
+  place-items: center;
+}
+
+.cuotas-select-cell input,
+.cuotas-family-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--balto-action, #b52d35);
+  cursor: pointer;
+}
+
+.cuotas-discount-note {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.67rem;
+  font-weight: 650;
+}
+
+.cuotas-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 14px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--balto-action, #b52d35) 22%, #e2e8f0);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--balto-action, #b52d35) 5%, #fff);
+}
+
+.cuotas-selection-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.cuotas-selection-bar svg {
+  color: var(--balto-action, #b52d35);
+}
+
+.cuotas-selection-bar strong {
+  white-space: nowrap;
+}
+
+.cuotas-selection-bar span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.cuotas-context-loading,
+.cuotas-no-family {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.cuotas-no-family svg {
+  color: #94a3b8;
+}
+
+.cuotas-family-card {
+  display: grid;
+  gap: 13px;
+  margin-top: 16px;
+  padding: 15px;
+  border: 1px solid #fdba74;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.cuotas-family-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cuotas-family-card__head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.cuotas-family-card__head span,
+.cuotas-batch-list header span {
+  color: #c2410c;
+  font-size: 0.69rem;
+  font-weight: 900;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.cuotas-family-card__head strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.cuotas-family-card__head small {
+  color: #64748b;
+}
+
+.cuotas-family-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.cuotas-family-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+
+.cuotas-family-toggle strong {
+  color: #0f172a;
+  font-size: 0.84rem;
+}
+
+.cuotas-family-toggle small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cuotas-family-members {
+  display: grid;
+  gap: 8px;
+}
+
+.cuotas-family-members article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.cuotas-family-members article.is-unavailable {
+  opacity: 0.62;
+  background: #f8fafc;
+}
+
+.cuotas-family-members article > div {
+  display: grid;
+  gap: 2px;
+}
+
+.cuotas-family-members article > div:last-child {
+  text-align: right;
+}
+
+.cuotas-family-members strong {
+  color: #0f172a;
+  font-size: 0.8rem;
+}
+
+.cuotas-family-members span,
+.cuotas-family-members small {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.cuotas-payment-grid--multiple {
+  margin-bottom: 16px;
+}
+
+.cuotas-batch-list {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.cuotas-batch-list > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.cuotas-batch-list > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.cuotas-batch-list > header > strong {
+  color: var(--balto-action, #b52d35);
+  font-size: 1.12rem;
+}
+
+.cuotas-batch-list > div {
+  display: grid;
+  max-height: 350px;
+  overflow: auto;
+}
+
+.cuotas-batch-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.cuotas-batch-list article:last-child {
+  border-bottom: 0;
+}
+
+.cuotas-batch-list article > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cuotas-batch-list article > div strong {
+  color: #0f172a;
+  font-size: 0.82rem;
+}
+
+.cuotas-batch-list article > div span,
+.cuotas-batch-list article > div small {
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.cuotas-batch-list article > label {
+  display: grid;
+  gap: 4px;
+}
+
+.cuotas-batch-list article > label span {
+  color: #64748b;
+  font-size: 0.67rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cuotas-batch-list input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  color: #0f172a;
+  background: #fff;
+  font: inherit;
+  font-weight: 750;
+}
+
+html[data-theme="oscuro"] .cuotas-grid.is-selected,
+html[data-theme="oscuro"] .cuotas-selection-bar,
+html[data-theme="oscuro"] .cuotas-family-card,
+html[data-theme="oscuro"] .cuotas-family-toggle,
+html[data-theme="oscuro"] .cuotas-family-members article,
+html[data-theme="oscuro"] .cuotas-context-loading,
+html[data-theme="oscuro"] .cuotas-no-family,
+html[data-theme="oscuro"] .cuotas-batch-list,
+html[data-theme="oscuro"] .cuotas-batch-list > header,
+html[data-theme="oscuro"] .cuotas-batch-list input {
+  background: color-mix(in srgb, var(--balto-bg) 88%, #fff 12%);
+}
+
+@media (max-width: 720px) {
+  .cuotas-selection-bar,
+  .cuotas-selection-bar > div,
+  .cuotas-family-card__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cuotas-selection-bar strong {
+    white-space: normal;
+  }
+
+  .cuotas-family-members article,
+  .cuotas-batch-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .cuotas-family-members article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cuotas-family-members article > div:last-child {
+    text-align: left;
+  }
+}

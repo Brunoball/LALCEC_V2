@@ -41,7 +41,7 @@ test.describe('Login y sesión', () => {
     await expect(page.getByPlaceholder('Contraseña')).toHaveAttribute('type', 'password');
   });
 
-  test('aplica atributos de seguridad y no persiste contraseñas en recordar cuenta', async ({ page }) => {
+  test('aplica atributos del formulario y restaura todas las credenciales recordadas', async ({ page }) => {
     const username = process.env.PW_USER;
     await page.addInitScript(
       ({ rememberedKey, sessionKey, account }) => {
@@ -62,7 +62,7 @@ test.describe('Login y sesión', () => {
     await expect(passwordInput).toHaveAttribute('maxlength', '255');
     await expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
     await expect(userInput).toHaveValue(username);
-    await expect(passwordInput).toHaveValue('');
+    await expect(passwordInput).toHaveValue('NO_GUARDAR');
     await expect(page.getByRole('checkbox', { name: /Recordar cuenta/i })).toBeChecked();
 
     const storage = await page.evaluate(
@@ -72,9 +72,9 @@ test.describe('Login y sesión', () => {
       }),
       { rememberedKey: REMEMBERED_ACCOUNT_KEY, sessionKey: SESSION_KEY },
     );
-    expect(storage.remembered).toEqual({ usuario: username });
+    expect(storage.remembered).toEqual({ usuario: username, contrasena: 'NO_GUARDAR' });
     expect(storage.legacySession).toBeNull();
-    expect(JSON.stringify(storage.remembered)).not.toContain('NO_GUARDAR');
+    expect(storage.remembered.contrasena).toBe('NO_GUARDAR');
   });
 
   test('la validación nativa impide enviar campos vacíos', async ({ page }) => {
@@ -134,8 +134,8 @@ test.describe('Login y sesión', () => {
       const raw = localStorage.getItem(key);
       return raw ? JSON.parse(raw) : null;
     }, REMEMBERED_ACCOUNT_KEY);
-    expect(remembered).toEqual({ usuario: username });
-    expect(JSON.stringify(remembered)).not.toContain(password);
+    expect(remembered).toEqual({ usuario: username, contrasena: password });
+    expect(remembered.contrasena).toBe(password);
 
     await page.getByTitle('Cerrar sesión').click();
     const logoutDialog = page
@@ -156,7 +156,7 @@ test.describe('Login y sesión', () => {
     ]);
 
     await expect(page.getByPlaceholder('Usuario')).toHaveValue(username);
-    await expect(page.getByPlaceholder('Contraseña')).toHaveValue('');
+    await expect(page.getByPlaceholder('Contraseña')).toHaveValue(password);
     await expect(page.getByRole('checkbox', { name: /Recordar cuenta/i })).toBeChecked();
     const storedSession = await page.evaluate((key) => sessionStorage.getItem(key), SESSION_KEY);
     expect(storedSession).toBeNull();
@@ -164,6 +164,8 @@ test.describe('Login y sesión', () => {
     await page.getByRole('checkbox', { name: /Recordar cuenta/i }).uncheck();
     await page.reload();
     await expect(page.getByPlaceholder('Usuario')).toHaveValue('');
+    await expect(page.getByPlaceholder('Contraseña')).toHaveValue('');
+    await expect(page.getByRole('checkbox', { name: /Recordar cuenta/i })).not.toBeChecked();
   });
 
   test('el cierre sigue mostrando el login aunque el servidor responda 401 en paralelo', async ({ page }) => {
