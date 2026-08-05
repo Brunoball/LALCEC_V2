@@ -45,7 +45,7 @@ trait ContableSoporte
     protected static function opcion(PDO $db, int $id, string $expectedType): array
     {
         $statement = $db->prepare(
-            'SELECT id_opcion, tipo, nombre
+            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
              FROM contable_opciones
              WHERE id_opcion = ?
              LIMIT 1'
@@ -59,6 +59,8 @@ trait ContableSoporte
             'id_opcion' => (int)$row['id_opcion'],
             'tipo' => (string)$row['tipo'],
             'nombre' => (string)$row['nombre'],
+            'creado_en' => (string)$row['creado_en'],
+            'actualizado_en' => (string)$row['actualizado_en'],
         ];
     }
 
@@ -153,7 +155,7 @@ trait ContableSoporte
     {
         $suffix = $lock ? ' FOR UPDATE' : '';
         $statement = $db->prepare(
-            'SELECT id_opcion, tipo, nombre
+            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
              FROM contable_opciones
              WHERE id_opcion = ?' . $suffix
         );
@@ -165,13 +167,15 @@ trait ContableSoporte
             'id_opcion' => (int)$row['id_opcion'],
             'tipo' => (string)$row['tipo'],
             'nombre' => (string)$row['nombre'],
+            'creado_en' => (string)$row['creado_en'],
+            'actualizado_en' => (string)$row['actualizado_en'],
         ];
     }
 
     protected static function opcionesConfiguracionDatos(PDO $db): array
     {
         $rows = $db->query(
-            'SELECT id_opcion, tipo, nombre
+            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
              FROM contable_opciones
              ORDER BY tipo ASC, nombre ASC, id_opcion ASC'
         )->fetchAll();
@@ -189,6 +193,8 @@ trait ContableSoporte
                 'id_opcion' => (int)$row['id_opcion'],
                 'tipo' => $type,
                 'nombre' => (string)$row['nombre'],
+                'creado_en' => (string)$row['creado_en'],
+                'actualizado_en' => (string)$row['actualizado_en'],
             ];
             $summary[$type . '_total']++;
         }

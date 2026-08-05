@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
   faArrowRotateLeft,
+  faCalculator,
   faChevronRight,
   faFileInvoiceDollar,
   faGear,
@@ -125,6 +126,17 @@ function ConfigurationHome() {
       detail: "Medios de pago y condición IVA",
       path: "/configuracion/catalogos",
     },
+    {
+      id: "contable",
+      title: "Contable",
+      description:
+        "Administrá las listas que aparecen en los selectores de otros ingresos y egresos.",
+      icon: faCalculator,
+      status: "5 listas",
+      area: "Contabilidad",
+      detail: "Proveedores, categorías y conceptos",
+      path: "/configuracion/contable",
+    },
   ];
 
   return (
@@ -137,8 +149,8 @@ function ConfigurationHome() {
           <small>CONFIGURACIÓN DEL SISTEMA</small>
           <strong>Solo las opciones que utiliza LALCEC V2</strong>
           <p>
-            Gestioná usuarios, roles y los catálogos generales vinculados con
-            socios, empresas y pagos.
+            Gestioná usuarios, roles y los catálogos vinculados con socios,
+            pagos y Contabilidad.
           </p>
         </div>
       </header>

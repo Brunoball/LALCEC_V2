@@ -104,7 +104,7 @@ export default function Inicio() {
             </div>
             <div className="ini_brand-copy">
               <h2>Administración simple y centralizada</h2>
-              <p>Una base preparada para gestionar socios, familias, cuotas, categorías, contabilidad y comunicación por WhatsApp.</p>
+              <p>Gestión de socios simple y ordenada: cuotas, familias, categorías, contabilidad y WhatsApp en un solo sistema.</p>
             </div>
           </div>
         </section>

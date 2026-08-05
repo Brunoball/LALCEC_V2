@@ -67,7 +67,15 @@ const contableLists = [
   },
 ];
 
-function catalogRow(page, name) {
+function catalogTableRow(page, tableName, name) {
+  return page
+    .getByRole('table', { name: tableName })
+    .getByRole('row')
+    .filter({ hasText: name })
+    .last();
+}
+
+function contableOptionCard(page, name) {
   return page.locator('.config-list__item').filter({ hasText: name }).last();
 }
 
@@ -108,7 +116,7 @@ test.describe('Configuración general', () => {
     await sections.getByRole('button', { name: /Catálogos generales/i }).click();
     await expect(page).toHaveURL(/\/configuracion\/catalogos$/);
     await expect(page.getByRole('heading', { name: 'Catálogos generales' })).toBeVisible();
-    await page.getByRole('button', { name: 'Volver a configuración' }).click();
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page).toHaveURL(/\/configuracion$/);
 
     await page
@@ -149,11 +157,11 @@ test.describe('Configuración general', () => {
       await dialog.getByRole('button', { name: 'Agregar' }).click();
       await expectToast(page, 'La opción se agregó correctamente.');
 
-      const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+      const search = page.getByRole('textbox', { name: 'Buscar', exact: true });
       await search.fill(catalog.original);
-      let row = catalogRow(page, catalog.original);
-      await expect(row).toContainText('ACTIVO');
-      await expect(row).toContainText('Sin registros asociados');
+      let row = catalogTableRow(page, catalog.tab, catalog.original);
+      await expect(row).toContainText('Activo');
+      await expect(row.getByRole('cell', { name: '0 registros asociados' })).toBeVisible();
 
       await row.getByRole('button', { name: `Editar ${catalog.original}` }).click();
       dialog = page.getByRole('dialog', { name: `Editar ${catalog.label}` });
@@ -162,7 +170,7 @@ test.describe('Configuración general', () => {
       await expectToast(page, 'La opción se modificó correctamente.');
 
       await search.fill(catalog.edited);
-      row = catalogRow(page, catalog.edited);
+      row = catalogTableRow(page, catalog.tab, catalog.edited);
       await expect(row).toBeVisible();
       await row.getByRole('button', { name: `Eliminar ${catalog.edited}` }).click();
 
@@ -172,7 +180,7 @@ test.describe('Configuración general', () => {
       await expect(deleteDialog).toBeVisible();
       await deleteDialog.getByRole('button', { name: 'Eliminar' }).click();
       await expectToast(page, /opción se eliminó definitivamente/i);
-      await expect(catalogRow(page, catalog.edited)).toHaveCount(0);
+      await expect(catalogTableRow(page, catalog.tab, catalog.edited)).toHaveCount(0);
     }
   });
 
@@ -201,7 +209,7 @@ test.describe('Configuración general', () => {
 
       const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
       await search.fill(list.original);
-      let row = catalogRow(page, list.original);
+      let row = contableOptionCard(page, list.original);
       await expect(row).toContainText('Disponible en los selectores de Contabilidad');
 
       await row.getByRole('button', { name: `Editar ${list.original}` }).click();
@@ -211,7 +219,7 @@ test.describe('Configuración general', () => {
       await expectToast(page, 'La opción se modificó correctamente.');
 
       await search.fill(list.edited);
-      row = catalogRow(page, list.edited);
+      row = contableOptionCard(page, list.edited);
       await expect(row).toBeVisible();
       await row.getByRole('button', { name: `Eliminar ${list.edited}` }).click();
       const deleteDialog = page.getByRole('dialog').filter({
@@ -219,8 +227,8 @@ test.describe('Configuración general', () => {
       });
       await expect(deleteDialog).toBeVisible();
       await deleteDialog.getByRole('button', { name: 'Eliminar' }).click();
-      await expectToast(page, /opción se eliminó correctamente/i);
-      await expect(catalogRow(page, list.edited)).toHaveCount(0);
+      await expectToast(page, /la opción se eliminó correctamente/i);
+      await expect(contableOptionCard(page, list.edited)).toHaveCount(0);
     }
   });
 });

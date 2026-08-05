@@ -186,9 +186,10 @@ test.describe('Permisos de usuario de solo lectura', () => {
 
       await page.goto('/contable/resumen');
       await expect(page.getByText('Resumen contable', { exact: true })).toBeVisible();
-      await expect(page.getByText('Ingresos', { exact: true }).first()).toBeVisible();
-      await expect(page.getByText('Egresos', { exact: true }).first()).toBeVisible();
-      await expect(page.getByText('Resultado', { exact: true }).first()).toBeVisible();
+      const periodTotals = page.getByLabel('Totales del período');
+      await expect(periodTotals.getByText('Ingresos', { exact: true })).toBeVisible();
+      await expect(periodTotals.getByText('Egresos', { exact: true })).toBeVisible();
+      await expect(periodTotals.getByText('Resultado', { exact: true })).toBeVisible();
 
       await page.goto('/socios/personas');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
@@ -239,10 +240,11 @@ test.describe('Permisos de usuario de solo lectura', () => {
       await page.goto('/configuracion/catalogos');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
       await expect(page.getByRole('button', { name: /Nuevo medio de pago/i })).toHaveCount(0);
-      await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(catalogName);
-      const catalogCard = page.locator('.config-list__item').filter({ hasText: catalogName }).last();
-      await expect(catalogCard).toBeVisible();
-      await expect(catalogCard.locator('button')).toHaveCount(0);
+      await page.getByRole('textbox', { name: 'Buscar', exact: true }).fill(catalogName);
+      const catalogRow = rowByText(page, 'Medios de pago', catalogName);
+      await expect(catalogRow).toBeVisible();
+      await expect(catalogRow).toContainText('Solo lectura');
+      await expect(catalogRow.locator('button')).toHaveCount(0);
 
       await page.goto('/configuracion/contable');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();

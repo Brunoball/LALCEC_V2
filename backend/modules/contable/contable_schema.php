@@ -12,28 +12,26 @@ function ensure_contable_schema(PDO $db): void
     if (isset($validatedConnections[$connectionId])) return;
 
     $requiredColumns = [
-        'contable_opciones' => ['id_opcion', 'tipo', 'nombre'],
+        'contable_opciones' => ['id_opcion', 'tipo', 'nombre', 'creado_en', 'actualizado_en'],
         'contable_ingresos' => [
             'id_ingreso', 'fecha', 'id_medio_pago', 'proveedor',
-            'categoria', 'concepto', 'importe', 'detalle',
+            'categoria', 'concepto', 'importe', 'detalle', 'creado_en', 'actualizado_en',
         ],
         'contable_egresos' => [
             'id_egreso', 'fecha', 'id_medio_pago', 'proveedor',
             'categoria', 'concepto', 'numero_comprobante', 'importe',
-            'detalle', 'archivo_path',
+            'detalle', 'archivo_path', 'creado_en', 'actualizado_en',
         ],
     ];
 
     $forbiddenColumns = [
         'contable_opciones' => [
             'activo', 'id_usuario_master_creacion', 'id_usuario_master_modificacion',
-            'creado_en', 'actualizado_en',
         ],
         'contable_ingresos' => [
             'id_proveedor', 'id_categoria', 'id_concepto',
             'medio_pago_snapshot', 'proveedor_snapshot', 'categoria_snapshot', 'concepto_snapshot',
             'estado', 'fecha_anulacion', 'id_usuario_master_creacion', 'id_usuario_master_modificacion',
-            'creado_en', 'actualizado_en',
         ],
         'contable_egresos' => [
             'id_proveedor', 'id_categoria', 'id_concepto',
@@ -41,7 +39,6 @@ function ensure_contable_schema(PDO $db): void
             'estado', 'fecha_anulacion', 'archivo_nombre_original', 'archivo_nombre_guardado',
             'archivo_mime', 'archivo_tamanio',
             'id_usuario_master_creacion', 'id_usuario_master_modificacion',
-            'creado_en', 'actualizado_en',
         ],
     ];
 

@@ -390,7 +390,7 @@ trait ContableConsultas
         $statement = $db->prepare(
             "SELECT
                 m.{$idColumn}, m.fecha, m.id_medio_pago, m.proveedor, m.categoria,
-                m.concepto, m.importe, m.detalle,
+                m.concepto, m.importe, m.detalle, m.creado_en, m.actualizado_en,
                 COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = 'PROVEEDOR' AND o.nombre = m.proveedor LIMIT 1) AS id_proveedor,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = '{$categoryType}' AND o.nombre = m.categoria LIMIT 1) AS id_categoria,
@@ -422,6 +422,8 @@ trait ContableConsultas
                 'concepto' => (string)$row['concepto'],
                 'detalle' => $row['detalle'] === null ? '' : (string)$row['detalle'],
                 'importe' => self::importeDesdeCentavos($amountCents),
+                'creado_en' => (string)$row['creado_en'],
+                'actualizado_en' => (string)$row['actualizado_en'],
             ];
             if (!$isIncome) {
                 $path = trim((string)($row['archivo_path'] ?? ''));

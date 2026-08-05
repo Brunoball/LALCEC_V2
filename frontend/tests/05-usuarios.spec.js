@@ -18,6 +18,12 @@ function userRow(page, username) {
     .last();
 }
 
+async function selectRole(dialog, accessibleName) {
+  const radio = dialog.getByRole('radio', { name: accessibleName });
+  await radio.locator('xpath=ancestor::label[1]').click();
+  await expect(radio).toBeChecked();
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Usuarios y roles', () => {
@@ -39,7 +45,7 @@ test.describe('Usuarios y roles', () => {
     await expect(page.getByRole('heading', { name: 'Configuración de usuarios' })).toBeVisible();
     await expect(page.getByLabel('Resumen de usuarios')).toBeVisible();
 
-    const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    const search = page.getByRole('textbox', { name: 'Buscar', exact: true });
     await search.fill(process.env.PW_USER);
     const currentRow = userRow(page, process.env.PW_USER);
     await expect(currentRow).toContainText('Sesión actual');
@@ -53,7 +59,10 @@ test.describe('Usuarios y roles', () => {
       .getByRole('button', { name: `Editar ${process.env.PW_USER}` })
       .click();
     let dialog = page.getByRole('dialog', { name: 'Editar usuario' });
-    await expect(dialog.getByLabel('Rol *')).toBeDisabled();
+    const currentRoleOptions = dialog.getByRole('radiogroup', { name: 'Rol del usuario' });
+    await expect(currentRoleOptions.getByRole('radio')).toHaveCount(2);
+    await expect(currentRoleOptions.getByRole('radio', { name: /^Administrador/i })).toBeDisabled();
+    await expect(currentRoleOptions.getByRole('radio', { name: /^Solo lectura/i })).toBeDisabled();
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
 
     await search.fill('');
@@ -61,7 +70,7 @@ test.describe('Usuarios y roles', () => {
     dialog = page.getByRole('dialog', { name: 'Nuevo usuario' });
     await dialog.getByLabel('Usuario *').fill(user.username);
     await dialog.getByLabel('Email').fill(user.email);
-    await dialog.getByLabel('Rol *').selectOption('vista');
+    await selectRole(dialog, /^Solo lectura/i);
     await dialog.getByLabel('Contraseña *', { exact: true }).fill(user.password);
     await dialog.getByLabel('Confirmar contraseña *', { exact: true }).fill(`${user.password}X`);
     await dialog.getByRole('button', { name: 'Crear usuario' }).click();
@@ -82,7 +91,7 @@ test.describe('Usuarios y roles', () => {
     dialog = page.getByRole('dialog', { name: 'Editar usuario' });
     await dialog.getByLabel('Usuario *').fill(user.usernameEdited);
     await dialog.getByLabel('Email').fill(user.emailEdited);
-    await dialog.getByLabel('Rol *').selectOption('admin');
+    await selectRole(dialog, /^Administrador/i);
     await dialog.getByLabel('Nueva contraseña', { exact: true }).fill(user.newPassword);
     await dialog.getByLabel('Confirmar nueva contraseña', { exact: true }).fill(user.newPassword);
     await dialog.getByRole('button', { name: 'Guardar cambios' }).click();

@@ -414,8 +414,12 @@ test.describe('Cuotas de socios y empresas', () => {
       .check();
     await expect(page.getByText(/2 cuotas seleccionadas/i)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Pagar seleccionados (2)' }).click();
+    const continueButton = page.getByRole('button', { name: 'Continuar (2)', exact: true });
+    await expect(continueButton).toBeVisible();
+    await expect(continueButton).toBeEnabled();
+    await continueButton.click();
     const dialog = page.getByRole('dialog', { name: 'Registrar pagos seleccionados' });
+    await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(batchPersonOne.apellido);
     await expect(dialog).toContainText(batchPersonTwo.apellido);
     await expect(dialog.getByRole('button', { name: 'Registrar 2 pagos' })).toBeVisible();
@@ -453,7 +457,7 @@ test.describe('Cuotas de socios y empresas', () => {
     await expect(paymentDialog).toContainText(familyPersonTwo.apellido);
     await paymentDialog.getByRole('button', { name: /Registrar pago familiar \(2\)/ }).click();
 
-    const receiptDialog = page.getByRole('dialog', { name: 'Pago realizado con éxito' });
+    const receiptDialog = page.getByRole('dialog', { name: 'Pago realizado' });
     await expect(receiptDialog).toContainText(/se registró correctamente/i);
     await expect(receiptDialog.getByRole('button', { name: 'Imprimir' })).toBeVisible();
     await expect(receiptDialog.getByRole('button', { name: 'Exportar PDF' })).toBeVisible();
