@@ -97,7 +97,7 @@ test.describe('Login y sesión', () => {
     await page.goto('/');
     const userInput = page.getByPlaceholder('Usuario');
     const passwordInput = page.getByPlaceholder('Contraseña');
-    const toggle = page.getByRole('button', { name: 'Mostrar u ocultar contraseña' });
+    const toggle = page.getByRole('button', { name: /^(Mostrar|Ocultar) contraseña$/ });
     const remember = page.getByRole('checkbox', { name: /Recordar cuenta/i });
 
     await userInput.fill(invalidUsername);
@@ -164,6 +164,44 @@ test.describe('Login y sesión', () => {
     await page.getByRole('checkbox', { name: /Recordar cuenta/i }).uncheck();
     await page.reload();
     await expect(page.getByPlaceholder('Usuario')).toHaveValue('');
+  });
+
+  test('el cierre sigue mostrando el login aunque el servidor responda 401 en paralelo', async ({ page }) => {
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await loginThroughUi(page, {
+      username: process.env.PW_USER,
+      password: process.env.PW_PASSWORD,
+    });
+
+    await page.route(/api\.php\?action=auth_logout(?:&|$)/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          exito: false,
+          codigo: 'UNAUTHORIZED',
+          mensaje: 'La sesión ya no es válida.',
+        }),
+      });
+    });
+
+    await page.getByTitle('Cerrar sesión').click();
+    await page
+      .getByRole('dialog')
+      .filter({ hasText: 'Confirmar cierre de sesión' })
+      .getByRole('button', { name: 'Cerrar sesión' })
+      .click();
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+    await expect(page.locator('#root')).not.toBeEmpty();
+    await page.waitForTimeout(400);
+    await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+    expect(await page.evaluate((key) => sessionStorage.getItem(key), SESSION_KEY)).toBeNull();
+    expect(pageErrors).toEqual([]);
   });
 
   test('el modal de cierre responde a Escape sin cerrar la sesión', async ({ page }) => {
