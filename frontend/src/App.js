@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Inicio from "./components/Login/Inicio";
 import Principal from "./components/Principal/Principal";
@@ -16,7 +16,10 @@ import Usuarios from "./components/Configuracion/secciones/Usuarios";
 import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
 import BotPanel from "./components/BotPanel/BotPanel";
 import { BOT_PANEL_ROUTE } from "./config/config";
-import { isAuthenticated } from "./components/_shared/auth/session";
+import {
+  AUTH_SESSION_CHANGED_EVENT,
+  isAuthenticated,
+} from "./components/_shared/auth/session";
 
 function ProtectedLayout() {
   return isAuthenticated() ? <Principal /> : <Navigate to="/" replace />;
@@ -27,6 +30,15 @@ function ProtectedPage({ children }) {
 }
 
 export default function App() {
+  const [, setAuthRevision] = useState(0);
+
+  useEffect(() => {
+    const refreshAuthState = () => setAuthRevision((revision) => revision + 1);
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, refreshAuthState);
+    return () =>
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, refreshAuthState);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

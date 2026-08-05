@@ -1,4 +1,23 @@
 const SESSION_STORAGE_KEY = "gestion_socios_session";
+export const AUTH_SESSION_CHANGED_EVENT = "gestion_socios_auth_changed";
+
+let authChangeScheduled = false;
+
+function notifyAuthSessionChanged() {
+  if (typeof window === "undefined" || authChangeScheduled) return;
+
+  authChangeScheduled = true;
+  const notify = () => {
+    authChangeScheduled = false;
+    window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
+  };
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(notify);
+  } else {
+    setTimeout(notify, 0);
+  }
+}
 
 function removeLegacyPersistentSession() {
   try {
@@ -47,15 +66,19 @@ export function canWrite() {
 export function saveSession(session) {
   removeLegacyPersistentSession();
   sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  notifyAuthSessionChanged();
 }
 
 export function clearSession() {
+  let hadSession = false;
   try {
+    hadSession = sessionStorage.getItem(SESSION_STORAGE_KEY) !== null;
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {
     // No impide completar el cierre de sesión en la interfaz.
   }
   removeLegacyPersistentSession();
+  if (hadSession) notifyAuthSessionChanged();
 }
 
 export function openAuthenticatedTab(path) {

@@ -42,13 +42,11 @@ async function request(action, { method = "GET", params, body, signal } = {}) {
   }
 
   // Un 401 durante el login significa credenciales incorrectas y debe
-  // mostrarse en el formulario. La redirección corresponde únicamente a
-  // sesiones que vencen mientras el usuario ya está dentro del sistema.
+  // mostrarse en el formulario. En el resto de acciones invalida la sesión.
   if (response.status === 401 && action !== "auth_login") {
+    // La sesión se invalida de forma reactiva. Evitar una recarga nativa acá
+    // impide competir con la navegación de React Router durante el logout.
     clearSession();
-    if (window.location.pathname !== "/") {
-      window.location.replace("/");
-    }
   }
 
   if (!response.ok || data?.exito === false) {
@@ -99,7 +97,6 @@ export async function apiFormPost(action, formData, options = {}) {
 
   if (response.status === 401) {
     clearSession();
-    if (window.location.pathname !== "/") window.location.replace("/");
   }
   if (!response.ok || data?.exito === false) {
     const error = new Error(data?.mensaje || "No se pudo completar la operación.");
@@ -123,7 +120,6 @@ export async function apiDownload(action, params = {}, options = {}) {
   });
   if (response.status === 401) {
     clearSession();
-    if (window.location.pathname !== "/") window.location.replace("/");
   }
   if (!response.ok) {
     let message = "No se pudo descargar el archivo.";

@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faArrowTrendDown,
-  faArrowTrendUp,
   faBell,
   faBuilding,
   faCalendarDays,
@@ -12,7 +10,6 @@ import {
   faRotate,
   faRotateRight,
   faTags,
-  faTriangleExclamation,
   faUserMinus,
   faUserPlus,
   faUsers,
@@ -27,12 +24,6 @@ const money = (value) =>
     currency: "ARS",
     minimumFractionDigits: 2,
   }).format(Number(value || 0));
-
-const formatDate = (value) => {
-  if (!value) return "—";
-  const [year, month, day] = String(value).slice(0, 10).split("-");
-  return year && month && day ? `${day}/${month}/${year}` : value;
-};
 
 const EMPTY = {
   periodo: {},
@@ -177,7 +168,6 @@ export default function Dashboard() {
     estado,
     actividad,
     periodo,
-    fuentes,
   } = summary;
   const balance = Number(contable.saldo_mes || 0);
   const currentCompliance = Number(cuotas.cumplimiento_mes || 0);
@@ -330,104 +320,6 @@ export default function Dashboard() {
           </aside>
         </div>
 
-        <div className="admin-dashboard__secondaryGrid">
-          <article className="admin-dashboard__panel admin-dashboard__finance">
-            <header className="admin-dashboard__panelHead">
-              <div>
-                <h2>Resumen económico del mes</h2>
-                <p>Importes que efectivamente tienen monto informado.</p>
-              </div>
-            </header>
-            <div className="admin-dashboard__financeRows">
-              <div>
-                <span>
-                  <FontAwesomeIcon icon={faArrowTrendUp} /> Cuotas cobradas
-                </span>
-                <strong>{money(contable.ingresos_socios_mes)}</strong>
-              </div>
-              <div>
-                <span>
-                  <FontAwesomeIcon icon={faArrowTrendUp} /> Otros ingresos
-                </span>
-                <strong>{money(contable.otros_ingresos_mes)}</strong>
-              </div>
-              <div>
-                <span>
-                  <FontAwesomeIcon icon={faArrowTrendDown} /> Egresos
-                </span>
-                <strong>{money(contable.egresos_mes)}</strong>
-              </div>
-              <div className={balance < 0 ? "is-negative" : "is-total"}>
-                <span>
-                  <FontAwesomeIcon icon={faWallet} /> Resultado
-                </span>
-                <strong>{money(contable.saldo_mes)}</strong>
-              </div>
-            </div>
-            {!fuentes.contable_disponible ? (
-              <p className="admin-dashboard__notice">
-                <FontAwesomeIcon icon={faTriangleExclamation} /> Los otros
-                ingresos y egresos se mostrarán cuando estén disponibles las
-                tablas del módulo Contable.
-              </p>
-            ) : null}
-            {Number(cuotas.cobros_sin_importe_mes || 0) > 0 ? (
-              <p className="admin-dashboard__notice is-warning">
-                <FontAwesomeIcon icon={faTriangleExclamation} /> Hay {" "}
-                {Number(cuotas.cobros_sin_importe_mes || 0)} cobro
-                {Number(cuotas.cobros_sin_importe_mes || 0) === 1 ? "" : "s"}
-                sin monto; no se suman al resultado.
-              </p>
-            ) : null}
-          </article>
-
-          <article className="admin-dashboard__panel admin-dashboard__recent">
-            <header className="admin-dashboard__panelHead">
-              <div>
-                <h2>Últimos pagos registrados</h2>
-                <p>Movimientos más recientes de socios y empresas.</p>
-              </div>
-            </header>
-            <div className="admin-dashboard__recentList">
-              {(summary.pagos_recientes || []).length ? (
-                summary.pagos_recientes.map((payment) => (
-                  <div
-                    className="admin-dashboard__recentItem"
-                    key={payment.id_pago}
-                  >
-                    <span className="admin-dashboard__recentIcon">
-                      <FontAwesomeIcon
-                        icon={
-                          payment.tipo_socio === "EMPRESA"
-                            ? faBuilding
-                            : faUsers
-                        }
-                      />
-                    </span>
-                    <div className="admin-dashboard__recentMain">
-                      <strong>{payment.socio}</strong>
-                      <small>
-                        {payment.mes_nombre} {String(payment.periodo).slice(-4)}
-                        {" · "}
-                        {payment.medio_pago}
-                      </small>
-                    </div>
-                    <div className="admin-dashboard__recentAmount">
-                      <strong>
-                        {payment.monto === null ? "Sin importe" : money(payment.monto)}
-                      </strong>
-                      <small>{formatDate(payment.fecha_pago)}</small>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="admin-dashboard__empty">
-                  Todavía no hay pagos registrados.
-                </div>
-              )}
-            </div>
-          </article>
-        </div>
       </div>
     </section>
   );
