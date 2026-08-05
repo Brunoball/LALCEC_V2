@@ -24,18 +24,32 @@ const normalizarTipo = (tipo) => {
   return tipo;
 };
 
-const Toast = ({ tipo, mensaje, onClose, duracion }) => {
+const Toast = ({
+  tipo,
+  mensaje,
+  onClose,
+  duracion,
+  persistente,
+  cerrarConEscape = true,
+  cerrarConInteraccion = true,
+  mostrarCerrar,
+  cierreDeshabilitado = false,
+  acciones = null,
+  className = "",
+  ariaLabelCerrar = "Cerrar notificación",
+}) => {
   const [desapareciendo, setDesapareciendo] = useState(false);
   const cierreEjecutadoRef = useRef(false);
   const cierreTimerRef = useRef(null);
   const tipoNormalizado = useMemo(() => normalizarTipo(tipo), [tipo]);
   const esPersistente = useMemo(
-    () => TIPOS_PERSISTENTES.has(tipoNormalizado),
-    [tipoNormalizado],
+    () => persistente ?? TIPOS_PERSISTENTES.has(tipoNormalizado),
+    [persistente, tipoNormalizado],
   );
+  const mostrarBotonCerrar = mostrarCerrar ?? esPersistente;
 
   const cerrarToast = useCallback(() => {
-    if (cierreEjecutadoRef.current) return;
+    if (cierreDeshabilitado || cierreEjecutadoRef.current) return;
 
     cierreEjecutadoRef.current = true;
     setDesapareciendo(true);
@@ -44,18 +58,21 @@ const Toast = ({ tipo, mensaje, onClose, duracion }) => {
       cierreTimerRef.current = null;
       if (typeof onClose === "function") onClose();
     }, 280);
-  }, [onClose]);
+  }, [cierreDeshabilitado, onClose]);
 
-  useEffect(() => () => {
-    if (cierreTimerRef.current !== null) {
-      window.clearTimeout(cierreTimerRef.current);
-      cierreTimerRef.current = null;
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (cierreTimerRef.current !== null) {
+        window.clearTimeout(cierreTimerRef.current);
+        cierreTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    const cerrarConEscape = (event) => {
-      if (event.key === "Escape") cerrarToast();
+    const manejarEscape = (event) => {
+      if (event.key === "Escape" && cerrarConEscape) cerrarToast();
     };
 
     const cerrarConBotones = (event) => {
@@ -66,17 +83,17 @@ const Toast = ({ tipo, mensaje, onClose, duracion }) => {
         'button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"]',
       );
 
-      if (botonAccion) cerrarToast();
+      if (botonAccion && cerrarConInteraccion) cerrarToast();
     };
 
-    window.addEventListener("keydown", cerrarConEscape);
+    window.addEventListener("keydown", manejarEscape);
     document.addEventListener("click", cerrarConBotones, true);
 
     return () => {
-      window.removeEventListener("keydown", cerrarConEscape);
+      window.removeEventListener("keydown", manejarEscape);
       document.removeEventListener("click", cerrarConBotones, true);
     };
-  }, [cerrarToast]);
+  }, [cerrarConEscape, cerrarConInteraccion, cerrarToast]);
 
   useEffect(() => {
     if (esPersistente) return undefined;
@@ -123,21 +140,29 @@ const Toast = ({ tipo, mensaje, onClose, duracion }) => {
 
   const contenidoToast = (
     <div
-      className={`toast-container ${claseSeleccionada} ${desapareciendo ? "desaparecer" : ""}`}
+      className={`toast-container ${claseSeleccionada} ${className} ${desapareciendo ? "desaparecer" : ""}`.trim()}
+      role="status"
     >
       <FontAwesomeIcon
         icon={iconoSeleccionado}
         className={`toast-icon ${tipoNormalizado === "cargando" ? "spin" : ""}`}
       />
-      <span className="toast-message">{mensaje}</span>
+      <div className="toast-message">{mensaje}</div>
 
-      {esPersistente && (
+      {acciones ? <div className="toast-actions">{acciones}</div> : null}
+
+      {mostrarBotonCerrar && (
         <button
           type="button"
           className="toast-close"
           onClick={cerrarToast}
-          aria-label="Cerrar notificación"
-          title="Cerrar"
+          disabled={cierreDeshabilitado}
+          aria-label={ariaLabelCerrar}
+          title={
+            cierreDeshabilitado
+              ? "Esperá a que termine la acción"
+              : ariaLabelCerrar
+          }
         >
           ×
         </button>

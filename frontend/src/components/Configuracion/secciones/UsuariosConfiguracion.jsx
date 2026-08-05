@@ -3,16 +3,25 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
   faArrowRotateLeft,
+  faCheck,
+  faEnvelope,
   faGear,
+  faKey,
+  faLock,
   faPen,
+  faShieldHalved,
   faTrashCan,
+  faUser,
+  faUserPlus,
   faUsers,
   faUserSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../../Global/ModulePage";
+import DataTableSkeleton from "../../Global/DataTableSkeleton";
 import CrudModal from "../../Global/Modales/CrudModal";
 import ModalEliminarGlobal from "../../Global/Modales/ModalEliminarGlobal";
 import ModuleFeedback from "../../Global/ModuleFeedback";
+import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import { getSession, saveSession } from "../../_shared/auth/session";
 import { configuracionApi } from "../api/configuracionApi";
 import "./UsuariosConfiguracion.css";
@@ -39,7 +48,12 @@ function formatCreatedAt(value) {
 }
 
 function userInitial(value) {
-  return String(value || "U").trim().charAt(0).toLocaleUpperCase("es-AR") || "U";
+  return (
+    String(value || "U")
+      .trim()
+      .charAt(0)
+      .toLocaleUpperCase("es-AR") || "U"
+  );
 }
 
 function UserStat({ icon, label, value, detail, tone }) {
@@ -92,7 +106,10 @@ export default function UsuariosConfiguracion({ onBack }) {
         },
       });
     } catch (error) {
-      setFeedback({ type: "error", message: error.message || "No se pudieron cargar los usuarios." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No se pudieron cargar los usuarios.",
+      });
     } finally {
       setLoading(false);
     }
@@ -110,7 +127,9 @@ export default function UsuariosConfiguracion({ onBack }) {
       if (!term) return true;
       return [user.usuario, user.email, ROLE_LABELS[user.rol], user.rol]
         .filter(Boolean)
-        .some((value) => String(value).toLocaleLowerCase("es-AR").includes(term));
+        .some((value) =>
+          String(value).toLocaleLowerCase("es-AR").includes(term),
+        );
     });
   }, [data.usuarios, search, statusFilter]);
 
@@ -145,11 +164,17 @@ export default function UsuariosConfiguracion({ onBack }) {
       return;
     }
     if (!form.id && form.contrasena.length < 8) {
-      setFeedback({ type: "error", message: "La contraseña debe tener al menos 8 caracteres." });
+      setFeedback({
+        type: "error",
+        message: "La contraseña debe tener al menos 8 caracteres.",
+      });
       return;
     }
     if (form.id && form.contrasena && form.contrasena.length < 8) {
-      setFeedback({ type: "error", message: "La contraseña debe tener al menos 8 caracteres." });
+      setFeedback({
+        type: "error",
+        message: "La contraseña debe tener al menos 8 caracteres.",
+      });
       return;
     }
 
@@ -180,7 +205,10 @@ export default function UsuariosConfiguracion({ onBack }) {
       setFeedback({ type: "success", message: response.mensaje });
       await cargar();
     } catch (error) {
-      setFeedback({ type: "error", message: error.message || "No se pudo guardar el usuario." });
+      setFeedback({
+        type: "error",
+        message: error.message || "No se pudo guardar el usuario.",
+      });
     } finally {
       setSaving(false);
     }
@@ -214,33 +242,60 @@ export default function UsuariosConfiguracion({ onBack }) {
   };
 
   const stats = [
-    { icon: faUsers, label: "TOTAL", value: data.resumen.total, detail: "Usuarios registrados", tone: "total" },
-    { icon: faArrowRotateLeft, label: "ACTIVOS", value: data.resumen.activos, detail: "Pueden ingresar", tone: "active" },
-    { icon: faUserSlash, label: "BAJAS", value: data.resumen.bajas, detail: "Sin acceso activo", tone: "inactive" },
-    { icon: faGear, label: "ADMINS", value: data.resumen.admins, detail: "Permiso completo", tone: "admin" },
+    {
+      icon: faUsers,
+      label: "TOTAL",
+      value: data.resumen.total,
+      detail: "Usuarios registrados",
+      tone: "total",
+    },
+    {
+      icon: faArrowRotateLeft,
+      label: "ACTIVOS",
+      value: data.resumen.activos,
+      detail: "Pueden ingresar",
+      tone: "active",
+    },
+    {
+      icon: faUserSlash,
+      label: "BAJAS",
+      value: data.resumen.bajas,
+      detail: "Sin acceso activo",
+      tone: "inactive",
+    },
+    {
+      icon: faGear,
+      label: "ADMINS",
+      value: data.resumen.admins,
+      detail: "Permiso completo",
+      tone: "admin",
+    },
   ];
 
   return (
     <>
       <ModulePage
         title="Configuración de usuarios"
-        description="Administrá los usuarios del sistema: altas, bajas, edición, roles y contraseña."
-        filters={[{
-          key: "usuarios-search",
-          type: "search",
-          label: "Búsqueda",
-          value: search,
-          onChange: setSearch,
-          placeholder: "Usuario, email o rol",
-        }]}
+        filters={[
+          {
+            key: "usuarios-search",
+            type: "search",
+            label: "Buscar",
+            value: search,
+            onChange: setSearch,
+            placeholder: "",
+          },
+        ]}
         primaryActionLabel="Nuevo usuario"
         onPrimaryAction={openCreate}
-        secondaryActions={[{
-          key: "volver",
-          label: "Volver",
-          icon: faArrowLeft,
-          onClick: onBack,
-        }]}
+        secondaryActions={[
+          {
+            key: "volver",
+            label: "Volver",
+            icon: faArrowLeft,
+            onClick: onBack,
+          },
+        ]}
       >
         <ModuleFeedback
           type={feedback?.type || "error"}
@@ -251,17 +306,24 @@ export default function UsuariosConfiguracion({ onBack }) {
 
         {!data.capacidades.email || !data.capacidades.fecha_creacion ? (
           <div className="config-usersSchemaNotice">
-            Ejecutá el SQL incluido en el ZIP sobre lalcec_v2 para completar la estructura de usuarios.
+            Ejecutá el SQL incluido en el ZIP sobre lalcec_v2 para completar la
+            estructura de usuarios.
           </div>
         ) : null}
 
         <section className="config-usersStats" aria-label="Resumen de usuarios">
-          {stats.map((stat) => <UserStat key={stat.label} {...stat} />)}
+          {stats.map((stat) => (
+            <UserStat key={stat.label} {...stat} />
+          ))}
         </section>
 
         <section className="config-usersPanel">
           <header className="config-usersPanel__toolbar">
-            <div className="config-usersTabs" role="tablist" aria-label="Estado de usuarios">
+            <div
+              className="config-usersTabs"
+              role="tablist"
+              aria-label="Estado de usuarios"
+            >
               {[
                 { value: "activos", label: "Activos" },
                 { value: "bajas", label: "Dados de baja" },
@@ -285,69 +347,132 @@ export default function UsuariosConfiguracion({ onBack }) {
             </strong>
           </header>
 
-          <div className="config-usersTable" role="table" aria-label="Usuarios del sistema">
+          <div
+            className="config-usersTable"
+            role="table"
+            aria-label="Usuarios del sistema"
+            aria-busy={loading}
+          >
+            {loading ? (
+              <span
+                className="mov-skeletonStatus"
+                role="status"
+                aria-live="polite"
+              >
+                Cargando usuarios...
+              </span>
+            ) : null}
             <div className="config-usersTable__head" role="row">
               <span role="columnheader">Usuario</span>
               <span role="columnheader">Email</span>
               <span role="columnheader">Rol</span>
               <span role="columnheader">Estado</span>
               <span role="columnheader">Creación</span>
-              <span role="columnheader">Acciones</span>
+              <span
+                className="config-usersTable__actionsHeading"
+                role="columnheader"
+              >
+                Acciones
+              </span>
             </div>
             <div className="config-usersTable__body" role="rowgroup">
-              {!loading && filteredUsers.map((user) => (
-                <div className={`config-usersTable__row ${user.activo ? "" : "is-inactive"}`} role="row" key={user.id}>
-                  <div className="config-usersIdentity" role="cell">
-                    <span className="config-usersAvatar">{userInitial(user.usuario)}</span>
-                    <div>
-                      <strong>{user.usuario}</strong>
-                      {user.sesion_actual ? <small>Sesión actual</small> : null}
+              {loading ? (
+                <DataTableSkeleton
+                  actionColumnIndex={5}
+                  columnCount={6}
+                  gridClassName="config-usersTable__skeletonRow"
+                  rows={6}
+                />
+              ) : (
+                filteredUsers.map((user) => (
+                  <div
+                    className={`config-usersTable__row ${user.activo ? "" : "is-inactive"}`}
+                    role="row"
+                    key={user.id}
+                  >
+                    <div className="config-usersIdentity" role="cell">
+                      <span className="config-usersAvatar">
+                        {userInitial(user.usuario)}
+                      </span>
+                      <div>
+                        <strong>{user.usuario}</strong>
+                        {user.sesion_actual ? (
+                          <small>Sesión actual</small>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div
+                      className="config-usersEmail"
+                      role="cell"
+                      data-label="Email"
+                    >
+                      {user.email || <span>Sin email</span>}
+                    </div>
+                    <div role="cell" data-label="Rol">
+                      <span
+                        className={`config-usersRole config-usersRole--${user.rol}`}
+                      >
+                        {ROLE_LABELS[user.rol] || user.rol}
+                      </span>
+                    </div>
+                    <div role="cell" data-label="Estado">
+                      <span
+                        className={`config-usersState ${user.activo ? "is-active" : "is-inactive"}`}
+                      >
+                        <i aria-hidden="true" />
+                        {user.activo ? "Activo" : "Baja"}
+                      </span>
+                    </div>
+                    <div
+                      className="config-usersCreated"
+                      role="cell"
+                      data-label="Creación"
+                    >
+                      {formatCreatedAt(user.creado_en)}
+                    </div>
+                    <div
+                      className="config-usersActions config-usersTable__actionsCell mov-actionsInline"
+                      role="cell"
+                    >
+                      <button
+                        type="button"
+                        className="mov-iconBtn"
+                        onClick={() => openEdit(user)}
+                        title="Editar usuario"
+                        aria-label={`Editar ${user.usuario}`}
+                      >
+                        <FontAwesomeIcon icon={faPen} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`mov-iconBtn ${user.activo ? "mov-iconBtn--danger" : ""}`.trim()}
+                        onClick={() => setStateModal(user)}
+                        disabled={!user.puede_cambiar_estado}
+                        title={user.activo ? "Dar de baja" : "Reactivar"}
+                        aria-label={`${user.activo ? "Dar de baja" : "Reactivar"} ${user.usuario}`}
+                      >
+                        <FontAwesomeIcon
+                          icon={user.activo ? faUserSlash : faArrowRotateLeft}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        className="mov-iconBtn mov-iconBtn--danger"
+                        onClick={() => setDeleteModal(user)}
+                        disabled={!user.puede_eliminar}
+                        title={
+                          user.puede_eliminar
+                            ? "Eliminar usuario"
+                            : "No se puede eliminar porque tiene historial"
+                        }
+                        aria-label={`Eliminar ${user.usuario}`}
+                      >
+                        <FontAwesomeIcon icon={faTrashCan} />
+                      </button>
                     </div>
                   </div>
-                  <div className="config-usersEmail" role="cell">
-                    {user.email || <span>Sin email</span>}
-                  </div>
-                  <div role="cell">
-                    <span className={`config-usersRole config-usersRole--${user.rol}`}>
-                      {ROLE_LABELS[user.rol] || user.rol}
-                    </span>
-                  </div>
-                  <div role="cell">
-                    <span className={`config-usersState ${user.activo ? "is-active" : "is-inactive"}`}>
-                      <i aria-hidden="true" />
-                      {user.activo ? "Activo" : "Baja"}
-                    </span>
-                  </div>
-                  <div className="config-usersCreated" role="cell">
-                    {formatCreatedAt(user.creado_en)}
-                  </div>
-                  <div className="config-usersActions" role="cell">
-                    <button type="button" onClick={() => openEdit(user)} title="Editar usuario" aria-label={`Editar ${user.usuario}`}>
-                      <FontAwesomeIcon icon={faPen} />
-                    </button>
-                    <button
-                      type="button"
-                      className={user.activo ? "is-warning" : "is-success"}
-                      onClick={() => setStateModal(user)}
-                      disabled={!user.puede_cambiar_estado}
-                      title={user.activo ? "Dar de baja" : "Reactivar"}
-                      aria-label={`${user.activo ? "Dar de baja" : "Reactivar"} ${user.usuario}`}
-                    >
-                      <FontAwesomeIcon icon={user.activo ? faUserSlash : faArrowRotateLeft} />
-                    </button>
-                    <button
-                      type="button"
-                      className="is-danger"
-                      onClick={() => setDeleteModal(user)}
-                      disabled={!user.puede_eliminar}
-                      title={user.puede_eliminar ? "Eliminar usuario" : "No se puede eliminar porque tiene historial"}
-                      aria-label={`Eliminar ${user.usuario}`}
-                    >
-                      <FontAwesomeIcon icon={faTrashCan} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
 
               {!loading && !filteredUsers.length ? (
                 <div className="config-usersEmpty">
@@ -361,89 +486,189 @@ export default function UsuariosConfiguracion({ onBack }) {
 
       <CrudModal
         open={formOpen}
-        title={form.id ? "Editar usuario" : "Nuevo usuario"}
-        subtitle={form.id
-          ? "Actualizá los datos, el rol o la contraseña del usuario."
-          : "Creá un acceso independiente para esta organización."}
+        title={
+          <>
+            <FontAwesomeIcon
+              icon={form.id ? faPen : faUserPlus}
+              aria-hidden="true"
+            />
+            <span>{form.id ? "Editar usuario" : "Nuevo usuario"}</span>
+          </>
+        }
+        subtitle={
+          form.id
+            ? "Actualizá los datos, el rol o la contraseña del usuario."
+            : "Creá un acceso independiente para esta organización."
+        }
         onClose={() => setFormOpen(false)}
         onSubmit={saveUser}
         saving={saving}
         submitLabel={form.id ? "Guardar cambios" : "Crear usuario"}
+        closeOnBackdrop={false}
+        modalClassName="config-usersModal"
         wide
       >
         <div className="entity-form config-usersForm">
           <div className="entity-form__grid">
-            <label className="entity-field">
-              <span>Usuario *</span>
+            <FloatingField
+              label={
+                <>
+                  <FontAwesomeIcon icon={faUser} aria-hidden="true" />
+                  Usuario *
+                </>
+              }
+              active={Boolean(form.usuario)}
+            >
               <input
                 value={form.usuario}
+                placeholder=" "
                 onChange={(event) => updateForm("usuario", event.target.value)}
                 maxLength={100}
                 autoComplete="off"
                 required
                 autoFocus
               />
-            </label>
-            <label className="entity-field">
-              <span>Email</span>
+            </FloatingField>
+            <FloatingField
+              label={
+                <>
+                  <FontAwesomeIcon icon={faEnvelope} aria-hidden="true" />
+                  Email
+                </>
+              }
+              active={Boolean(form.email)}
+            >
               <input
                 type="email"
                 value={form.email}
+                placeholder=" "
                 onChange={(event) => updateForm("email", event.target.value)}
                 maxLength={190}
                 autoComplete="off"
                 disabled={!data.capacidades.email}
               />
-            </label>
-            <label className="entity-field">
-              <span>Rol *</span>
-              <select
-                value={form.rol}
-                onChange={(event) => updateForm("rol", event.target.value)}
-                disabled={form.sesion_actual}
-                required
+            </FloatingField>
+            <fieldset className="config-usersForm__rolePicker">
+              <legend>
+                <FontAwesomeIcon icon={faShieldHalved} aria-hidden="true" />
+                Rol de acceso
+              </legend>
+              <div
+                className="config-usersForm__roleOptions"
+                role="radiogroup"
+                aria-label="Rol del usuario"
               >
-                <option value="admin">Administrador</option>
-                <option value="vista">Solo lectura</option>
-              </select>
-              {form.sesion_actual ? <small>No podés cambiar el rol de tu propia sesión.</small> : null}
-            </label>
-            <div className="config-usersForm__roleHelp">
-              <strong>{form.rol === "admin" ? "Permiso completo" : "Permiso de consulta"}</strong>
-              <p>
-                {form.rol === "admin"
-                  ? "Puede crear, editar, eliminar y administrar usuarios."
-                  : "Puede consultar la información, sin realizar modificaciones."}
-              </p>
-            </div>
-            <label className="entity-field">
-              <span>{form.id ? "Nueva contraseña" : "Contraseña *"}</span>
+                {[
+                  {
+                    value: "admin",
+                    label: "Administrador",
+                    description:
+                      "Gestiona usuarios y puede modificar toda la información.",
+                    icon: faShieldHalved,
+                  },
+                  {
+                    value: "vista",
+                    label: "Solo lectura",
+                    description:
+                      "Consulta la información sin realizar cambios.",
+                    icon: faUser,
+                  },
+                ].map((role) => (
+                  <label
+                    className={`config-usersForm__roleOption ${form.rol === role.value ? "is-selected" : ""}`}
+                    key={role.value}
+                  >
+                    <input
+                      type="radio"
+                      name="rol"
+                      value={role.value}
+                      checked={form.rol === role.value}
+                      onChange={(event) =>
+                        updateForm("rol", event.target.value)
+                      }
+                      disabled={form.sesion_actual}
+                      required
+                    />
+                    <span
+                      className="config-usersForm__roleIcon"
+                      aria-hidden="true"
+                    >
+                      <FontAwesomeIcon icon={role.icon} />
+                    </span>
+                    <span className="config-usersForm__roleCopy">
+                      <strong>{role.label}</strong>
+                      <small>{role.description}</small>
+                    </span>
+                    <span
+                      className="config-usersForm__roleCheck"
+                      aria-hidden="true"
+                    >
+                      <FontAwesomeIcon icon={faCheck} />
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {form.sesion_actual ? (
+                <small className="config-usersForm__roleNotice">
+                  No podés cambiar el rol de tu propia sesión.
+                </small>
+              ) : null}
+            </fieldset>
+            <FloatingField
+              label={
+                <>
+                  <FontAwesomeIcon icon={faLock} aria-hidden="true" />
+                  {form.id ? "Nueva contraseña" : "Contraseña *"}
+                </>
+              }
+              active={Boolean(form.contrasena)}
+            >
               <input
                 type="password"
                 value={form.contrasena}
-                onChange={(event) => updateForm("contrasena", event.target.value)}
+                placeholder=" "
+                onChange={(event) =>
+                  updateForm("contrasena", event.target.value)
+                }
                 minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
                 required={!form.id}
               />
-            </label>
-            <label className="entity-field">
-              <span>{form.id ? "Confirmar nueva contraseña" : "Confirmar contraseña *"}</span>
+            </FloatingField>
+            <FloatingField
+              label={
+                <>
+                  <FontAwesomeIcon icon={faKey} aria-hidden="true" />
+                  {form.id
+                    ? "Confirmar nueva contraseña"
+                    : "Confirmar contraseña *"}
+                </>
+              }
+              active={Boolean(form.confirmar_contrasena)}
+            >
               <input
                 type="password"
                 value={form.confirmar_contrasena}
-                onChange={(event) => updateForm("confirmar_contrasena", event.target.value)}
+                placeholder=" "
+                onChange={(event) =>
+                  updateForm("confirmar_contrasena", event.target.value)
+                }
                 minLength={8}
                 maxLength={128}
                 autoComplete="new-password"
                 required={!form.id || Boolean(form.contrasena)}
               />
-            </label>
+            </FloatingField>
           </div>
-          {form.id ? (
-            <p className="entity-help">Dejá ambos campos de contraseña vacíos para conservar la actual.</p>
-          ) : null}
+          <p className="config-usersForm__passwordHelp">
+            <FontAwesomeIcon icon={faLock} aria-hidden="true" />
+            <span>
+              {form.id
+                ? "Dejá ambos campos vacíos para conservar la contraseña actual."
+                : "Usá al menos 8 caracteres para proteger el acceso."}
+            </span>
+          </p>
         </div>
       </CrudModal>
 
@@ -452,24 +677,42 @@ export default function UsuariosConfiguracion({ onBack }) {
         operacion={stateModal?.activo ? "baja" : "alta"}
         row={stateModal}
         title={stateModal?.activo ? "Dar de baja usuario" : "Reactivar usuario"}
-        message={stateModal?.activo
-          ? "El usuario dejará de poder iniciar sesión y se cerrarán sus sesiones activas."
-          : "El usuario volverá a poder iniciar sesión con su contraseña actual."}
-        warning={stateModal?.rol === "admin" && stateModal?.activo
-          ? "La organización siempre debe conservar al menos un administrador activo."
-          : ""}
+        message={
+          stateModal?.activo
+            ? "El usuario dejará de poder iniciar sesión y se cerrarán sus sesiones activas."
+            : "El usuario volverá a poder iniciar sesión con su contraseña actual."
+        }
+        warning={
+          stateModal?.rol === "admin" && stateModal?.activo
+            ? "La organización siempre debe conservar al menos un administrador activo."
+            : ""
+        }
         confirmLabel={stateModal?.activo ? "Dar de baja" : "Reactivar"}
-        loadingLabel={stateModal?.activo ? "Dando de baja..." : "Reactivando..."}
+        loadingLabel={
+          stateModal?.activo ? "Dando de baja..." : "Reactivando..."
+        }
         loadingMessage="Actualizando el acceso del usuario…"
-        successMessage={stateModal?.activo
-          ? "Usuario dado de baja correctamente."
-          : "Usuario reactivado correctamente."}
+        successMessage={
+          stateModal?.activo
+            ? "Usuario dado de baja correctamente."
+            : "Usuario reactivado correctamente."
+        }
         errorMessage="No se pudo actualizar el estado del usuario."
-        details={stateModal ? [
-          { label: "Usuario", value: stateModal.usuario },
-          { label: "Rol", value: ROLE_LABELS[stateModal.rol] || stateModal.rol },
-          { label: "Estado actual", value: stateModal.activo ? "Activo" : "Baja" },
-        ] : []}
+        details={
+          stateModal
+            ? [
+                { label: "Usuario", value: stateModal.usuario },
+                {
+                  label: "Rol",
+                  value: ROLE_LABELS[stateModal.rol] || stateModal.rol,
+                },
+                {
+                  label: "Estado actual",
+                  value: stateModal.activo ? "Activo" : "Baja",
+                },
+              ]
+            : []
+        }
         onClose={() => setStateModal(null)}
         onConfirm={confirmState}
         onToast={handleModalToast}
@@ -488,10 +731,17 @@ export default function UsuariosConfiguracion({ onBack }) {
         loadingMessage="Eliminando usuario…"
         successMessage="Usuario eliminado correctamente."
         errorMessage="No se pudo eliminar el usuario."
-        details={deleteModal ? [
-          { label: "Usuario", value: deleteModal.usuario },
-          { label: "Rol", value: ROLE_LABELS[deleteModal.rol] || deleteModal.rol },
-        ] : []}
+        details={
+          deleteModal
+            ? [
+                { label: "Usuario", value: deleteModal.usuario },
+                {
+                  label: "Rol",
+                  value: ROLE_LABELS[deleteModal.rol] || deleteModal.rol,
+                },
+              ]
+            : []
+        }
         onClose={() => setDeleteModal(null)}
         onConfirm={confirmDelete}
         onToast={handleModalToast}

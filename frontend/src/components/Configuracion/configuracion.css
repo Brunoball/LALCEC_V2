@@ -410,38 +410,9 @@
 }
 
 .config-list__actions {
-  display: flex;
-  gap: 6px;
-}
-
-.config-iconButton {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  color: var(--balto-midnight);
-  background: #fff;
-  cursor: pointer;
-  transition:
-    transform var(--mov-trans),
-    border-color var(--mov-trans),
-    color var(--mov-trans);
-}
-
-.config-iconButton:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--primary-color) 32%, transparent);
-  color: var(--balto-action);
-}
-
-.config-iconButton.is-danger {
-  color: var(--balto-danger);
-}
-
-.config-iconButton.is-success {
-  color: var(--balto-success);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .config-status {

@@ -1,33 +1,173 @@
+.cuotas-header-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cuotas-header-row .module-titleBox {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
 .cuotas-head-filters {
-  flex: 1 1 760px;
+  display: grid;
+  align-items: end;
+  gap: 10px;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  margin-left: auto;
+  justify-self: end;
+  justify-content: end;
+  grid-template-columns:
+    minmax(240px, 280px)
+    minmax(220px, 250px)
+    120px
+    120px;
 }
 
 .cuotas-head-filters .module-filter--tabs {
-  min-width: 220px;
+  min-width: 0;
 }
 
 .cuotas-head-filters .cuotas-search-filter {
-  flex: 1 1 240px;
-  min-width: 210px;
+  width: 100%;
+  min-width: 0;
+  max-width: 250px;
+  margin-left: 0;
+  justify-self: end;
 }
 
-.cuotas-head-filters .cuotas-category-filter {
-  flex: 0 1 180px;
-  min-width: 150px;
-}
-
-.cuotas-head-filters .cuotas-year-filter {
-  flex: 0 0 105px;
-  min-width: 95px;
-}
-
+.cuotas-head-filters .cuotas-year-filter,
 .cuotas-head-filters .cuotas-month-filter {
-  flex: 0 0 145px;
-  min-width: 125px;
+  width: 100%;
+  min-width: 0;
+  max-width: 120px;
+  justify-self: stretch;
 }
 
-.cuotas-table .entity-table-wrap {
-  max-height: min(62vh, 690px);
+.cuotas-page .module-card .cuotas-table > .entity-table-wrap {
+  min-height: 240px;
+  max-height: min(56vh, 610px, calc(100vh - 360px));
+}
+
+.cuotas-table-footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--mov-border);
+  background: color-mix(in srgb, var(--balto-bg) 58%, #fff);
+}
+
+.cuotas-table-footer .global-summaryCards--footer {
+  min-width: 0;
+  flex: 0 0 auto;
+  align-self: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 0;
+  background: transparent;
+}
+
+.cuotas-table-footer .global-summaryCards__list {
+  width: 170px;
+  grid-template-columns: 170px;
+}
+
+.cuotas-table-footer .global-summaryCards__item {
+  padding: 6px 8px;
+}
+
+.cuotas-pagination {
+  min-height: 54px;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  background: transparent;
+}
+
+.cuotas-pagination__summary {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cuotas-pagination__summary strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.cuotas-pagination__summary span {
+  margin-left: 6px;
+  color: var(--primary-600);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.cuotas-pagination__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.cuotas-pagination__controls button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.cuotas-pagination__controls button:hover:not(:disabled) {
+  color: var(--primary-700);
+  border-color: color-mix(in srgb, var(--primary-500) 45%, transparent);
+  background: var(--primary-50);
+}
+
+.cuotas-pagination__controls button.is-active {
+  color: #fff;
+  border-color: var(--primary-600);
+  background: var(--gradient-primary);
+}
+
+.cuotas-pagination__controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cuotas-pagination__ellipsis {
+  min-width: 22px;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.cuotas-lower-actions {
+  display: none;
 }
 
 .cuotas-grid--debt {
@@ -37,7 +177,7 @@
     minmax(120px, 0.75fr)
     minmax(130px, 0.8fr)
     minmax(130px, 0.82fr)
-    minmax(145px, 0.85fr);
+    minmax(100px, 0.58fr);
   min-width: 980px;
 }
 
@@ -50,8 +190,30 @@
     minmax(115px, 0.72fr)
     minmax(130px, 0.8fr)
     minmax(115px, 0.72fr)
-    minmax(80px, 0.48fr);
+    minmax(100px, 0.56fr);
   min-width: 1160px;
+}
+
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(2),
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(3),
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(6),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(2),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(3),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(8),
+.cuotas-grid--selecting.mov-gridTable--head
+  > .mov-gridCell--head:nth-child(3),
+.cuotas-grid--selecting.mov-gridTable--head
+  > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--selecting.mov-gridTable--head
+  > .mov-gridCell--head:nth-child(5) {
+  justify-content: center;
+  text-align: center;
 }
 
 .cuotas-money-cell {
@@ -79,13 +241,6 @@
   border-color: #e2e8f0;
   background: #f8fafc;
   color: #64748b;
-}
-
-.cuotas-pay-button {
-  min-height: 34px;
-  padding: 7px 11px;
-  white-space: nowrap;
-  font-size: 0.78rem;
 }
 
 .cuotas-payment-modal.entity-modal--wide {
@@ -127,22 +282,137 @@
   line-height: 1.45;
 }
 
+@media (max-width: 1499px) {
+  .cuotas-page > .module-card > .module-card__head > .module-card__actions {
+    display: none !important;
+  }
+
+  .cuotas-table-footer {
+    gap: 6px;
+  }
+
+  .cuotas-lower-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 9px 12px;
+  }
+
+  .cuotas-lower-actions .cuotas-lower-action {
+    height: 30px;
+    min-height: 30px;
+    padding: 0 9px;
+    border-color: transparent;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    font-size: 11px;
+    font-weight: 620;
+  }
+
+  .cuotas-lower-actions .cuotas-lower-action:hover:not(:disabled) {
+    box-shadow: none;
+    transform: none;
+  }
+
+  .cuotas-lower-actions .mov-btn--ghost:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--balto-ink) 12%, transparent);
+    background: color-mix(in srgb, var(--balto-ink) 5%, transparent);
+  }
+
+  .cuotas-lower-actions .mov-btn--primary {
+    border-color: color-mix(in srgb, var(--balto-action) 16%, transparent);
+    background: color-mix(in srgb, var(--balto-action) 9%, transparent);
+    color: var(--balto-action);
+  }
+
+  .cuotas-lower-actions .mov-btn--primary:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--balto-action) 24%, transparent);
+    background: color-mix(in srgb, var(--balto-action) 13%, transparent);
+  }
+
+  .cuotas-lower-actions .mov-btn--danger {
+    border-color: color-mix(in srgb, var(--balto-danger) 16%, transparent);
+    background: color-mix(in srgb, var(--balto-danger) 7%, transparent);
+  }
+}
+
 @media (max-width: 1180px) {
+  .cuotas-header-row {
+    flex-wrap: wrap;
+  }
+
   .cuotas-head-filters {
+    flex-basis: 760px;
+  }
+}
+
+@media (max-width: 860px) {
+  .cuotas-head-filters {
+    max-width: none;
     flex-basis: 100%;
+    grid-template-columns: minmax(240px, 1fr) 120px 120px;
+    justify-content: end;
   }
 
   .cuotas-head-filters .module-filter--tabs,
   .cuotas-head-filters .cuotas-search-filter {
-    flex: 1 1 260px;
+    grid-column: 1 / -1;
+  }
+
+  .cuotas-head-filters .cuotas-year-filter {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .cuotas-head-filters .cuotas-month-filter {
+    grid-column: 3;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 600px) {
+  .cuotas-head-filters {
+    grid-template-columns: minmax(0, 1fr) 120px 120px;
   }
 }
 
 @media (max-width: 720px) {
+  .cuotas-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cuotas-pagination__controls {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .cuotas-page .module-card .cuotas-table > .entity-table-wrap {
+    min-height: 220px;
+    max-height: min(48vh, 520px, calc(100vh - 470px));
+  }
+
+  .cuotas-table-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cuotas-table-footer .global-summaryCards--footer {
+    border-bottom: 1px solid var(--mov-border);
+  }
+
+  .cuotas-lower-actions {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+
   .cuotas-head-filters .module-filter,
   .cuotas-head-filters .module-filter--tabs,
   .cuotas-head-filters .cuotas-search-filter,
-  .cuotas-head-filters .cuotas-category-filter,
   .cuotas-head-filters .cuotas-year-filter,
   .cuotas-head-filters .cuotas-month-filter {
     flex: 1 1 100%;
@@ -162,13 +432,35 @@
     minmax(100px, 0.72fr)
     minmax(120px, 0.75fr)
     minmax(130px, 0.8fr)
-    minmax(130px, 0.82fr)
-    minmax(145px, 0.85fr);
-  min-width: 1060px;
+    minmax(130px, 0.82fr);
+  min-width: 920px;
 }
 
 .cuotas-grid.is-selected {
-  background: color-mix(in srgb, var(--balto-action, #b52d35) 7%, #fff);
+  background: color-mix(in srgb, var(--balto-action, #b52d35) 9%, #fff);
+  box-shadow: inset 4px 0 0 var(--balto-action, #b52d35);
+}
+
+.cuotas-grid--selecting.mov-gridTable--row {
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cuotas-grid--selecting.mov-gridTable--row:hover {
+  background: color-mix(in srgb, var(--balto-action, #b52d35) 5%, #fff);
+}
+
+.cuotas-grid--selecting.mov-gridTable--row.is-selected:hover {
+  background: color-mix(in srgb, var(--balto-action, #b52d35) 12%, #fff);
+}
+
+.cuotas-grid--selecting.mov-gridTable--row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--balto-action, #b52d35);
+  outline-offset: -3px;
 }
 
 .cuotas-select-cell {
@@ -178,10 +470,66 @@
 
 .cuotas-select-cell input,
 .cuotas-family-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--balto-action, #b52d35);
+  width: 21px;
+  height: 21px;
+  display: grid;
+  flex: 0 0 21px;
+  place-content: center;
+  margin: 0;
+  appearance: none;
+  border: 2px solid #94a3b8;
+  border-radius: 6px;
+  background: #fff;
   cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.cuotas-select-cell input::before,
+.cuotas-family-toggle input::before {
+  width: 10px;
+  height: 6px;
+  content: "";
+  border-bottom: 2px solid #fff;
+  border-left: 2px solid #fff;
+  transform: translateY(-1px) rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.14s ease;
+}
+
+.cuotas-select-cell input:hover,
+.cuotas-family-toggle input:hover {
+  border-color: var(--balto-action, #b52d35);
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--balto-action, #b52d35) 10%, transparent);
+}
+
+.cuotas-select-cell input:checked,
+.cuotas-family-toggle input:checked {
+  border-color: var(--balto-action, #b52d35);
+  background: var(--balto-action, #b52d35);
+  box-shadow: 0 4px 10px
+    color-mix(in srgb, var(--balto-action, #b52d35) 24%, transparent);
+}
+
+.cuotas-select-cell input:checked::before,
+.cuotas-family-toggle input:checked::before {
+  transform: translateY(-1px) rotate(-45deg) scale(1);
+}
+
+.cuotas-select-cell input:active,
+.cuotas-family-toggle input:active {
+  transform: scale(0.92);
+}
+
+.cuotas-select-cell input:focus-visible,
+.cuotas-family-toggle input:focus-visible {
+  outline: 3px solid
+    color-mix(in srgb, var(--balto-action, #b52d35) 25%, transparent);
+  outline-offset: 2px;
 }
 
 .cuotas-discount-note {
@@ -192,36 +540,48 @@
   font-weight: 650;
 }
 
-.cuotas-selection-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 14px 16px 0;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--balto-action, #b52d35) 22%, #e2e8f0);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--balto-action, #b52d35) 5%, #fff);
+.cuotas-selection-toast {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+  border-color: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 30%,
+    #e2e8f0
+  ) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--balto-action, #b52d35) 7%, #fff),
+    #fff 70%
+  ) !important;
 }
 
-.cuotas-selection-bar > div {
+.cuotas-selection-toast__copy {
   display: flex;
-  align-items: center;
-  gap: 9px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
 }
 
-.cuotas-selection-bar svg {
-  color: var(--balto-action, #b52d35);
+.cuotas-selection-toast .toast-icon {
+  color: var(--balto-action, #b52d35) !important;
 }
 
-.cuotas-selection-bar strong {
+.cuotas-selection-toast__copy strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.cuotas-selection-toast__copy span {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.76rem;
+}
+
+.cuotas-selection-toast .toast-actions .mov-btn {
+  min-height: 36px;
+  padding: 0 13px;
   white-space: nowrap;
-}
-
-.cuotas-selection-bar span {
-  color: #64748b;
-  font-size: 0.78rem;
 }
 
 .cuotas-context-loading,
@@ -442,7 +802,7 @@
 }
 
 html[data-theme="oscuro"] .cuotas-grid.is-selected,
-html[data-theme="oscuro"] .cuotas-selection-bar,
+html[data-theme="oscuro"] .cuotas-selection-toast,
 html[data-theme="oscuro"] .cuotas-family-card,
 html[data-theme="oscuro"] .cuotas-family-toggle,
 html[data-theme="oscuro"] .cuotas-family-members article,
@@ -454,16 +814,56 @@ html[data-theme="oscuro"] .cuotas-batch-list input {
   background: color-mix(in srgb, var(--balto-bg) 88%, #fff 12%);
 }
 
+html[data-theme="oscuro"] .cuotas-selection-toast {
+  border-color: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 42%,
+    var(--mov-border)
+  ) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--balto-action, #b52d35) 14%, var(--balto-bg)),
+    var(--balto-bg) 72%
+  ) !important;
+}
+
+html[data-theme="oscuro"] .cuotas-select-cell input:not(:checked),
+html[data-theme="oscuro"] .cuotas-family-toggle input:not(:checked) {
+  border-color: #64748b;
+  background: color-mix(in srgb, var(--balto-bg) 88%, #fff 12%);
+}
+
 @media (max-width: 720px) {
-  .cuotas-selection-bar,
-  .cuotas-selection-bar > div,
   .cuotas-family-card__head {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .cuotas-selection-bar strong {
-    white-space: normal;
+  .cuotas-selection-toast {
+    align-items: center;
+    flex-wrap: wrap;
+    width: calc(100vw - 20px);
+    padding: 12px !important;
+  }
+
+  .cuotas-selection-toast .toast-message {
+    flex: 1 1 calc(100% - 76px);
+  }
+
+  .cuotas-selection-toast .toast-actions {
+    order: 4;
+    width: 100%;
+    flex-direction: row;
+    margin: 8px 0 0;
+    padding-left: 34px;
+  }
+
+  .cuotas-selection-toast .toast-close {
+    order: 3;
+  }
+
+  .cuotas-selection-toast .toast-actions .mov-btn {
+    flex: 1 1 0;
   }
 
   .cuotas-family-members article,

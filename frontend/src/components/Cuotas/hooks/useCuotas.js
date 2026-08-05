@@ -5,6 +5,7 @@ const initialResponse = {
   items: [],
   resumen: {},
   periodo: {},
+  paginacion: null,
   catalogos: {
     categorias: [],
     medios_pago: [],
@@ -33,6 +34,7 @@ export function useCuotas(filtros = {}) {
           items: result.items || [],
           resumen: result.resumen || {},
           periodo: result.periodo || {},
+          paginacion: result.paginacion || null,
           catalogos: result.catalogos || initialResponse.catalogos,
         });
       }

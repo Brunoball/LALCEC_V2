@@ -38,8 +38,8 @@ export default function ModalComprobantePago({
   return (
     <CrudModal
       open={open}
-      title={isWaiver ? "Condonación realizada con éxito" : "Pago realizado con éxito"}
-      subtitle={`${isWaiver ? "La condonación" : "El cobro"} se registró correctamente. Podés cerrar este mensaje, imprimir el comprobante o exportarlo en PDF.`}
+      title={isWaiver ? "Condonación realizada" : "Pago realizado"}
+      subtitle={`${isWaiver ? "La condonación" : "El cobro"} se registró correctamente. Podés generar el comprobante ahora o hacerlo más tarde desde el listado.`}
       onClose={onClose}
       hideCancel
       hideSubmit

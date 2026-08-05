@@ -137,7 +137,7 @@ function ModuleFilter({ filter }) {
             type="text"
             value={value}
             onChange={(event) => filter.onChange?.(event.target.value)}
-            placeholder={filter.placeholder || "Buscar..."}
+            placeholder={filter.placeholder ?? "Buscar..."}
             aria-label={filter.label}
           />
           {String(value).trim() ? (
@@ -175,9 +175,11 @@ export function ModulePage({
   secondaryActions = [],
   primaryActionClassName = "",
   headFiltersClassName = "",
+  headFiltersContainerClassName = "",
   canCreate = true,
   refreshing = false,
   tabsInTitle = false,
+  headLeftClassName = "",
   className = "",
   children,
   notice,
@@ -210,7 +212,11 @@ export function ModulePage({
 
       <article className="mov-card mov-card--table module-card">
         <header className="mov-card__head module-card__head">
-          <div className="mov-card__headLeft module-card__headLeft">
+          <div
+            className={
+              headLeftClassName || "mov-card__headLeft module-card__headLeft"
+            }
+          >
             <div className="title-mov module-titleBox">
               <h1 className="mov-card__title module-title">{title}</h1>
               {titleTabs ? (
@@ -224,7 +230,10 @@ export function ModulePage({
 
             {headerFilters.length ? (
               <div
-                className={`mov-headFilters module-headFilters ${headFiltersClassName}`.trim()}
+                className={
+                  headFiltersContainerClassName ||
+                  `mov-headFilters module-headFilters ${headFiltersClassName}`.trim()
+                }
               >
                 {headerFilters.map((filter) => (
                   <ModuleFilter
