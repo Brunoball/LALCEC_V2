@@ -147,7 +147,7 @@ function ConfigurationHome() {
         </span>
         <div>
           <small>CONFIGURACIÓN DEL SISTEMA</small>
-          <strong>Solo las opciones que utiliza LALCEC V2</strong>
+          <strong>Administración y configuración general</strong>
           <p>
             Gestioná usuarios, roles y los catálogos vinculados con socios,
             pagos y Contabilidad.

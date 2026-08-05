@@ -1,5 +1,6 @@
 // src/components/BotPanel/modales/EditEtiquetaModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { botManagementPost } from "../api/botApi";
 import { useModalEscapeStack } from "./useModalEscapeStack";
 import ConfirmActionModal from "./ConfirmActionModal";
 import "./EditEtiquetaModal.css";
@@ -17,9 +18,6 @@ const EditEtiquetaModal = ({
   error,
   onClose,
   onSave,
-
-  // Base url de puntos para crear/editar/eliminar etiquetas.
-  puntosBaseUrl,
   onRefreshEtiquetas,
   onLabelsChanged,
 }) => {
@@ -67,17 +65,6 @@ const EditEtiquetaModal = ({
 
   const busy = loading || creating || editing || deletingId !== null;
 
-  const postJSON = async (url, body) => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
-    return { res, data };
-  };
-
   const refreshLabels = async () => {
     if (onLabelsChanged) {
       await onLabelsChanged();
@@ -102,20 +89,11 @@ const EditEtiquetaModal = ({
     const nombre = normalizarNombreEtiqueta(nuevoNombre).trim();
     if (!nombre) return;
 
-    if (!puntosBaseUrl) {
-      setCreateErr("Falta puntosBaseUrl (PANEL_PUNTOS) en el modal");
-      return;
-    }
-
     setCreating(true);
     setCreateErr("");
 
     try {
-      const { res, data } = await postJSON(`${puntosBaseUrl}/etiquetas_create.php`, { nombre });
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
+      const data = await botManagementPost("etiquetas_create", { nombre });
 
       const newId = data?.id_etiqueta;
       if (!newId) throw new Error("No se recibió id_etiqueta");
@@ -150,23 +128,14 @@ const EditEtiquetaModal = ({
       return;
     }
 
-    if (!puntosBaseUrl) {
-      setEditErr("Falta puntosBaseUrl (PANEL_PUNTOS) en el modal");
-      return;
-    }
-
     setEditing(true);
     setEditErr("");
 
     try {
-      const { res, data } = await postJSON(`${puntosBaseUrl}/etiquetas_update.php`, {
+      await botManagementPost("etiquetas_update", {
         id_etiqueta: Number(id),
         nombre,
       });
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
 
       await refreshLabels();
       setEditingId(null);
@@ -195,12 +164,6 @@ const EditEtiquetaModal = ({
   const confirmarEliminarEtiqueta = async () => {
     const id = Number(pendingDeleteEtiqueta?.id || 0);
 
-    if (!puntosBaseUrl) {
-      setDeleteErr("Falta puntosBaseUrl (PANEL_PUNTOS) en el modal");
-      setPendingDeleteEtiqueta(null);
-      return;
-    }
-
     if (id <= 0) {
       setDeleteErr("No se pudo identificar la etiqueta a eliminar");
       setPendingDeleteEtiqueta(null);
@@ -212,13 +175,9 @@ const EditEtiquetaModal = ({
     setEditErr("");
 
     try {
-      const { res, data } = await postJSON(`${puntosBaseUrl}/etiquetas_delete.php`, {
+      await botManagementPost("etiquetas_delete", {
         id_etiqueta: id,
       });
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
 
       if (String(selectedId) === String(id)) setSelectedId("");
       if (Number(editingId || 0) === id) cancelEdit();

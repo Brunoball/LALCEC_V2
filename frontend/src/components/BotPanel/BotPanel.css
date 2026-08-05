@@ -53,6 +53,16 @@
   --wp-reply-bg: #1f2c33;
   --wp-reply-border: #00a884;
 
+  /* Burbujas de mensaje (recibido / bot / enviado por admin) */
+  --wp-bubble-in: var(--wp-card);
+  --wp-bubble-in-border: var(--wp-border-soft);
+  --wp-bubble-bot: var(--wp-accent-2);
+  --wp-bubble-bot-border: var(--wp-accent-3);
+  --wp-bubble-out: var(--wp-success-bg);
+  --wp-bubble-out-border: var(--wp-success);
+  --wp-main-tint-1: var(--wp-accent-2);
+  --wp-main-tint-2: rgba(37,211,102,.07);
+
   /* Patrón decorativo sutil del fondo de conversación. */
   --wp-chat-pattern: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22284%22%20height=%22196%22%20viewBox=%220%200%20284%20196%22%3E%3Cg%20fill=%22none%22%20stroke=%22%238a98a1%22%20stroke-opacity=%22.15%22%20stroke-width=%221.65%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M18%2027h29a8%208%200%200%201%208%208v12a8%208%200%200%201-8%208H32l-10%208%203-8h-7a8%208%200%200%201-8-8V35a8%208%200%200%201%208-8Z%22/%3E%3Cpath%20d=%22M105%2017%20126%2029l-21%2012%205-12-5-12Z%22/%3E%3Cpath%20d=%22m110%2029%2012%200%22/%3E%3Ccircle%20cx=%22208%22%20cy=%2236%22%20r=%2213%22/%3E%3Cpath%20d=%22M202%2034h.1M214%2034h.1M202%2041c4%204%208%204%2012%200%22/%3E%3Cpath%20d=%22M250%2078c-8-7-15%204-8%2010l8%207%208-7c7-6%200-17-8-10Z%22/%3E%3Cpath%20d=%22M72%2098h24a7%207%200%200%201%207%207v20a7%207%200%200%201-7%207H72a7%207%200%200%201-7-7v-20a7%207%200%200%201%207-7Z%22/%3E%3Cpath%20d=%22m70%20121%208-9%207%207%205-5%209%209%22/%3E%3Ccircle%20cx=%2292%22%20cy=%22106%22%20r=%222%22/%3E%3Cpath%20d=%22M151%2095c-3%202-4%205-3%208%202%208%2010%2016%2018%2018%203%201%206%200%208-3l3-5-9-5-4%204c-4-2-7-5-9-9l4-4-5-9-3%205Z%22/%3E%3Cpath%20d=%22M25%20157h35M25%20165h23%22/%3E%3Cpath%20d=%22M121%20157a11%2011%200%200%201%2020-6%2011%2011%200%200%201-20%206Z%22/%3E%3Cpath%20d=%22M131%20141v8M205%20157l7-8%207%208-7%208-7-8Z%22/%3E%3Cpath%20d=%22M263%20145v27M253%20158h20%22/%3E%3C/g%3E%3C/svg%3E");
   --wp-chat-pattern-size: 196px 136px;
@@ -103,6 +113,16 @@
 
   --wp-reply-bg: rgba(0,168,132,.07);
   --wp-reply-border: #00a884;
+
+  /* Burbujas de mensaje · colores reales de WhatsApp Web */
+  --wp-bubble-in: #ffffff;              /* recibido: blanco puro */
+  --wp-bubble-in-border: rgba(17,27,33,.04);
+  --wp-bubble-bot: #dcf8c6;             /* bot: verde WhatsApp clásico (distinto del admin) */
+  --wp-bubble-bot-border: rgba(0,150,80,.18);
+  --wp-bubble-out: #d9fdd3;             /* enviado por admin: verde WhatsApp actual */
+  --wp-bubble-out-border: rgba(0,150,80,.14);
+  --wp-main-tint-1: transparent;
+  --wp-main-tint-2: transparent;
 
   --wp-chat-pattern: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22284%22%20height=%22196%22%20viewBox=%220%200%20284%20196%22%3E%3Cg%20fill=%22none%22%20stroke=%22%2353636b%22%20stroke-opacity=%22.105%22%20stroke-width=%221.65%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M18%2027h29a8%208%200%200%201%208%208v12a8%208%200%200%201-8%208H32l-10%208%203-8h-7a8%208%200%200%201-8-8V35a8%208%200%200%201%208-8Z%22/%3E%3Cpath%20d=%22M105%2017%20126%2029l-21%2012%205-12-5-12Z%22/%3E%3Cpath%20d=%22m110%2029%2012%200%22/%3E%3Ccircle%20cx=%22208%22%20cy=%2236%22%20r=%2213%22/%3E%3Cpath%20d=%22M202%2034h.1M214%2034h.1M202%2041c4%204%208%204%2012%200%22/%3E%3Cpath%20d=%22M250%2078c-8-7-15%204-8%2010l8%207%208-7c7-6%200-17-8-10Z%22/%3E%3Cpath%20d=%22M72%2098h24a7%207%200%200%201%207%207v20a7%207%200%200%201-7%207H72a7%207%200%200%201-7-7v-20a7%207%200%200%201%207-7Z%22/%3E%3Cpath%20d=%22m70%20121%208-9%207%207%205-5%209%209%22/%3E%3Ccircle%20cx=%2292%22%20cy=%22106%22%20r=%222%22/%3E%3Cpath%20d=%22M151%2095c-3%202-4%205-3%208%202%208%2010%2016%2018%2018%203%201%206%200%208-3l3-5-9-5-4%204c-4-2-7-5-9-9l4-4-5-9-3%205Z%22/%3E%3Cpath%20d=%22M25%20157h35M25%20165h23%22/%3E%3Cpath%20d=%22M121%20157a11%2011%200%200%201%2020-6%2011%2011%200%200%201-20%206Z%22/%3E%3Cpath%20d=%22M131%20141v8M205%20157l7-8%207%208-7%208-7-8Z%22/%3E%3Cpath%20d=%22M263%20145v27M253%20158h20%22/%3E%3C/g%3E%3C/svg%3E");
 }
@@ -337,8 +357,8 @@
 /* ===== Main ===== */
 .wp-main{
   background:
-    radial-gradient(900px 500px at 20% 10%, var(--wp-accent-2), transparent 55%),
-    radial-gradient(900px 500px at 90% 80%, rgba(37,211,102,.07), transparent 55%),
+    radial-gradient(900px 500px at 20% 10%, var(--wp-main-tint-1), transparent 55%),
+    radial-gradient(900px 500px at 90% 80%, var(--wp-main-tint-2), transparent 55%),
     var(--wp-chat-bg, var(--wp-bg));
   display: flex;
   flex-direction: column;
@@ -555,18 +575,21 @@
 }
 
 /* Usuario */
-.wp-msg--left .wp-bubble{ background: var(--wp-card); }
+.wp-msg--left .wp-bubble{
+  background: var(--wp-bubble-in);
+  border-color: var(--wp-bubble-in-border);
+}
 
 /* Bot */
 .wp-msg--rightbot .wp-bubble{
-  background: var(--wp-accent-2);
-  border-color: var(--wp-accent-3);
+  background: var(--wp-bubble-bot);
+  border-color: var(--wp-bubble-bot-border);
 }
 
 /* Admin/Panel */
 .wp-msg--right .wp-bubble{
-  background: var(--wp-success-bg);
-  border-color: var(--wp-success);
+  background: var(--wp-bubble-out);
+  border-color: var(--wp-bubble-out-border);
 }
 
 .wp-bubble-text{
@@ -1487,20 +1510,23 @@
 }
 
 :root[data-botpanel-theme="light"] .wp-main{
-  background:
-    radial-gradient(680px 420px at 15% 8%, rgba(0,168,132,.075), transparent 58%),
-    radial-gradient(720px 440px at 90% 88%, rgba(37,211,102,.075), transparent 58%),
-    var(--wp-chat-bg);
+  background: var(--wp-chat-bg);
+}
+
+:root[data-botpanel-theme="light"] .wp-msg--left .wp-bubble{
+  background: #ffffff;
+  border-color: rgba(17,27,33,.06);
+  box-shadow: 0 1px 1px rgba(17,27,33,.08), 0 4px 10px rgba(17,27,33,.06);
 }
 
 :root[data-botpanel-theme="light"] .wp-msg--right .wp-bubble{
-  background: #d9fdd3;
-  border-color: rgba(0,168,132,.16);
+  background: var(--wp-bubble-out);
+  border-color: var(--wp-bubble-out-border);
 }
 
 :root[data-botpanel-theme="light"] .wp-msg--rightbot .wp-bubble{
-  background: #e7f8f3;
-  border-color: rgba(0,168,132,.13);
+  background: var(--wp-bubble-bot);
+  border-color: var(--wp-bubble-bot-border);
 }
 
 :root[data-botpanel-theme="light"] .wp-day span,

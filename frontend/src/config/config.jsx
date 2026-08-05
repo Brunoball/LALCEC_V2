@@ -5,29 +5,16 @@ const BASE_URL = withoutTrailingSlash(
   process.env.REACT_APP_API_URL || "http://localhost:3001/routes",
 );
 
-// Ruta interna del frontend. Se abre en otra pestaña desde el menú principal.
+// Ruta interna del frontend para abrir el panel del bot.
 export const BOT_PANEL_ROUTE = "/panel-bot";
 
-// Una sola raíz configurable para todo el backend del bot.
-// En producción puede sobrescribirse con REACT_APP_BOT_PANEL_BASE_URL.
-export const BOT_PANEL_BASE_URL = withoutTrailingSlash(
-  process.env.REACT_APP_BOT_PANEL_BASE_URL ||
-    "https://cooperadora.ipet50.edu.ar/api/bot_wp/funciones/Panel",
-);
-
-// Se mantienen las variables anteriores por compatibilidad con despliegues existentes.
-export const BOT_PANEL_ENDPOINTS_URL = withoutTrailingSlash(
-  process.env.REACT_APP_BOT_PANEL_URL ||
-    `${BOT_PANEL_BASE_URL}/endpoints`,
-);
-
-export const BOT_PANEL_PUNTOS_URL = withoutTrailingSlash(
-  process.env.REACT_APP_BOT_PANEL_PUNTOS_URL ||
-    `${BOT_PANEL_BASE_URL}/puntos`,
+// Única URL base para toda la API del bot.
+// botApi.js agrega automáticamente /endpoints o /puntos según la acción.
+export const BOT_URL = withoutTrailingSlash(
+  process.env.REACT_APP_BOT_URL ||
+    "https://lalcec.3devsnet.com/api/bot_whatshapp/funciones/Panel",
 );
 
 export default BASE_URL;
 
-
-
-//php -c "C:\php\php.ini" -S localhost:3001
+// php -c "C:\\php\\php.ini" -S localhost:3001

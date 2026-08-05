@@ -8,684 +8,44 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BOT_PANEL_ENDPOINTS_URL as PANEL_API,
-  BOT_PANEL_PUNTOS_URL as PANEL_PUNTOS,
-} from "../../config/config";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+  botManagementGet,
+  botManagementPost,
+  botPanelFormPost,
+  botPanelGet,
+  botPanelPost,
+} from "./api/botApi";
+import BotSidebar from "./components/BotSidebar";
+import BotConversationHeader from "./components/BotConversationHeader";
+import BotMessageList from "./components/BotMessageList";
+import BotComposer from "./components/BotComposer";
+import BotEventosModal from "./modales/BotEventosModal";
+import MediaViewerModal from "./modales/MediaViewerModal";
 import {
-  faArrowLeft,
-  faMagnifyingGlass,
-  faRobot,
-  faHand,
-  faCircle,
-  faPaperPlane,
-  faPaperclip,
-  faUser,
-  faSpinner,
-  faTriangleExclamation,
-  faXmark,
-  faFaceSmile,
-  faFilePdf,
-  faSun,
-  faMoon,
-  faEllipsisVertical,
-  faTag,
-} from "@fortawesome/free-solid-svg-icons";
+  CONSULTA_MANUAL_TEMPLATE_ENABLED,
+  buildConsultaTemplateText,
+  calcWindow,
+  inferMimeFromUrl,
+  inferNameFromUrl,
+  isImageMime,
+  isPdfMime,
+  normStr,
+  parseMoneyInput,
+  pickModo,
+  pickNombre,
+  toTs,
+} from "./utils/botPanelUtils";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faRobot } from "@fortawesome/free-solid-svg-icons";
 
 import "./BotPanel.css";
-import "./modales/BotEventosModal.css";
-import "./modales/MediaViewerModal.css";
 import notificationSound from "./notificacion/notificacion.mp3";
 
-// ✅ Menu ahora se usa SOLO en barra superior (no en lista)
-import ChatOptionsMenu from "./ChatOptionsMenu";
-
-// ✅ OJO: tu carpeta real es "modales"
 import EditNombreModal from "./modales/EditNombreModal";
 import EditEtiquetaModal from "./modales/EditEtiquetaModal";
 import ConfirmActionModal from "./modales/ConfirmActionModal";
 import ComprobanteRevisionModal from "./modales/ComprobanteRevisionModal";
 
-// ✅ NUEVO: modal galería
 import GaleriaModal from "./modales/GaleriaModal";
-import { useModalEscapeStack } from "./modales/useModalEscapeStack";
-
-/** Hora HH:MM desde timestamp (ms) */
-const fmtHora = (ts) => {
-  const d = new Date(ts);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-};
-
-/** Fecha corta + hora para la lista de chats: DD/MM HH:MM */
-const fmtFechaHoraLista = (ts) => {
-  if (!Number.isFinite(Number(ts))) return "";
-  const d = new Date(ts);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm} ${hh}:${mi}`;
-};
-
-/** Fecha completa para tooltips: DD/MM/AAAA HH:MM */
-const fmtFechaHoraCompleta = (ts) => {
-  if (!Number.isFinite(Number(ts))) return "";
-  const d = new Date(ts);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-};
-
-const fmtDateKey = (ts) => {
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-const isSameDay = (a, b) => {
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
-  const da = new Date(a);
-  const db = new Date(b);
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  );
-};
-
-const fmtFechaSeparador = (ts) => {
-  if (!Number.isFinite(ts)) return "";
-
-  const now = Date.now();
-  const yesterday = now - 24 * 60 * 60 * 1000;
-
-  if (isSameDay(ts, now)) return "Hoy";
-  if (isSameDay(ts, yesterday)) return "Ayer";
-
-  const d = new Date(ts);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-
-  return `${dd}/${mm}/${yyyy}`;
-};
-
-
-const fmtFechaEvento = (value) => {
-  const ts = toTs(value);
-  if (!Number.isFinite(ts)) return "";
-  const d = new Date(ts);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-};
-
-const toTs = (value) => {
-  if (!value) return null;
-  const s = String(value).trim();
-
-  const m = s.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
-  );
-
-  if (!m) {
-    const d = new Date(s);
-    const t = d.getTime();
-    return Number.isFinite(t) ? t : null;
-  }
-
-  const year = Number(m[1]);
-  const month = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const hour = Number(m[4]);
-  const min = Number(m[5]);
-  const sec = Number(m[6] ?? 0);
-
-  return new Date(year, month, day, hour, min, sec).getTime();
-};
-
-const normStr = (v) => String(v ?? "").trim();
-
-const buildConsultaTemplateText = (respuesta, fallback = "Te escribimos desde la Cooperadora.") => {
-  const body = normStr(respuesta) || fallback;
-  return `Hola 👋
-
-Te respondemos desde la Cooperadora del IPET 50.
-
-${body}
-
-Si necesitás continuar, respondé este mensaje y te seguimos ayudando.`;
-};
-
-const CONSULTA_TEMPLATE_VARIABLE_PLACEHOLDER =
-  "Acá se va a insertar la respuesta que escribas abajo.";
-
-const EMOJIS_RAPIDOS = [
-  "😀", "😃", "😄", "😁", "😅", "😂", "🤣", "😊",
-  "😍", "🥰", "😘", "😎", "🤔", "😢", "😭", "😡",
-  "👍", "👎", "👌", "👏", "🙌", "🙏", "💪", "👋",
-  "❤️", "💚", "💙", "💛", "🔥", "✨", "🎉", "✅",
-  "❌", "⚠️", "📌", "📎", "📷", "📄", "💬", "📞",
-  "💰", "💳", "🧾", "📅", "⏰", "🚚", "📦", "🏫",
-];
-
-// ✅ Plantilla aprobada en WhatsApp.
-// Habilita el envío de consulta_manual_fuera_24h cuando la ventana de 24hs está expirada.
-const CONSULTA_MANUAL_TEMPLATE_ENABLED = true;
-
-const pickNombre = (c) => {
-  const candidates = [
-    c?.nombre,
-    c?.nombre_contacto,
-    c?.contacto_nombre,
-    c?.nombre_db,
-    c?.name,
-    c?.full_name,
-    c?.display_name,
-    c?.perfil_nombre,
-  ];
-  for (const v of candidates) {
-    const s = normStr(v);
-    if (s) return s;
-  }
-  return "";
-};
-
-const pickModo = (c) => {
-  const m = normStr(c?.modo);
-  return m === "manual" ? "manual" : "bot";
-};
-
-const mapEmisorToSide = (emisor) => {
-  const e = normStr(emisor).toLowerCase();
-  if (e === "usuario" || e === "user") return "left";
-  if (e === "bot") return "rightbot";
-  return "right"; // Admin/Panel
-};
-
-const MS_24H = 24 * 60 * 60 * 1000;
-
-function calcWindow(ventana24hTs, nowTs) {
-  if (!ventana24hTs || !Number.isFinite(ventana24hTs)) {
-    return { valid: false, remainingMs: 0, remainingHours: 0, expireAt: null };
-  }
-  const expireAt = ventana24hTs + MS_24H;
-  const remainingMs = expireAt - nowTs;
-  const valid = remainingMs > 0;
-  const remainingHours = valid
-    ? Math.max(0, Math.ceil(remainingMs / 3600000))
-    : 0;
-
-  return {
-    valid,
-    remainingMs: Math.max(0, remainingMs),
-    remainingHours,
-    expireAt,
-  };
-}
-
-const isImageMime = (mime) => /^image\//i.test(String(mime || ""));
-const isPdfMime = (mime) =>
-  String(mime || "").toLowerCase() === "application/pdf";
-
-const inferMimeFromUrl = (url) => {
-  const u = String(url || "").toLowerCase();
-  if (!u) return "";
-  if (u.includes(".pdf")) return "application/pdf";
-  if (u.includes(".png")) return "image/png";
-  if (u.includes(".webp")) return "image/webp";
-  if (u.includes(".gif")) return "image/gif";
-  if (u.includes(".jpg") || u.includes(".jpeg")) return "image/jpeg";
-  return "";
-};
-
-const inferNameFromUrl = (url) => {
-  try {
-    const u = String(url || "");
-    const clean = u.split("?")[0];
-    const parts = clean.split("/");
-    return parts[parts.length - 1] || "archivo";
-  } catch {
-    return "archivo";
-  }
-};
-
-const fmtBytes = (n) => {
-  const v = Number(n || 0);
-  if (!v) return "";
-  const u = ["B", "KB", "MB", "GB"];
-  let i = 0;
-  let x = v;
-  while (x >= 1024 && i < u.length - 1) {
-    x /= 1024;
-    i++;
-  }
-  return `${x.toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
-};
-
-const parseMoneyInput = (value) => {
-  const raw = String(value ?? "").trim();
-  if (!raw) return null;
-
-  let s = raw.replace(/[^0-9,.]/g, "");
-  if (!s) return null;
-
-  const hasComma = s.includes(",");
-  const hasDot = s.includes(".");
-
-  if (hasComma && hasDot) {
-    s = s.replace(/\./g, "").replace(",", ".");
-  } else if (hasComma) {
-    const parts = s.split(",");
-    const last = parts[parts.length - 1] || "";
-    if (last.length === 2) s = s.replace(/\./g, "").replace(",", ".");
-    else s = s.replace(/,/g, "");
-  } else if (hasDot) {
-    const parts = s.split(".");
-    const last = parts[parts.length - 1] || "";
-    if (last.length === 3 && parts.length > 1) s = s.replace(/\./g, "");
-  }
-
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
-};
-
-
-/* =========================
-   ✅ MODAL VISOR (IMG / PDF)
-========================= */
-
-const fmtMoneyARS = (value, fallback = "Monto no detectado") => {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return n.toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: n % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
-};
-
-const firstText = (...values) => {
-  for (const value of values) {
-    if (value === null || value === undefined) continue;
-    if (typeof value === "object") continue;
-    const s = normStr(value);
-    if (s) return s;
-  }
-  return "";
-};
-
-const toNumberOrNull = (value) => {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
-const cantidadExactaPorMonto = (monto, precioUnitario) => {
-  const montoNum = toNumberOrNull(monto);
-  const precioNum = toNumberOrNull(precioUnitario);
-  if (!montoNum || !precioNum || montoNum <= 0 || precioNum <= 0) return null;
-
-  const cantidad = Math.round(montoNum / precioNum);
-  if (!Number.isFinite(cantidad) || cantidad <= 0) return null;
-
-  const totalEsperado = Number((precioNum * cantidad).toFixed(2));
-  const diferencia = Math.abs(Number(montoNum.toFixed(2)) - totalEsperado);
-  return diferencia <= 0.01 ? cantidad : null;
-};
-
-const pickComprobanteInfo = (ev = {}) => {
-  const ctx = ev?.contexto && typeof ev.contexto === "object" ? ev.contexto : {};
-  const archivo = ctx?.archivo && typeof ctx.archivo === "object" ? ctx.archivo : {};
-  const archivoUrl = firstText(ctx.archivo_url, ctx.url_archivo, archivo.url);
-  const mediaTipo = firstText(ctx.media_tipo, ctx.mime, archivo.mime);
-  const nombre = firstText(ctx.nombre_apellido, ctx.persona_nombre, ctx.nombre, ctx.comprador_nombre);
-  const dni = firstText(ctx.dni, ctx.persona_dni, ctx.comprador_dni);
-  const producto = firstText(ctx.producto_nombre, ctx.campania?.producto_nombre, ctx.producto);
-  const campania = firstText(ctx.campania_nombre, ctx.campania?.campania_nombre, ctx.venta, ctx.campania);
-  const monto = ctx.monto_detectado ?? ctx.monto_confirmado ?? ctx.monto ?? null;
-  const precioUnitario = ctx.precio_unitario ?? ctx.producto_precio ?? null;
-  const cantidadExacta = cantidadExactaPorMonto(monto, precioUnitario);
-  const cantidad = ctx.cantidad_estimada ?? ctx.cantidad_confirmada ?? ctx.cantidad_sugerida ?? cantidadExacta ?? null;
-  const estadoComprobante = firstText(ctx.estado_comprobante, ctx.estado);
-
-  // Algunos eventos viejos quedaron guardados con motivo_revision cuando el OCR había
-  // leído mal el monto. Si después el backend corrige a $12.000 y 1 entrada, no hay
-  // que seguir mostrando el cartel amarillo de “no coincide”.
-  const motivoRevisionRaw = firstText(ctx.motivo_revision, ctx.advertencia);
-  const motivoRevision = cantidadExacta ? "" : motivoRevisionRaw;
-
-  return {
-    id: Number(ctx.id_comprobante || 0),
-    archivoUrl,
-    mediaTipo,
-    nombre,
-    dni,
-    producto,
-    campania,
-    monto,
-    cantidad,
-    precioUnitario,
-    estadoComprobante,
-    motivoRevision,
-  };
-};
-
-const isImageComprobante = (url = "", mime = "") => {
-  const m = String(mime || "").toLowerCase();
-  const u = String(url || "").toLowerCase().split("?")[0];
-  return m.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(u);
-};
-
-const isPdfComprobante = (url = "", mime = "") => {
-  const m = String(mime || "").toLowerCase();
-  const u = String(url || "").toLowerCase().split("?")[0];
-  return m === "application/pdf" || u.endsWith(".pdf");
-};
-
-const BotEventosModal = ({
-  open,
-  onClose,
-  eventos,
-  resumen,
-  loading,
-  error,
-  onRefresh,
-  onMarkOne,
-  onDeleteOne,
-  onOpenChat,
-  onAprobarComprobante,
-  onRechazarComprobante,
-}) => {
-  useModalEscapeStack(open, onClose);
-
-  if (!open) return null;
-
-  const pendientes = Number(resumen?.pendientes || 0);
-  const hasEventos = Array.isArray(eventos) && eventos.length > 0;
-
-  return (
-    <div className="wp-events-backdrop" role="dialog" aria-modal="true">
-      <div className="wp-events-panel">
-        <div className="wp-events-head">
-          <div className="wp-events-head-main">
-            <div className="wp-events-icon" aria-hidden="true">
-              <FontAwesomeIcon icon={faRobot} />
-            </div>
-
-            <div className="wp-events-heading-copy">
-              <div className="wp-events-eyebrow">Actividad del sistema</div>
-              <div className="wp-events-title">
-                Alertas del bot
-                <span className={`wp-events-status ${pendientes > 0 ? "is-hot" : "is-ok"}`}>
-                  <FontAwesomeIcon icon={pendientes > 0 ? faTriangleExclamation : faCircle} />
-                  {pendientes > 0 ? "Requiere revisión" : "Todo al día"}
-                </span>
-              </div>
-              <div className="wp-events-sub">
-                {pendientes > 0
-                  ? `${pendientes} evento${pendientes === 1 ? "" : "s"} pendiente${pendientes === 1 ? "" : "s"}`
-                  : "No hay eventos pendientes"}
-              </div>
-            </div>
-          </div>
-
-          <button type="button" className="wp-events-close" onClick={onClose} aria-label="Cerrar">
-            <FontAwesomeIcon icon={faXmark} />
-          </button>
-        </div>
-
-        <div className="wp-events-actions">
-          <div className="wp-events-actions-copy">
-            <b>Centro de seguimiento</b>
-            <span>Revisá errores, advertencias y comprobantes pendientes.</span>
-          </div>
-          <button type="button" className="wp-events-btn" onClick={onRefresh} disabled={loading}>
-            {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : null}
-            Actualizar
-          </button>
-        </div>
-
-        <div className="wp-events-summary">
-          <div className="wp-events-stat wp-events-stat--danger"><span>Errores pendientes</span><b>{Number(resumen?.errores_pendientes || 0)}</b></div>
-          <div className="wp-events-stat wp-events-stat--warning"><span>Advertencias</span><b>{Number(resumen?.warnings_pendientes || 0)}</b></div>
-          <div className="wp-events-stat wp-events-stat--info"><span>Últimos 7 días</span><b>{Number(resumen?.total_ultimos_7_dias || 0)}</b></div>
-        </div>
-
-        {error ? (
-          <div className="wp-events-error">
-            <FontAwesomeIcon icon={faTriangleExclamation} />
-            {error}
-          </div>
-        ) : null}
-
-        <div className="wp-events-list">
-          {loading && !hasEventos ? (
-            <div className="wp-events-empty">
-              <FontAwesomeIcon icon={faSpinner} spin /> Cargando alertas…
-            </div>
-          ) : null}
-
-          {!loading && !hasEventos ? (
-            <div className="wp-events-empty">
-              Todo limpio. Si el bot falla al generar un link, enviar WhatsApp, procesar un webhook o subir un archivo, va a aparecer acá.
-            </div>
-          ) : null}
-
-          {hasEventos ? eventos.map((ev) => {
-            const pendiente = ev.estado === "pendiente";
-            const tipo = String(ev.tipo || "error");
-            const ctx = ev.contexto && typeof ev.contexto === "object" ? ev.contexto : {};
-            const idComprobante = Number(ctx?.id_comprobante || 0);
-            const esComprobanteVenta = String(ev.modulo || "") === "ventas_comprobante" && idComprobante > 0;
-            const comp = esComprobanteVenta ? pickComprobanteInfo(ev) : null;
-            const compArchivoUrl = comp?.archivoUrl || "";
-            const compEsImagen = isImageComprobante(compArchivoUrl, comp?.mediaTipo);
-            const compEsPdf = isPdfComprobante(compArchivoUrl, comp?.mediaTipo);
-            const compPersona = comp?.nombre || "Persona sin nombre detectado";
-            const compDni = comp?.dni || "sin DNI";
-            const compMonto = fmtMoneyARS(comp?.monto);
-            const compCantidad = Number(comp?.cantidad || 0) > 0 ? `${Number(comp?.cantidad)} entrada${Number(comp?.cantidad) === 1 ? "" : "s"}` : "Cantidad a revisar";
-            const compVenta = [comp?.campania, comp?.producto].filter(Boolean).join(" · ");
-
-            return (
-              <div key={ev.id_evento} className={`wp-event-card wp-event-card--${tipo} ${pendiente ? "is-pending" : "is-reviewed"}`}>
-                <div className="wp-event-top">
-                  <span className="wp-event-badge">{tipo}</span>
-                                    <span className="wp-event-date">{fmtFechaEvento(ev.creado_en)}</span>
-                </div>
-
-                <div className="wp-event-title">{ev.titulo || "Evento del bot"}</div>
-
-                {esComprobanteVenta ? (
-                  <div className="wp-event-comprobante">
-                    {compArchivoUrl ? (
-                      <a
-                        className="wp-event-comprobante-preview"
-                        href={compArchivoUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Abrir comprobante recibido"
-                      >
-                        {compEsImagen ? (
-                          <img src={compArchivoUrl} alt={`Comprobante ${idComprobante}`} loading="lazy" />
-                        ) : (
-                          <span className="wp-event-comprobante-file">{compEsPdf ? "PDF" : "Archivo"}</span>
-                        )}
-                      </a>
-                    ) : (
-                      <div className="wp-event-comprobante-preview is-empty">Sin archivo</div>
-                    )}
-
-                    <div className="wp-event-comprobante-info">
-                      <div className="wp-event-comprobante-title">Comprobante #{idComprobante}</div>
-                      <div className="wp-event-comprobante-person">
-                        <b>{compPersona}</b>
-                        <span>DNI: {compDni}</span>
-                      </div>
-
-                      {compVenta ? <div className="wp-event-comprobante-desc">{compVenta}</div> : null}
-
-                      <div className="wp-event-comprobante-chips">
-                        <span>{compMonto}</span>
-                        <span>{compCantidad}</span>
-                        {comp?.precioUnitario ? <span>Precio: {fmtMoneyARS(comp.precioUnitario, "-")}</span> : null}
-                      </div>
-
-                      {comp?.motivoRevision ? (
-                        <div className="wp-event-comprobante-warning">{comp.motivoRevision}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : ev.detalle ? (
-                  <div className="wp-event-detail">{ev.detalle}</div>
-                ) : null}
-
-                <div className="wp-event-meta">
-                  {ev.wa_id ? (
-                    <button type="button" className="wp-event-link" onClick={() => onOpenChat?.(ev.wa_id)}>
-                      Abrir chat {ev.wa_id}
-                    </button>
-                  ) : <span>Sin contacto asociado</span>}
-                  <span>Estado: <b>{pendiente ? "pendiente" : "revisado"}</b></span>
-                  {esComprobanteVenta && compArchivoUrl ? (
-                    <a className="wp-event-link" href={compArchivoUrl} target="_blank" rel="noreferrer">
-                      Ver comprobante
-                    </a>
-                  ) : null}
-                </div>
-
-                {pendiente ? (
-                  <div className="wp-event-foot">
-                    {esComprobanteVenta ? (
-                      <>
-                        <button
-                          type="button"
-                          className="wp-events-btn wp-events-btn--approve"
-                          onClick={() => onAprobarComprobante?.(idComprobante, ev.id_evento)}
-                        >
-                          Aprobar comprobante
-                        </button>
-                        <button
-                          type="button"
-                          className="wp-events-btn wp-events-btn--reject"
-                          onClick={() => onRechazarComprobante?.(idComprobante, ev.id_evento)}
-                        >
-                          Rechazar
-                        </button>
-                        <button
-                          type="button"
-                          className="wp-events-btn wp-events-btn--delete"
-                          onClick={() => onDeleteOne?.(ev.id_evento)}
-                          title="Ocultar sin aprobar, rechazar ni enviar mensajes"
-                        >
-                          Eliminar alerta
-                        </button>
-                      </>
-                    ) : null}
-                    {!esComprobanteVenta ? (
-                      <>
-                        <button type="button" className="wp-events-btn wp-events-btn--ok" onClick={() => onMarkOne?.(ev.id_evento)}>
-                          Marcar revisado
-                        </button>
-                        <button type="button" className="wp-events-btn wp-events-btn--delete" onClick={() => onDeleteOne?.(ev.id_evento)}>
-                          Eliminar
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            );
-          }) : null}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MediaViewerModal = ({ open, onClose, item }) => {
-  const boxRef = useRef(null);
-
-  useModalEscapeStack(open, onClose);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onDown = (e) => {
-      const box = boxRef.current;
-      if (!box) return;
-      if (!box.contains(e.target)) onClose?.();
-    };
-
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [open, onClose]);
-
-  if (!open || !item?.url) return null;
-
-  const mime = item.mime || inferMimeFromUrl(item.url);
-  const isImg = isImageMime(mime);
-  const isPdf = isPdfMime(mime);
-
-  return (
-    <div className="wp-media-backdrop" role="dialog" aria-label="Visor de archivo">
-      <div className="wp-media-modal" ref={boxRef}>
-        <div className="wp-media-top">
-          <div className="wp-media-heading">
-            <span className="wp-media-eyebrow">Vista previa</span>
-            <div className="wp-media-title">
-              {isPdf ? <FontAwesomeIcon icon={faFilePdf} /> : null}
-              <span>{item.name || (isPdf ? "Documento PDF" : "Imagen")}</span>
-            </div>
-          </div>
-
-          <div className="wp-media-actions">
-            <a className="wp-media-open" href={item.url} target="_blank" rel="noreferrer">
-              Abrir
-            </a>
-            <button
-              className="wp-media-close"
-              type="button"
-              onClick={onClose}
-              aria-label="Cerrar"
-            >
-              <FontAwesomeIcon icon={faXmark} />
-            </button>
-          </div>
-        </div>
-
-        <div className={`wp-media-body ${isImg ? "wp-media-body--image" : ""}`}>
-          {isImg ? (
-            <img className="wp-media-img" src={item.url} alt={item.name || "imagen"} />
-          ) : isPdf ? (
-            <iframe className="wp-media-iframe" src={item.url} title="PDF" />
-          ) : (
-            <div className="wp-media-unknown">
-              <p>📎 {item.name || "Archivo"}</p>
-              <a href={item.url} target="_blank" rel="noreferrer">
-                Abrir archivo
-              </a>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const BotPanel = () => {
   const navigate = useNavigate();
@@ -826,65 +186,17 @@ const BotPanel = () => {
     };
   }, [mensajes, selectedId, scrollToBottom]);
 
-  const fetchJSON = useCallback(async (url) => {
-    const res = await fetch(url, { method: "GET", cache: "no-store" });
-    const data = await res.json().catch(() => null);
-    return { res, data };
+  const markSeen = useCallback(async (waId) => {
+    if (!waId) return;
+    try {
+      await botPanelGet("panel_mark_seen", { wa_id: waId });
+    } catch {}
   }, []);
 
-  const postJSON = useCallback(async (url, body) => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
-    return { res, data };
+  const markUnread = useCallback(async (waId) => {
+    if (!waId) return { success: false, error: "wa_id requerido" };
+    return botPanelGet("panel_mark_unread", { wa_id: waId });
   }, []);
-
-  const postFormData = useCallback(async (url, formData) => {
-    const res = await fetch(url, {
-      method: "POST",
-      cache: "no-store",
-      body: formData,
-    });
-    const data = await res.json().catch(() => null);
-    return { res, data };
-  }, []);
-
-  const markSeen = useCallback(
-    async (waId) => {
-      if (!waId) return;
-      try {
-        await fetchJSON(
-          `${PANEL_API}/panel_mark_seen.php?wa_id=${encodeURIComponent(
-            waId
-          )}&_=${Date.now()}`
-        );
-      } catch {}
-    },
-    [fetchJSON]
-  );
-
-  const markUnread = useCallback(
-    async (waId) => {
-      if (!waId) return { success: false, error: "wa_id requerido" };
-
-      const { res, data } = await fetchJSON(
-        `${PANEL_API}/panel_mark_unread.php?wa_id=${encodeURIComponent(
-          waId
-        )}&_=${Date.now()}`
-      );
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
-
-      return data;
-    },
-    [fetchJSON]
-  );
 
   // ==========================
   // ✅ TEMA CLARO / OSCURO
@@ -914,12 +226,7 @@ const BotPanel = () => {
     setLoadingEtiquetas(true);
     setErrorEtiquetas("");
     try {
-      const { res, data } = await fetchJSON(
-        `${PANEL_PUNTOS}/etiquetas_list.php?_=${Date.now()}`
-      );
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
+      const data = await botManagementGet("etiquetas_list");
       setEtiquetas(Array.isArray(data.etiquetas) ? data.etiquetas : []);
     } catch (e) {
       setErrorEtiquetas(e?.message || "No se pudieron cargar etiquetas");
@@ -927,7 +234,7 @@ const BotPanel = () => {
     } finally {
       setLoadingEtiquetas(false);
     }
-  }, [fetchJSON]);
+  }, []);
 
   useEffect(() => {
     if (!tagFilterOpen) return;
@@ -957,12 +264,10 @@ const BotPanel = () => {
       if (!silent) setLoadingEventos(true);
       setErrorEventos("");
       try {
-        const { res, data } = await fetchJSON(
-          `${PANEL_API}/panel_eventos.php?estado=pendiente&limit=100&_=${Date.now()}`
-        );
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        const data = await botPanelGet("panel_eventos", {
+          estado: "pendiente",
+          limit: 100,
+        });
         setEventos(Array.isArray(data.eventos) ? data.eventos : []);
         setEventosResumen({
           pendientes: Number(data?.resumen?.pendientes || 0),
@@ -976,20 +281,17 @@ const BotPanel = () => {
         if (!silent) setLoadingEventos(false);
       }
     },
-    [fetchJSON]
+    []
   );
 
   const marcarEventoRevisado = useCallback(
     async (idEvento = 0) => {
       try {
         setLoadingEventos(true);
-        const { res, data } = await postJSON(`${PANEL_API}/panel_eventos.php`, {
+        await botPanelPost("panel_eventos", {
           accion: "marcar_revisado",
           id_evento: Number(idEvento || 0),
         });
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
         await fetchEventos(true);
       } catch (e) {
         setErrorEventos(e?.message || "No se pudo marcar la alerta como revisada");
@@ -997,7 +299,7 @@ const BotPanel = () => {
         setLoadingEventos(false);
       }
     },
-    [postJSON, fetchEventos]
+    [fetchEventos]
   );
 
   const fetchChats = useCallback(
@@ -1008,12 +310,7 @@ const BotPanel = () => {
       setErrorChats("");
 
       try {
-        const { res, data } = await fetchJSON(
-          `${PANEL_API}/panel_chats.php?_=${Date.now()}`
-        );
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        const data = await botPanelGet("panel_chats");
 
         const rows = Array.isArray(data.chats) ? data.chats : [];
         const mapped = rows.map((c) => {
@@ -1104,7 +401,7 @@ const BotPanel = () => {
         else setLoadingChats(false);
       }
     },
-    [fetchJSON, playUrgentSound]
+    [playUrgentSound]
   );
 
   const eliminarEventoSinAccion = useCallback(
@@ -1112,13 +409,10 @@ const BotPanel = () => {
       try {
         setLoadingEventos(true);
         setErrorEventos("");
-        const { res, data } = await postJSON(`${PANEL_API}/panel_eventos.php`, {
+        await botPanelPost("panel_eventos", {
           accion: "eliminar_alerta",
           id_evento: Number(idEvento || 0),
         });
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
         await fetchEventos(true);
         await fetchChats(true);
       } catch (e) {
@@ -1129,7 +423,7 @@ const BotPanel = () => {
         setLoadingEventos(false);
       }
     },
-    [postJSON, fetchEventos, fetchChats]
+    [fetchEventos, fetchChats]
   );
 
   // ==========================
@@ -1168,15 +462,14 @@ const BotPanel = () => {
 
     (async () => {
       try {
-        const { res, data } = await postJSON(`${PANEL_API}/panel_ventas_comprobante_transferencia.php`, {
-          accion: "detalle_comprobante",
-          id_comprobante: Number(idComprobante || 0),
-          id_evento: Number(idEvento || 0),
-        });
-
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        const data = await botPanelPost(
+          "panel_ventas_comprobante_transferencia",
+          {
+            accion: "detalle_comprobante",
+            id_comprobante: Number(idComprobante || 0),
+            id_evento: Number(idEvento || 0),
+          },
+        );
 
         const cantidad = Number(data?.cantidad_sugerida || data?.cantidad_estimada || 1);
         const monto = data?.monto_detectado ?? data?.monto_confirmado ?? "";
@@ -1200,7 +493,7 @@ const BotPanel = () => {
         setComprobanteConfirmError(msg);
       }
     })();
-  }, [postJSON]);
+  }, []);
 
   const cerrarConfirmacionComprobante = useCallback(() => {
     if (comprobanteConfirmLoading) return;
@@ -1256,11 +549,10 @@ const BotPanel = () => {
         setErrorEventos("");
         setComprobanteConfirmError("");
 
-        const { res, data } = await postJSON(`${PANEL_API}/panel_ventas_comprobante_transferencia.php`, payload);
-
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        await botPanelPost(
+          "panel_ventas_comprobante_transferencia",
+          payload,
+        );
 
         setComprobanteConfirm({
           open: false,
@@ -1284,7 +576,7 @@ const BotPanel = () => {
         setLoadingEventos(false);
       }
     },
-    [comprobanteConfirm, postJSON, fetchEventos, fetchChats]
+    [comprobanteConfirm, fetchEventos, fetchChats]
   );
 
   const setCampoComprobanteConfirm = useCallback((campo, valor) => {
@@ -1318,14 +610,10 @@ const BotPanel = () => {
       setErrorMsgs("");
 
       try {
-        const { res, data } = await fetchJSON(
-          `${PANEL_API}/panel_mensajes.php?wa_id=${encodeURIComponent(
-            waId
-          )}&limit=600&_=${Date.now()}`
-        );
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        const data = await botPanelGet("panel_mensajes", {
+          wa_id: waId,
+          limit: 600,
+        });
 
         const rows = Array.isArray(data.mensajes) ? data.mensajes : [];
 
@@ -1384,29 +672,26 @@ const BotPanel = () => {
         if (!silent) setLoadingMsgs(false);
       }
     },
-    [fetchJSON, markSeen, fetchChats]
+    [markSeen, fetchChats]
   );
 
-  const getHash = useCallback(
-    async (waId) => {
-      const { res, data } = await fetchJSON(
-        `${PANEL_API}/panel_hash.php?wa_id=${encodeURIComponent(
-          waId
-        )}&_=${Date.now()}`
-      );
-      if (!res.ok || !data?.success) return "";
+  const getHash = useCallback(async (waId) => {
+    try {
+      const data = await botPanelGet("panel_hash", { wa_id: waId });
       return String(data.hash ?? "");
-    },
-    [fetchJSON]
-  );
+    } catch {
+      return "";
+    }
+  }, []);
 
   const getGlobalHash = useCallback(async () => {
-    const { res, data } = await fetchJSON(
-      `${PANEL_API}/panel_global_hash.php?_=${Date.now()}`
-    );
-    if (!res.ok || !data?.success) return "";
-    return String(data.hash ?? "");
-  }, [fetchJSON]);
+    try {
+      const data = await botPanelGet("panel_global_hash");
+      return String(data.hash ?? "");
+    } catch {
+      return "";
+    }
+  }, []);
 
   const pollSelectedChat = useCallback(async () => {
     const waId = selectedIdRef.current;
@@ -1452,14 +737,10 @@ const BotPanel = () => {
       if (!waId) return;
 
       try {
-        const { res, data } = await postJSON(`${PANEL_API}/panel_set_modo.php`, {
+        await botPanelPost("panel_set_modo", {
           wa_id: waId,
           modo: nextMode,
         });
-
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
         await fetchChats(true);
       } catch (err) {
         setMensajes((prev) => [
@@ -1477,7 +758,7 @@ const BotPanel = () => {
         ]);
       }
     },
-    [postJSON, fetchChats]
+    [fetchChats]
   );
 
   useEffect(() => {
@@ -1872,10 +1153,7 @@ const BotPanel = () => {
         fd.append("caption", text);
         fd.append("file", attachedFile);
 
-        const { res, data } = await postFormData(`${PANEL_API}/panel_send_media.php`, fd);
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || `Error HTTP ${res.status}`);
-        }
+        await botPanelFormPost("panel_send_media", fd);
 
         clearAttached();
 
@@ -1932,16 +1210,12 @@ const BotPanel = () => {
     setEmojiOpen(false);
 
     try {
-      const { res, data } = await postJSON(`${PANEL_API}/panel_send.php`, {
+      await botPanelPost("panel_send", {
         wa_id: waId,
         texto: text,
         // Si la ventana de 24hs está expirada, el backend envía la plantilla aprobada.
         usar_plantilla_si_ventana_expirada: CONSULTA_MANUAL_TEMPLATE_ENABLED,
       });
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
 
       lastHashRef.current = "";
       await fetchMensajes(waId, { silent: true });
@@ -2093,13 +1367,10 @@ const BotPanel = () => {
     setModalEditLoading(true);
     setModalEditError("");
     try {
-      const { res, data } = await postJSON(`${PANEL_PUNTOS}/editar_nombre.php`, {
+      await botManagementPost("editar_nombre", {
         wa_id: waId,
         nombre,
       });
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
       setModalEditOpen(false);
       await fetchChats(true);
     } catch (e) {
@@ -2113,13 +1384,10 @@ const BotPanel = () => {
     setModalTagLoading(true);
     setModalTagError("");
     try {
-      const { res, data } = await postJSON(`${PANEL_PUNTOS}/etiquetas_set.php`, {
+      await botManagementPost("etiquetas_set", {
         wa_id: waId,
         etiqueta_id: etiquetaId,
       });
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
       setModalTagOpen(false);
       await fetchChats(true);
     } catch (e) {
@@ -2141,12 +1409,9 @@ const BotPanel = () => {
     setModalVaciarLoading(true);
     setModalVaciarError("");
     try {
-      const { res, data } = await postJSON(`${PANEL_PUNTOS}/vaciar_chat.php`, {
+      await botManagementPost("vaciar_chat", {
         wa_id: waId,
       });
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
 
       setModalVaciarOpen(false);
 
@@ -2170,13 +1435,7 @@ const BotPanel = () => {
     setModalEliminarLoading(true);
     setModalEliminarError("");
     try {
-      const { res, data } = await postJSON(
-        `${PANEL_PUNTOS}/eliminar_contacto.php`,
-        { wa_id: waId }
-      );
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || `Error HTTP ${res.status}`);
-      }
+      await botManagementPost("eliminar_contacto", { wa_id: waId });
 
       setModalEliminarOpen(false);
 
@@ -2250,255 +1509,29 @@ const BotPanel = () => {
     <div className="wp-shell">
       <audio ref={audioUrgentRef} preload="auto" src={notificationSound} />
 
-      <aside className="wp-sidebar">
-        <div className="wp-side-top">
-          <button
-            className="wp-back"
-            onClick={() => navigate("/panel", { replace: true })}
-            type="button"
-            title="Volver"
-            aria-label="Volver"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} />
-          </button>
-
-          <div className="wp-brand">
-            <span className="wp-brand-ico" aria-hidden="true">
-              <FontAwesomeIcon icon={faRobot} />
-            </span>
-            <div className="wp-brand-txt">
-              <div className="wp-brand-title">Panel Bot WhatsApp</div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className={`wp-alertbtn ${Number(eventosResumen?.pendientes || 0) > 0 ? "is-danger" : ""}`}
-            onClick={abrirPanelAlertas}
-            title="Ver alertas y errores del bot"
-            aria-label="Ver alertas y errores del bot"
-          >
-            <FontAwesomeIcon icon={faTriangleExclamation} />
-            {Number(eventosResumen?.pendientes || 0) > 0 ? (
-              <span className="wp-alertbadge">
-                {Number(eventosResumen?.pendientes || 0) > 99 ? "99+" : Number(eventosResumen?.pendientes || 0)}
-              </span>
-            ) : null}
-          </button>
-        </div>
-
-        <div className="wp-searchbar" ref={tagFilterRef}>
-          <div className="wp-search">
-            <span className="wp-search-ico" aria-hidden="true">
-              <FontAwesomeIcon icon={faMagnifyingGlass} />
-            </span>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="wp-search-input"
-              placeholder="Buscar por nombre, número, mensaje…"
-            />
-          </div>
-
-          <div className="wp-tag-filter">
-            <button
-              type="button"
-              className={`wp-tag-filter-btn ${tagFilterOpen ? "is-open" : ""} ${tagFilter !== "all" ? "has-filter" : ""}`}
-              onClick={() => setTagFilterOpen((v) => !v)}
-              title={`Filtrar por etiqueta: ${activeTagFilterLabel}`}
-              aria-label={`Filtrar por etiqueta: ${activeTagFilterLabel}`}
-              aria-expanded={tagFilterOpen}
-            >
-              <FontAwesomeIcon icon={faEllipsisVertical} />
-              {tagFilter !== "all" ? <span className="wp-tag-filter-dot" aria-hidden="true" /> : null}
-            </button>
-
-            {tagFilterOpen ? (
-              <div className="wp-tag-filter-menu" role="menu" aria-label="Filtrar chats por etiqueta">
-                <div className="wp-tag-filter-title">
-                  <FontAwesomeIcon icon={faTag} />
-                  <span>Filtrar por etiqueta</span>
-                </div>
-
-                <button
-                  type="button"
-                  className={`wp-tag-filter-item ${tagFilter === "all" ? "is-active" : ""}`}
-                  onClick={() => {
-                    setTagFilter("all");
-                    setTagFilterOpen(false);
-                  }}
-                >
-                  <span>Todas</span>
-                  <b>{tagCounts.all}</b>
-                </button>
-
-                <button
-                  type="button"
-                  className={`wp-tag-filter-item ${tagFilter === "sin" ? "is-active" : ""}`}
-                  onClick={() => {
-                    setTagFilter("sin");
-                    setTagFilterOpen(false);
-                  }}
-                >
-                  <span>Sin etiqueta</span>
-                  <b>{tagCounts.sin}</b>
-                </button>
-
-                <div className="wp-tag-filter-sep" />
-
-                {loadingEtiquetas ? (
-                  <div className="wp-tag-filter-state">Cargando etiquetas…</div>
-                ) : null}
-
-                {!loadingEtiquetas && errorEtiquetas ? (
-                  <div className="wp-tag-filter-state is-error">{errorEtiquetas}</div>
-                ) : null}
-
-                {!loadingEtiquetas && !errorEtiquetas && etiquetas.length === 0 ? (
-                  <div className="wp-tag-filter-state">No hay etiquetas creadas.</div>
-                ) : null}
-
-                {!loadingEtiquetas && !errorEtiquetas
-                  ? etiquetas.map((et) => {
-                      const etId = normStr(et?.id_etiqueta);
-                      const etNombre = normStr(et?.nombre) || "Etiqueta";
-                      const value = etId ? `id:${etId}` : `name:${etNombre.toLowerCase()}`;
-                      const count =
-                        (etId ? tagCounts.byId[etId] : undefined) ??
-                        tagCounts.byName[etNombre.toLowerCase()] ??
-                        0;
-
-                      return (
-                        <button
-                          key={etId || etNombre}
-                          type="button"
-                          className={`wp-tag-filter-item ${tagFilter === value ? "is-active" : ""}`}
-                          onClick={() => {
-                            setTagFilter(value);
-                            setTagFilterOpen(false);
-                          }}
-                        >
-                          <span>{etNombre}</span>
-                          <b>{count}</b>
-                        </button>
-                      );
-                    })
-                  : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {errorChats ? (
-          <div className="wp-error">
-            <FontAwesomeIcon icon={faTriangleExclamation} />
-            <span>{errorChats}</span>
-          </div>
-        ) : null}
-
-        <div className="wp-chatlist">
-          {loadingChats && chats.length === 0 ? (
-            <div className="wp-loading">
-              <FontAwesomeIcon icon={faSpinner} spin />
-              <span>Cargando chats…</span>
-            </div>
-          ) : null}
-
-          {list.map((c) => {
-            const active = c.id === selectedId;
-            const nombreOk = c.nombre || "Sin nombre";
-            const fechaHora = fmtFechaHoraLista(c.updatedAt || Date.now());
-            const fechaHoraTitle = fmtFechaHoraCompleta(c.updatedAt || Date.now());
-            const totalTxt = `${Number(c.total || 0)} msgs`;
-            const urgent = !!c.urgente;
-            const comprobantesPendientes = Number(c.comprobantesPendientes || 0);
-            const tone = c.chatTone || (Number(c.consultasPendientes || 0) > 0
-              ? "consulta"
-              : comprobantesPendientes > 0
-                ? "comprobante"
-                : c.prioridad === "alta"
-                  ? "danger"
-                  : "normal");
-            const toneClass = tone !== "normal" ? `wp-chatitem--${tone}` : "";
-
-            return (
-              <button
-                key={c.id}
-                type="button"
-                className={`wp-chatitem ${active ? "is-active" : ""} ${urgent ? "is-urgent" : ""} ${toneClass}`}
-                onClick={() => openChat(c.id)}
-              >
-                <div className="wp-avatar" aria-hidden="true">
-                  <FontAwesomeIcon icon={faUser} />
-                </div>
-
-                <div className="wp-chatmeta">
-                  <div className="wp-chatrow" style={{ alignItems: "center" }}>
-                    <div className="wp-chatname">
-                      {nombreOk}
-                      {Number(c.consultasPendientes || 0) > 0 ? (
-                        <span className="wp-consulta-flag">
-                          • CONSULTA
-                        </span>
-                      ) : null}
-                      {comprobantesPendientes > 0 ? (
-                        <span className="wp-comprobante-flag">
-                          • COMPROBANTE
-                        </span>
-                      ) : null}
-                      {c.online ? (
-                        <span className="wp-online" title="En línea" aria-hidden="true">
-                          <FontAwesomeIcon icon={faCircle} />
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="wp-chattime" title={fechaHoraTitle}>{fechaHora}</div>
-                  </div>
-
-                  <div className="wp-chatrow">
-                    <div className="wp-chatlast">
-                      {c.id} • {totalTxt}
-                      {comprobantesPendientes > 0 ? " • 🧾 comprobante" : c.prioridad === "alta" && Number(c.consultasPendientes || 0) === 0 ? " • ⚠️" : ""}
-                      {c.modo === "manual" ? " • ✋ manual" : ""}
-                    </div>
-
-                    {c.unread > 0 ? (
-                      <span
-                        className={`wp-unread ${tone !== "normal" ? `wp-unread--${tone}` : ""}`}
-                        title={
-                          tone === "consulta"
-                            ? "Consulta manual pendiente"
-                            : tone === "comprobante"
-                              ? "Comprobante pendiente"
-                              : tone === "danger"
-                                ? "Alerta importante"
-                                : "Mensajes sin ver"
-                        }
-                      >
-                        {c.unread > 99 ? "99+" : c.unread}
-                      </span>
-                    ) : (
-                      <span
-                        className={`wp-tag wp-tag--${(c.etiqueta || "sin").replace(
-                          /\s/g,
-                          ""
-                        )}`}
-                      >
-                        {c.etiqueta || "sin etiqueta"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-
-          {!loadingChats && list.length === 0 ? (
-            <div className="wp-empty">No hay chats con ese filtro.</div>
-          ) : null}
-        </div>
-      </aside>
+      <BotSidebar
+        activeTagFilterLabel={activeTagFilterLabel}
+        abrirPanelAlertas={abrirPanelAlertas}
+        chats={chats}
+        errorChats={errorChats}
+        errorEtiquetas={errorEtiquetas}
+        etiquetas={etiquetas}
+        eventosResumen={eventosResumen}
+        list={list}
+        loadingChats={loadingChats}
+        loadingEtiquetas={loadingEtiquetas}
+        onBack={() => navigate("/panel", { replace: true })}
+        openChat={openChat}
+        q={q}
+        selectedId={selectedId}
+        setQ={setQ}
+        setTagFilter={setTagFilter}
+        setTagFilterOpen={setTagFilterOpen}
+        tagCounts={tagCounts}
+        tagFilter={tagFilter}
+        tagFilterOpen={tagFilterOpen}
+        tagFilterRef={tagFilterRef}
+      />
 
       <main className="wp-main">
         {!selectedId ? (
@@ -2513,493 +1546,59 @@ const BotPanel = () => {
           </div>
         ) : (
           <>
-            <div className="wp-chat-top">
-              <div className="wp-chat-top-left">
-                <div className="wp-avatar wp-avatar--sm" aria-hidden="true">
-                  <FontAwesomeIcon icon={faUser} />
-                </div>
-                <div className="wp-chat-top-meta">
-                  <div className="wp-chat-top-name">
-                    {selected?.nombre || "Sin nombre"}
-                  </div>
-                  <div className="wp-chat-top-id">{selectedId}</div>
-                </div>
-              </div>
+            <BotConversationHeader
+              headerMenuBtnRef={headerMenuBtnRef}
+              isWindowExpired={isWindowExpired}
+              marcarChatComoLeido={marcarChatComoLeido}
+              marcarChatComoNoLeido={marcarChatComoNoLeido}
+              mode={mode}
+              openCambiarEtiqueta={openCambiarEtiqueta}
+              openEditarNombre={openEditarNombre}
+              openEliminarContacto={openEliminarContacto}
+              openGaleria={openGaleria}
+              openMenu={openMenu}
+              openVaciarChat={openVaciarChat}
+              selected={selected}
+              selectedConsultasPendientes={selectedConsultasPendientes}
+              selectedId={selectedId}
+              selectedWindow={selectedWindow}
+              setModeDB={setModeDB}
+              setOpenMenu={setOpenMenu}
+              theme={theme}
+              toggleTheme={toggleTheme}
+            />
 
-              <div className="wp-chat-top-right">
-                <div className="wp-chat-actions" aria-label="Acciones de la conversación">
-                  <div className="wp-mode">
-                    <div
-                      className={`wp-window ${isWindowExpired ? "is-expired" : ""}`}
-                      title={
-                        isWindowExpired
-                          ? "Ventana de 24hs expirada"
-                          : `Quedan ${selectedWindow.remainingHours}h`
-                      }
-                      aria-label="Ventana 24 horas"
-                    >
-                      {isWindowExpired ? (
-                        <span className="wp-window-x" aria-hidden="true">
-                          <FontAwesomeIcon icon={faXmark} />
-                        </span>
-                      ) : (
-                        <span className="wp-window-h">
-                          {selectedWindow.remainingHours}hs
-                        </span>
-                      )}
-                    </div>
+            <BotMessageList
+              abrirPanelAlertas={abrirPanelAlertas}
+              errorMsgs={errorMsgs}
+              mensajes={mensajes}
+              messagesRef={messagesRef}
+              msgEndRef={msgEndRef}
+              openViewer={openViewer}
+            />
 
-                    <button
-                      type="button"
-                      className={`wp-modebtn ${mode === "bot" ? "is-active" : ""}`}
-                      onClick={() => setModeDB("bot")}
-                      title="Modo Bot (respuestas automáticas activas)"
-                      aria-label="Modo Bot"
-                    >
-                      <FontAwesomeIcon icon={faRobot} />
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`wp-modebtn ${mode === "manual" ? "is-active" : ""}`}
-                      onClick={() => setModeDB("manual")}
-                      title={
-                        isWindowExpired
-                          ? CONSULTA_MANUAL_TEMPLATE_ENABLED
-                            ? "Modo Manual (ventana expirada: podés enviar una plantilla de texto)"
-                            : "Modo Manual (ventana expirada)"
-                          : "Modo Manual (el bot queda inhabilitado)"
-                      }
-                      aria-label="Modo Manual"
-                    >
-                      <FontAwesomeIcon icon={faHand} />
-                    </button>
-
-                    <ChatOptionsMenu
-                      anchorRef={headerMenuBtnRef}
-                      open={openMenu}
-                      onOpen={() => setOpenMenu(true)}
-                      onClose={() => setOpenMenu(false)}
-                      onEditarNombre={() => openEditarNombre(selectedId)}
-                      onCambiarEtiqueta={() => openCambiarEtiqueta(selectedId)}
-                      onVerGaleria={() => openGaleria()}
-                      onMarcarNoLeido={() => marcarChatComoNoLeido(selectedId)}
-                      onMarcarLeido={() => marcarChatComoLeido(selectedId)}
-                      isUnread={Number(selected?.unread || 0) > 0}
-                      onVaciarChat={() => openVaciarChat(selectedId)}
-                      onEliminarContacto={() => openEliminarContacto(selectedId)}
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    className="wp-themebtn"
-                    onClick={toggleTheme}
-                    title={
-                      theme === "dark"
-                        ? "Cambiar a modo claro"
-                        : "Cambiar a modo oscuro"
-                    }
-                    aria-label="Cambiar tema"
-                  >
-                    <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} />
-                    <span className="wp-themebtn-txt">
-                      {theme === "dark" ? "Claro" : "Oscuro"}
-                    </span>
-                  </button>
-                </div>
-
-                <div className="wp-chat-status">
-                  
-
-                  {mode === "manual" ? (
-                    <span className="wp-chip wp-chip--manual">
-                      Manual activo • bot pausado
-                    </span>
-                  ) : null}
-
-                  <span className="wp-chip wp-chip--tag">
-                    {selected?.etiqueta || "sin etiqueta"}
-                  </span>
-
-                </div>
-              </div>
-            </div>
-
-            {isWindowExpired ? (
-              <div className="wp-window-expiredline">
-                <FontAwesomeIcon icon={faTriangleExclamation} />
-                <span>Ventana de 24hs expirada</span>
-              </div>
-            ) : null}
-
-            {mode === "manual" ? (
-              <div className={`wp-manual-banner ${selectedConsultasPendientes > 0 ? "is-consulta-pending" : ""}`}>
-                <div className="wp-manual-banner-icon" aria-hidden="true">✋</div>
-                <div className="wp-manual-banner-copy">
-                  <strong>
-                    {selectedConsultasPendientes > 0
-                      ? "Consulta pendiente en atención manual"
-                      : "Conversación manual activa"}
-                  </strong>
-                  <span>
-                    {selectedConsultasPendientes > 0
-                      ? "El usuario está esperando respuesta. El bot queda pausado mientras atendés este chat."
-                      : "El bot no va a responder automáticamente hasta que vuelvas a modo bot."}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="wp-messages" ref={messagesRef}>
-              <div className="wp-day">
-                <span>Mensajes</span>
-              </div>
-
-              {errorMsgs ? (
-                <div className="wp-error wp-error--inchat">
-                  <FontAwesomeIcon icon={faTriangleExclamation} />
-                  <span>{errorMsgs}</span>
-                </div>
-              ) : null}
-
-              {(mensajes || []).map((m, idx) => {
-                const prev = idx > 0 ? mensajes[idx - 1] : null;
-                const showDateSeparator =
-                  !prev || fmtDateKey(prev.ts) !== fmtDateKey(m.ts);
-
-                const side = mapEmisorToSide(m.emisor);
-
-                const notificationType = String(m.notificacion_tipo || "normal").toLowerCase();
-                const prioridadMsg = String(m.prioridad || "normal").toLowerCase();
-                const isComprobanteNotification =
-                  notificationType.startsWith("comprobante") ||
-                  prioridadMsg === "aprobacion_comprobante" ||
-                  prioridadMsg === "comprobante_aprobado" ||
-                  prioridadMsg === "comprobante_rechazado";
-                const comprobanteLabel =
-                  notificationType === "comprobante_rechazado" || prioridadMsg === "comprobante_rechazado"
-                    ? "Comprobante"
-                    : notificationType === "comprobante_aprobado" || prioridadMsg === "comprobante_aprobado"
-                      ? "Comprobante"
-                      : "Comprobante";
-
-                const isPendingConsult =
-                  !isComprobanteNotification &&
-                  m.es_consulta === true &&
-                  m.consulta_atendida === false;
-
-                const danger =
-                  String(m.text || "").startsWith("ERROR") ||
-                  (prioridadMsg === "alta" && !isPendingConsult && !isComprobanteNotification);
-
-                const hasMedia = !!m.media_url;
-                const mime =
-                  m.media_mime || (m.media_url ? inferMimeFromUrl(m.media_url) : "");
-                const showImg = hasMedia && isImageMime(mime);
-                const showPdf = hasMedia && isPdfMime(mime);
-
-                return (
-                  <React.Fragment key={m.id}>
-                    {showDateSeparator ? (
-                      <div className="wp-date-separator">
-                        <span>{fmtFechaSeparador(m.ts)}</span>
-                      </div>
-                    ) : null}
-
-                    <div className={`wp-msg wp-msg--${side}`}>
-                      <div
-                        className={`wp-bubble ${danger ? "wp-bubble--danger" : ""} ${
-                          isPendingConsult ? "wp-bubble--consulta" : ""
-                        } ${isComprobanteNotification ? "wp-bubble--comprobante" : ""}`}
-                      >
-                        {isPendingConsult ? (
-                          <button
-                            type="button"
-                            className="wp-consulta-pill"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              abrirPanelAlertas();
-                            }}
-                            title="Ver pendientes"
-                          >
-                            👩‍💼 Consulta pendiente
-                          </button>
-                        ) : null}
-
-                        {isComprobanteNotification ? (
-                          <button
-                            type="button"
-                            className="wp-comprobante-pill"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              abrirPanelAlertas();
-                            }}
-                            title="Ver comprobantes pendientes"
-                          >
-                            🧾 {comprobanteLabel}
-                          </button>
-                        ) : null}
-                        
-                        {hasMedia ? (
-                          <div className="wp-media-inbubble">
-                            {showImg ? (
-                              <button
-                                type="button"
-                                className="wp-media-thumbbtn"
-                                onClick={() =>
-                                  openViewer({
-                                    url: m.media_url,
-                                    mime,
-                                    name: m.media_name || "imagen",
-                                  })
-                                }
-                                title="Ver imagen"
-                              >
-                                <img
-                                  className="wp-media-thumb"
-                                  src={m.media_url}
-                                  alt={m.media_name || "imagen"}
-                                />
-                              </button>
-                            ) : showPdf ? (
-                              <button
-                                type="button"
-                                className="wp-doc-card"
-                                onClick={() =>
-                                  openViewer({
-                                    url: m.media_url,
-                                    mime,
-                                    name: m.media_name || "documento.pdf",
-                                  })
-                                }
-                                title="Ver PDF"
-                              >
-                                <div className="wp-doc-ico">
-                                  <FontAwesomeIcon icon={faFilePdf} />
-                                </div>
-                                <div className="wp-doc-meta">
-                                  <div className="wp-doc-name">
-                                    {m.media_name || "Documento PDF"}
-                                  </div>
-                                  <div className="wp-doc-sub">
-                                    PDF{" "}
-                                    {m.media_size
-                                      ? `• ${fmtBytes(m.media_size)}`
-                                      : ""}
-                                  </div>
-                                </div>
-                              </button>
-                            ) : (
-                              <a href={m.media_url} target="_blank" rel="noreferrer">
-                                📎 {m.media_name || "Archivo"}{" "}
-                                {m.media_size ? `(${fmtBytes(m.media_size)})` : ""}
-                              </a>
-                            )}
-                          </div>
-                        ) : null}
-
-                        {m.text ? <div className="wp-bubble-text">{m.text}</div> : null}
-
-                        <div className="wp-bubble-time">
-                          {fmtHora(m.ts)} • {m.emisor}
-                        </div>
-                      </div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-
-              <div ref={msgEndRef} />
-            </div>
-
-            {mode === "manual" ? (
-              <div
-                className={`wp-composer ${
-                  isWindowExpired && CONSULTA_MANUAL_TEMPLATE_ENABLED ? "is-template-mode" : ""
-                } ${
-                  isWindowExpired && !CONSULTA_MANUAL_TEMPLATE_ENABLED ? "is-disabled" : ""
-                } ${
-                  selectedConsultasPendientes > 0 ? "has-consulta-pending" : ""
-                }`}
-              >
-                {isWindowExpired && CONSULTA_MANUAL_TEMPLATE_ENABLED ? (
-                  <div className="wp-template-preview">
-                    <div className="wp-template-preview-head">
-                      <span>📨 Plantilla aprobada que se enviará</span>
-                      <small>Escribí solo la respuesta. El saludo y el cierre ya van incluidos.</small>
-                    </div>
-
-                    <div className="wp-template-preview-wrap">
-                      <div className="wp-template-preview-bubble">
-                        <div>Hola 👋</div>
-                        <br />
-                        <div>Te respondemos desde la Cooperadora del IPET 50.</div>
-                        <br />
-                        <div
-                          className={`wp-template-preview-var ${
-                            draft.trim() ? "has-text" : "is-empty"
-                          }`}
-                        >
-                          {draft.trim() || CONSULTA_TEMPLATE_VARIABLE_PLACEHOLDER}
-                        </div>
-                        <br />
-                        <div>
-                          Si necesitás continuar, respondé este mensaje y te seguimos
-                          ayudando.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="wp-composer-inner">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    style={{ display: "none" }}
-                    onChange={onFilePicked}
-                  />
-
-                  <button
-                    type="button"
-                    className="wp-attach"
-                    title={
-                      isConsultaManualBlockedByTemplatePending
-                        ? "Ventana de 24hs expirada"
-                        : isWindowExpired
-                        ? "Fuera de 24hs solo se puede enviar plantilla de texto"
-                        : "Adjuntar imagen/PDF"
-                    }
-                    aria-label="Adjuntar imagen/PDF"
-                    disabled={isWindowExpired || sendingMedia}
-                    onClick={onAttachClick}
-                  >
-                    <FontAwesomeIcon icon={faPaperclip} />
-                  </button>
-
-                  <button
-                    ref={emojiBtnRef}
-                    type="button"
-                    className={`wp-emoji-btn ${emojiOpen ? "is-open" : ""}`}
-                    title={isConsultaManualBlockedByTemplatePending ? "Ventana de 24hs expirada" : "Emojis"}
-                    aria-label="Emojis"
-                    disabled={sendingMedia || isConsultaManualBlockedByTemplatePending}
-                    onClick={() => setEmojiOpen((v) => !v)}
-                  >
-                    <FontAwesomeIcon icon={faFaceSmile} />
-                  </button>
-
-                  {emojiOpen && !isConsultaManualBlockedByTemplatePending ? (
-                    <div
-                      ref={emojiPopRef}
-                      className="wp-emoji-pop"
-                      role="dialog"
-                      aria-label="Selector de emojis"
-                    >
-                      <div className="wp-emoji-grid">
-                        {EMOJIS_RAPIDOS.map((emoji, index) => (
-                          <button
-                            key={`${emoji}-${index}`}
-                            type="button"
-                            className="wp-emoji-option"
-                            title={`Insertar ${emoji}`}
-                            aria-label={`Insertar emoji ${emoji}`}
-                            onClick={() => insertAtCursor(emoji)}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <textarea
-                    ref={composerRef}
-                    className="wp-input"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={onKeyDownDraft}
-                    placeholder={
-                      attachedFile
-                        ? `Adjunto: ${attachedFile.name} — escribí un texto opcional…`
-                        : isConsultaManualBlockedByTemplatePending
-                        ? "Ventana de 24hs expirada"
-                        : isWindowExpired
-                        ? "Escribí solo la respuesta; el saludo y el cierre ya están en la plantilla…"
-                        : "Modo manual: escribir mensaje…"
-                    }
-                    rows={1}
-                    disabled={sendingMedia || isConsultaManualBlockedByTemplatePending}
-                  />
-
-                  <button
-                    type="button"
-                    className={`wp-send ${
-                      isWindowExpired && CONSULTA_MANUAL_TEMPLATE_ENABLED ? "is-template" : ""
-                    }`}
-                    onClick={sendManual}
-                    aria-label={
-                      isWindowExpired && CONSULTA_MANUAL_TEMPLATE_ENABLED
-                        ? "Enviar plantilla"
-                        : "Enviar"
-                    }
-                    title={
-                      isConsultaManualBlockedByTemplatePending
-                        ? "Ventana de 24hs expirada"
-                        : isWindowExpired
-                        ? "Enviar plantilla"
-                        : attachedFile
-                        ? "Enviar archivo"
-                        : "Enviar"
-                    }
-                    disabled={sendingMedia || isConsultaManualBlockedByTemplatePending}
-                  >
-                    {sendingMedia ? (
-                      <FontAwesomeIcon icon={faSpinner} spin />
-                    ) : isWindowExpired && CONSULTA_MANUAL_TEMPLATE_ENABLED ? (
-                      <>
-                        <FontAwesomeIcon icon={faPaperPlane} />
-                        <span>Enviar plantilla</span>
-                      </>
-                    ) : (
-                      <FontAwesomeIcon icon={faPaperPlane} />
-                    )}
-                  </button>
-                </div>
-
-                {attachedFile ? (
-                  <div
-                    style={{
-                      padding: "6px 10px",
-                      fontSize: 12,
-                      opacity: 0.9,
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <span>
-                      📎 <b>{attachedFile.name}</b> ({fmtBytes(attachedFile.size)})
-                    </span>
-                    <button
-                      type="button"
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        color: "inherit",
-                        textDecoration: "underline",
-                      }}
-                      onClick={clearAttached}
-                    >
-                      quitar
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            <BotComposer
+              attachedFile={attachedFile}
+              clearAttached={clearAttached}
+              composerRef={composerRef}
+              draft={draft}
+              emojiBtnRef={emojiBtnRef}
+              emojiOpen={emojiOpen}
+              emojiPopRef={emojiPopRef}
+              fileInputRef={fileInputRef}
+              insertAtCursor={insertAtCursor}
+              isConsultaManualBlockedByTemplatePending={isConsultaManualBlockedByTemplatePending}
+              isWindowExpired={isWindowExpired}
+              mode={mode}
+              onAttachClick={onAttachClick}
+              onFilePicked={onFilePicked}
+              onKeyDownDraft={onKeyDownDraft}
+              selectedConsultasPendientes={selectedConsultasPendientes}
+              sendManual={sendManual}
+              sendingMedia={sendingMedia}
+              setDraft={setDraft}
+              setEmojiOpen={setEmojiOpen}
+            />
           </>
         )}
       </main>
@@ -3068,7 +1667,6 @@ const BotPanel = () => {
         error={modalTagError || errorEtiquetas}
         onClose={() => setModalTagOpen(false)}
         onSave={saveEtiqueta}
-        puntosBaseUrl={PANEL_PUNTOS}
         onRefreshEtiquetas={fetchEtiquetas}
         onLabelsChanged={refreshEtiquetasYChats}
       />
