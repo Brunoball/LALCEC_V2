@@ -14,6 +14,7 @@ import Resumen from "./components/Contable/secciones/Resumen";
 import Configuracion from "./components/Configuracion/Configuracion";
 import Usuarios from "./components/Configuracion/secciones/Usuarios";
 import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
+import ContableConfiguracion from "./components/Configuracion/secciones/ContableConfiguracion";
 import BotPanel from "./components/BotPanel/BotPanel";
 import { BOT_PANEL_ROUTE } from "./config/config";
 import {
@@ -87,6 +88,10 @@ export default function App() {
           <Route
             path="/configuracion/catalogos"
             element={<CatalogosConfiguracion />}
+          />
+          <Route
+            path="/configuracion/contable"
+            element={<ContableConfiguracion />}
           />
         </Route>
         <Route path="*" element={<Navigate to="/panel" replace />} />

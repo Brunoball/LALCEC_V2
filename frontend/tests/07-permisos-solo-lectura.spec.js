@@ -79,6 +79,20 @@ test.describe('Permisos de usuario de solo lectura', () => {
             mes: new Date().getMonth() + 1,
           },
         }],
+        ['contable_resumen', {
+          params: { anio: new Date().getFullYear(), mes: new Date().getMonth() + 1 },
+        }],
+        ['contable_catalogos'],
+        ['contable_opciones_configuracion'],
+        ['contable_ingresos_socios', {
+          params: { anio: new Date().getFullYear(), mes: new Date().getMonth() + 1 },
+        }],
+        ['contable_ingresos_listar', {
+          params: { anio: new Date().getFullYear(), mes: new Date().getMonth() + 1 },
+        }],
+        ['contable_egresos_listar', {
+          params: { anio: new Date().getFullYear(), mes: new Date().getMonth() + 1 },
+        }],
         ['socios_listar', { params: { tipo: 'PERSONA', estado: 'ACTIVO' } }],
         ['socios_obtener', { params: { id: personItem.id_socio } }],
         ['socios_historial', { params: { id: personItem.id_socio } }],
@@ -105,6 +119,12 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['cuotas_registrar_pago', { id_socio: personItem.id_socio }],
         ['cuotas_registrar_pagos', { pagos: [{ id_socio: personItem.id_socio }] }],
         ['cuotas_eliminar_pago', { id_pago: 1 }],
+        ['contable_opcion_guardar', { tipo: 'PROVEEDOR', nombre: 'NO PERMITIDO' }],
+        ['contable_opcion_eliminar', { id_opcion: 1 }],
+        ['contable_ingreso_guardar', { fecha: '2026-08-05', importe: 100 }],
+        ['contable_ingreso_eliminar', { id_ingreso: 1 }],
+        ['contable_egreso_guardar', { fecha: '2026-08-05', importe: 100 }],
+        ['contable_egreso_eliminar', { id_egreso: 1 }],
         ['socios_guardar', { tipo_socio: 'PERSONA' }],
         ['socios_eliminar', { id: personItem.id_socio }],
         ['socios_eliminar_definitivo', { id: personItem.id_socio, confirmacion: 'ELIMINAR' }],
@@ -151,6 +171,24 @@ test.describe('Permisos de usuario de solo lectura', () => {
       await expect(page.getByText(/permiso de consulta.*registrar y eliminar pagos.*deshabilitado/i)).toBeVisible();
       await expect(page.locator('.module-card__actions .mov-btn--primary')).toHaveCount(0);
       await expect(page.locator('.cuotas-pay-button:not(:disabled)')).toHaveCount(0);
+
+      await page.goto('/contable/ingresos');
+      await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Listado de ingresos' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Registrar ingreso' })).toHaveCount(0);
+      await page.getByRole('tab', { name: 'Otros ingresos' }).click();
+      await expect(page.getByRole('button', { name: 'Registrar ingreso' })).toHaveCount(0);
+
+      await page.goto('/contable/egresos');
+      await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Listado de egresos' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Registrar egreso' })).toHaveCount(0);
+
+      await page.goto('/contable/resumen');
+      await expect(page.getByText('Resumen contable', { exact: true })).toBeVisible();
+      await expect(page.getByText('Ingresos', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('Egresos', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('Resultado', { exact: true }).first()).toBeVisible();
 
       await page.goto('/socios/personas');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
@@ -205,6 +243,13 @@ test.describe('Permisos de usuario de solo lectura', () => {
       const catalogCard = page.locator('.config-list__item').filter({ hasText: catalogName }).last();
       await expect(catalogCard).toBeVisible();
       await expect(catalogCard.locator('button')).toHaveCount(0);
+
+      await page.goto('/configuracion/contable');
+      await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Configuración contable' })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Nueva persona o proveedor/i })).toHaveCount(0);
+      await expect(page.getByRole('tab', { name: 'Personas / proveedores' })).toBeVisible();
+      await expect(page.locator('.config-list__actions button')).toHaveCount(0);
 
       await page.goto('/configuracion/usuarios');
       await expect(page).toHaveURL(/\/configuracion$/);

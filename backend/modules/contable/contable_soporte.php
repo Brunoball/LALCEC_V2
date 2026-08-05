@@ -13,15 +13,22 @@ trait ContableSoporte
 
     protected static function filtroAnio(mixed $value): int
     {
-        $year = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
-        return $year === false ? (int)date('Y') : (int)$year;
+        $text = trim((string)$value);
+        if ($text === '') return (int)date('Y');
+        $year = filter_var($text, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 2000, 'max_range' => 2100],
+        ]);
+        if ($year === false) api_error('El año seleccionado no es válido.', 'FILTRO_INVALIDO');
+        return (int)$year;
     }
 
     protected static function filtroMes(mixed $value, bool $required = true): ?int
     {
         $text = trim((string)$value);
         if ($text === '' && !$required) return null;
-        $month = filter_var($text, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
+        $month = filter_var($text, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => 12],
+        ]);
         if ($month === false) api_error('El mes seleccionado no es válido.', 'FILTRO_INVALIDO');
         return (int)$month;
     }
@@ -35,12 +42,14 @@ trait ContableSoporte
         return $type;
     }
 
-    protected static function opcion(PDO $db, int $id, string $expectedType, bool $activeOnly = true): array
+    protected static function opcion(PDO $db, int $id, string $expectedType): array
     {
-        $sql = 'SELECT id_opcion, tipo, nombre, activo FROM contable_opciones WHERE id_opcion = ?';
-        if ($activeOnly) $sql .= ' AND activo = 1';
-        $sql .= ' LIMIT 1';
-        $statement = $db->prepare($sql);
+        $statement = $db->prepare(
+            'SELECT id_opcion, tipo, nombre
+             FROM contable_opciones
+             WHERE id_opcion = ?
+             LIMIT 1'
+        );
         $statement->execute([$id]);
         $row = $statement->fetch();
         if (!$row || (string)$row['tipo'] !== $expectedType) {
@@ -50,17 +59,16 @@ trait ContableSoporte
             'id_opcion' => (int)$row['id_opcion'],
             'tipo' => (string)$row['tipo'],
             'nombre' => (string)$row['nombre'],
-            'activo' => (bool)$row['activo'],
         ];
     }
 
     protected static function medioPago(PDO $db, int $id): array
     {
         $statement = $db->prepare(
-            "SELECT id_medio_pago, nombre, activo
+            'SELECT id_medio_pago, nombre
              FROM medios_pago
-             WHERE id_medio_pago = ? AND activo = 1 AND nombre <> 'CONDONACIÓN'
-             LIMIT 1"
+             WHERE id_medio_pago = ? AND activo = 1
+             LIMIT 1'
         );
         $statement->execute([$id]);
         $row = $statement->fetch();
@@ -112,12 +120,87 @@ trait ContableSoporte
         ][$month] ?? '';
     }
 
+    protected static function importePagoSql(
+        string $paymentAlias = 'p',
+        string $partnerAlias = 's',
+        string $categoryAlias = 'c'
+    ): string {
+        return "COALESCE(
+            {$paymentAlias}.monto,
+            (
+                SELECT hp.monto_nuevo
+                FROM categorias_historial_precios hp
+                WHERE hp.id_categoria = {$partnerAlias}.id_categoria
+                  AND DATE(hp.fecha_cambio) <= LAST_DAY(
+                      STR_TO_DATE(CONCAT({$paymentAlias}.anio, '-', LPAD({$paymentAlias}.mes, 2, '0'), '-01'), '%Y-%m-%d')
+                  )
+                ORDER BY hp.fecha_cambio DESC, hp.id_historial_precio DESC
+                LIMIT 1
+            ),
+            (
+                SELECT hp0.monto_anterior
+                FROM categorias_historial_precios hp0
+                WHERE hp0.id_categoria = {$partnerAlias}.id_categoria
+                ORDER BY hp0.fecha_cambio ASC, hp0.id_historial_precio ASC
+                LIMIT 1
+            ),
+            {$categoryAlias}.monto_cuota,
+            0
+        )";
+    }
+
+    protected static function opcionConfiguracion(PDO $db, int $id, bool $lock = false): ?array
+    {
+        $suffix = $lock ? ' FOR UPDATE' : '';
+        $statement = $db->prepare(
+            'SELECT id_opcion, tipo, nombre
+             FROM contable_opciones
+             WHERE id_opcion = ?' . $suffix
+        );
+        $statement->execute([$id]);
+        $row = $statement->fetch();
+        if (!$row) return null;
+
+        return [
+            'id_opcion' => (int)$row['id_opcion'],
+            'tipo' => (string)$row['tipo'],
+            'nombre' => (string)$row['nombre'],
+        ];
+    }
+
+    protected static function opcionesConfiguracionDatos(PDO $db): array
+    {
+        $rows = $db->query(
+            'SELECT id_opcion, tipo, nombre
+             FROM contable_opciones
+             ORDER BY tipo ASC, nombre ASC, id_opcion ASC'
+        )->fetchAll();
+
+        $lists = [];
+        $summary = [];
+        foreach (self::TIPOS_OPCION as $type) {
+            $lists[$type] = [];
+            $summary[$type . '_total'] = 0;
+        }
+
+        foreach ($rows as $row) {
+            $type = (string)$row['tipo'];
+            $lists[$type][] = [
+                'id_opcion' => (int)$row['id_opcion'],
+                'tipo' => $type,
+                'nombre' => (string)$row['nombre'],
+            ];
+            $summary[$type . '_total']++;
+        }
+
+        return ['listas' => $lists, 'resumen' => $summary];
+    }
+
     protected static function catalogosBase(PDO $db): array
     {
         $options = $db->query(
             'SELECT id_opcion, tipo, nombre
              FROM contable_opciones
-             WHERE activo = 1
              ORDER BY tipo, nombre'
         )->fetchAll();
         $grouped = [];
@@ -130,10 +213,10 @@ trait ContableSoporte
         }
 
         $means = $db->query(
-            "SELECT id_medio_pago, nombre
+            'SELECT id_medio_pago, nombre
              FROM medios_pago
-             WHERE activo = 1 AND nombre <> 'CONDONACIÓN'
-             ORDER BY nombre"
+             WHERE activo = 1
+             ORDER BY nombre'
         )->fetchAll();
         foreach ($means as &$mean) $mean['id_medio_pago'] = (int)$mean['id_medio_pago'];
         unset($mean);
@@ -148,13 +231,11 @@ trait ContableSoporte
         unset($partnerCategory);
 
         $years = [(int)date('Y') => (int)date('Y')];
-        $yearQueries = [
-            "SELECT DISTINCT YEAR(fecha_pago) AS anio FROM pagos WHERE estado = 'PAGADO'",
-            "SELECT DISTINCT YEAR(fecha_pago) AS anio FROM pagos_inscripciones WHERE estado = 'PAGADO'",
-            "SELECT DISTINCT YEAR(fecha) AS anio FROM contable_ingresos WHERE estado = 'ACTIVO'",
-            "SELECT DISTINCT YEAR(fecha) AS anio FROM contable_egresos WHERE estado = 'ACTIVO'",
-        ];
-        foreach ($yearQueries as $query) {
+        foreach ([
+            'SELECT DISTINCT YEAR(fecha_pago) AS anio FROM pagos',
+            'SELECT DISTINCT YEAR(fecha) AS anio FROM contable_ingresos',
+            'SELECT DISTINCT YEAR(fecha) AS anio FROM contable_egresos',
+        ] as $query) {
             foreach ($db->query($query)->fetchAll() as $row) {
                 $year = (int)($row['anio'] ?? 0);
                 if ($year >= 2000 && $year <= 2100) $years[$year] = $year;
@@ -181,19 +262,10 @@ trait ContableSoporte
         return $folder !== '' ? $folder : 'lalcec';
     }
 
-    protected static function allowedUploadPrefixes(): array
-    {
-        // t_1 se acepta para conservar adjuntos creados antes de quitar el modo SaaS.
-        return [self::uploadFolder() . '/', 't_1/'];
-    }
-
     protected static function validUploadPath(string $relativePath): bool
     {
         $cleanPath = ltrim($relativePath, '/\\');
-        foreach (self::allowedUploadPrefixes() as $prefix) {
-            if (str_starts_with($cleanPath, $prefix)) return true;
-        }
-        return false;
+        return str_starts_with($cleanPath, self::uploadFolder() . '/');
     }
 
     protected static function uploadRoot(array $auth): string
@@ -241,12 +313,7 @@ trait ContableSoporte
             api_error('No se pudo guardar el comprobante en el servidor.', 'ARCHIVO_GUARDADO_ERROR', 500);
         }
 
-        $original = clean_text($file['name'] ?? 'COMPROBANTE', 255, false);
         return [
-            'archivo_nombre_original' => $original,
-            'archivo_nombre_guardado' => $stored,
-            'archivo_mime' => $mime,
-            'archivo_tamanio' => $size,
             'archivo_path' => self::uploadFolder() . '/' . $stored,
             'absolute_path' => $destination,
         ];
@@ -254,11 +321,10 @@ trait ContableSoporte
 
     protected static function borrarArchivoFisico(array $auth, ?string $relativePath): void
     {
-        if (!$relativePath) return;
-        $cleanPath = ltrim($relativePath, '/\\');
-        if (!self::validUploadPath($cleanPath)) return;
+        $path = trim((string)$relativePath);
+        if ($path === '' || !self::validUploadPath($path)) return;
         $root = dirname(__DIR__, 2) . '/uploads/contable';
-        $candidate = $root . '/' . $cleanPath;
+        $candidate = $root . '/' . ltrim($path, '/\\');
         $realRoot = realpath($root);
         $realFile = realpath($candidate);
         if ($realRoot && $realFile && str_starts_with($realFile, $realRoot . DIRECTORY_SEPARATOR) && is_file($realFile)) {

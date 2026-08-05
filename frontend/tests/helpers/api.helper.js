@@ -226,6 +226,20 @@ async function cleanupCatalogByName(requestContext, listName, itemName) {
   return true;
 }
 
+async function cleanupContableOptionByName(requestContext, type, itemName) {
+  const response = await apiCall(requestContext, 'contable_opciones_configuracion');
+  const item = (response.listas?.[type] || []).find(
+    (row) => String(row.nombre).toUpperCase() === String(itemName).toUpperCase(),
+  );
+  if (!item) return false;
+  await apiCall(requestContext, 'contable_opcion_eliminar', {
+    method: 'POST',
+    data: { id_opcion: item.id_opcion },
+  });
+  return true;
+}
+
+
 function runDbCleanup(operation, value) {
   const phpBinary = process.env.PW_PHP_BIN || 'php';
   const script = path.join(__dirname, 'db-cleanup.php');
@@ -300,6 +314,7 @@ module.exports = {
   apiCall,
   apiResult,
   cleanupCatalogByName,
+  cleanupContableOptionByName,
   cleanupCategoriesByPrefix,
   cleanupDiscountsByThresholds,
   cleanupFamilyByPrefix,

@@ -148,7 +148,7 @@ const emptyExpenseForm = () => ({
   importe: "",
   detalle: "",
   archivo: null,
-  archivo_nombre_original: "",
+  archivo_nombre: "",
   eliminar_archivo: false,
 });
 
@@ -205,8 +205,16 @@ function EmptyState({ loading, message = "No hay registros para mostrar." }) {
 
 function SummaryView({ summary, loading, mode }) {
   const totals = summary?.totales || {};
-  const income = Number(totals.ingresos || 0);
-  const expenses = Number(totals.egresos || 0);
+  const selectedMonth = (summary?.meses || []).find(
+    (item) => Number(item.mes) === Number(summary?.mes_seleccionado),
+  );
+  const visibleTotals = mode === "monthly" ? selectedMonth || {} : totals;
+  const income = Number(visibleTotals.ingresos || 0);
+  const expenses = Number(visibleTotals.egresos || 0);
+  const result = Number(visibleTotals.resultado || income - expenses);
+  const partnerIncome = Number(visibleTotals.ingresos_socios || 0);
+  const otherIncome = Number(visibleTotals.otros_ingresos || 0);
+  const estimatedPayments = Number(visibleTotals.pagos_estimados || 0);
   const sum = income + expenses;
   const incomeDegrees = sum > 0 ? (income / sum) * 360 : 0;
   const detail = summary?.detalle_mes || {};
@@ -214,6 +222,43 @@ function SummaryView({ summary, loading, mode }) {
   return (
     <section className={`ct-summary ct-summary--${mode}`}>
       {loading ? <EmptyState loading /> : null}
+
+      {!loading ? (
+        <>
+          <div className="ct-kpis" aria-label="Totales del período">
+            <article>
+              <span>Ingresos</span>
+              <strong>{money(income)}</strong>
+              <small>
+                Cuotas {money(partnerIncome)} · Otros {money(otherIncome)}
+              </small>
+            </article>
+            <article>
+              <span>Egresos</span>
+              <strong>{money(expenses)}</strong>
+              <small>Gastos registrados manualmente</small>
+            </article>
+            <article className={result >= 0 ? "is-positive" : "is-negative"}>
+              <span>Resultado</span>
+              <strong>{money(result)}</strong>
+              <small>
+                {mode === "monthly"
+                  ? selectedMonth?.nombre || "Mes seleccionado"
+                  : `Año ${summary?.anio || ""}`}
+              </small>
+            </article>
+          </div>
+
+          {estimatedPayments > 0 ? (
+            <div className="ct-estimate-note" role="note">
+              <strong>{estimatedPayments}</strong> cobro
+              {estimatedPayments === 1 ? " histórico tiene" : "s históricos tienen"}{" "}
+              el importe estimado según la cuota de su categoría porque la base
+              anterior no guardó el monto exacto.
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
       {!loading && mode === "annual" ? (
         <div className="ct-summary__annual">
@@ -464,9 +509,9 @@ export default function ContableModule({ view = "summary" }) {
             id_ingreso: String(item.id_ingreso),
             fecha: item.fecha,
             id_medio_pago: String(item.id_medio_pago),
-            id_proveedor: String(item.id_proveedor),
-            id_categoria: String(item.id_categoria),
-            id_concepto: String(item.id_concepto),
+            id_proveedor: item.id_proveedor ? String(item.id_proveedor) : "",
+            id_categoria: item.id_categoria ? String(item.id_categoria) : "",
+            id_concepto: item.id_concepto ? String(item.id_concepto) : "",
             importe: String(item.importe),
             detalle: item.detalle || "",
           }
@@ -497,14 +542,14 @@ export default function ContableModule({ view = "summary" }) {
             id_egreso: String(item.id_egreso),
             fecha: item.fecha,
             id_medio_pago: String(item.id_medio_pago),
-            id_proveedor: String(item.id_proveedor),
-            id_categoria: String(item.id_categoria),
-            id_concepto: String(item.id_concepto),
+            id_proveedor: item.id_proveedor ? String(item.id_proveedor) : "",
+            id_categoria: item.id_categoria ? String(item.id_categoria) : "",
+            id_concepto: item.id_concepto ? String(item.id_concepto) : "",
             numero_comprobante: item.numero_comprobante || "",
             importe: String(item.importe),
             detalle: item.detalle || "",
             archivo: null,
-            archivo_nombre_original: item.archivo_nombre_original || "",
+            archivo_nombre: item.archivo_nombre || "",
             eliminar_archivo: false,
           }
         : emptyExpenseForm(),
@@ -539,7 +584,7 @@ export default function ContableModule({ view = "summary" }) {
     setExpenseForm((current) => ({
       ...current,
       archivo: file,
-      archivo_nombre_original: file.name,
+      archivo_nombre: file.name,
       eliminar_archivo: false,
     }));
   };
@@ -587,8 +632,8 @@ export default function ContableModule({ view = "summary" }) {
     if (!deleteTarget) return { ok: false };
     const response =
       deleteTarget.type === "income"
-        ? await contableApi.anularIngreso(deleteTarget.item.id_ingreso)
-        : await contableApi.anularEgreso(deleteTarget.item.id_egreso);
+        ? await contableApi.eliminarIngreso(deleteTarget.item.id_ingreso)
+        : await contableApi.eliminarEgreso(deleteTarget.item.id_egreso);
     await loadData();
     setDeleteTarget(null);
     return response;
@@ -628,6 +673,7 @@ export default function ContableModule({ view = "summary" }) {
           "Período pagado",
           "Medio",
           "Monto",
+          "Tipo de importe",
         ],
         items.map((item) => [
           formatDate(item.fecha),
@@ -637,6 +683,7 @@ export default function ContableModule({ view = "summary" }) {
           item.periodo,
           item.medio,
           item.monto,
+          item.monto_estimado ? "ESTIMADO" : "REGISTRADO",
         ]),
       );
     } else if (view === "income") {
@@ -927,7 +974,12 @@ export default function ContableModule({ view = "summary" }) {
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
                       <div className="mov-gridCell is-center is-strong">
-                        {money(item.monto)}
+                        <strong>{money(item.monto)}</strong>
+                        {item.monto_estimado ? (
+                          <small className="contable-estimated">
+                            Importe histórico estimado
+                          </small>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -959,46 +1011,32 @@ export default function ContableModule({ view = "summary" }) {
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.concepto}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
-                        {item.origen_modulo === "VENTAS" ? (
-                          <small className="contable-originTag">
-                            GENERADO POR VENTAS · #{item.id_referencia_origen}
-                          </small>
-                        ) : null}
                       </div>
                       <div className="mov-gridCell is-center is-strong">
                         {money(item.importe)}
                       </div>
                       {writable ? (
                         <div className="mov-gridCell mov-gridCell--actions">
-                          {item.origen_modulo === "VENTAS" ? (
-                            <span
-                              className="contable-lockedAction"
-                              title="Se administra desde Ventas"
+                          <div className="mov-actionsInline">
+                            <button
+                              className="mov-iconBtn"
+                              type="button"
+                              onClick={() => openIncome(item)}
+                              title="Editar"
                             >
-                              Automático
-                            </span>
-                          ) : (
-                            <div className="mov-actionsInline">
-                              <button
-                                className="mov-iconBtn"
-                                type="button"
-                                onClick={() => openIncome(item)}
-                                title="Editar"
-                              >
-                                <FontAwesomeIcon icon={faPen} />
-                              </button>
-                              <button
-                                className="mov-iconBtn mov-iconBtn--danger"
-                                type="button"
-                                onClick={() =>
-                                  setDeleteTarget({ type: "income", item })
-                                }
-                                title="Anular"
-                              >
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              </button>
-                            </div>
-                          )}
+                              <FontAwesomeIcon icon={faPen} />
+                            </button>
+                            <button
+                              className="mov-iconBtn mov-iconBtn--danger"
+                              type="button"
+                              onClick={() =>
+                                setDeleteTarget({ type: "income", item })
+                              }
+                              title="Anular"
+                            >
+                              <FontAwesomeIcon icon={faTrashCan} />
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -1291,7 +1329,7 @@ export default function ContableModule({ view = "summary" }) {
                 value: "receipt",
                 label: "Comprobante",
                 icon: faPaperclip,
-                badge: expenseForm.archivo_nombre_original ? 1 : null,
+                badge: expenseForm.archivo_nombre ? 1 : null,
               },
             ]}
             value={expenseFormTab}
@@ -1459,7 +1497,7 @@ export default function ContableModule({ view = "summary" }) {
                   <FontAwesomeIcon icon={faPaperclip} />
                 </span>
                 <strong>
-                  {expenseForm.archivo_nombre_original ||
+                  {expenseForm.archivo_nombre ||
                     "Adjuntar comprobante"}
                 </strong>
                 <span>Arrastrá una imagen o PDF, o elegí un archivo.</span>
@@ -1472,7 +1510,7 @@ export default function ContableModule({ view = "summary" }) {
                     onChange={(event) => chooseFile(event.target.files?.[0])}
                   />
                 </label>
-                {expenseForm.archivo_nombre_original ? (
+                {expenseForm.archivo_nombre ? (
                   <button
                     type="button"
                     className="mov-btn mov-btn--danger"
@@ -1480,7 +1518,7 @@ export default function ContableModule({ view = "summary" }) {
                       setExpenseForm((current) => ({
                         ...current,
                         archivo: null,
-                        archivo_nombre_original: "",
+                        archivo_nombre: "",
                         eliminar_archivo: true,
                       }))
                     }
@@ -1521,12 +1559,12 @@ export default function ContableModule({ view = "summary" }) {
         operacion="advertencia"
         row={deleteTarget?.item}
         title={
-          deleteTarget?.type === "income" ? "Anular ingreso" : "Anular egreso"
+          deleteTarget?.type === "income" ? "Eliminar ingreso" : "Eliminar egreso"
         }
-        message="El movimiento dejará de sumar en los totales, pero se conservará en auditoría."
+        message="El movimiento se eliminará definitivamente de Contabilidad. La acción quedará registrada en auditoría."
         warning="Esta acción no modifica cuotas ni cobros de socios."
-        confirmLabel="Anular movimiento"
-        successMessage="El movimiento se anuló correctamente."
+        confirmLabel="Eliminar movimiento"
+        successMessage="El movimiento se eliminó correctamente."
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         details={

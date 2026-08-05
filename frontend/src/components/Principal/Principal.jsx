@@ -64,7 +64,7 @@ const NAV_ITEMS = [
   },
   {
     key: "contable",
-    label: "Contable",
+    label: "Contabilidad",
     path: "/contable",
     defaultPath: "/contable/ingresos",
     icon: faWallet,
@@ -166,6 +166,7 @@ export default function Principal() {
       "/configuracion": "Configuración",
       "/configuracion/usuarios": "Usuarios y roles",
       "/configuracion/catalogos": "Catálogos generales",
+      "/configuracion/contable": "Configuración contable",
     };
     if (configurationLabels[location.pathname]) {
       return configurationLabels[location.pathname];

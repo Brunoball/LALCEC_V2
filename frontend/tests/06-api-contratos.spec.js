@@ -40,6 +40,19 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['cuotas_registrar_pago', 'POST', { data: {} }],
       ['cuotas_registrar_pagos', 'POST', { data: {} }],
       ['cuotas_eliminar_pago', 'POST', { data: {} }],
+      ['contable_resumen', 'GET'],
+      ['contable_catalogos', 'GET'],
+      ['contable_opciones_configuracion', 'GET'],
+      ['contable_ingresos_socios', 'GET'],
+      ['contable_ingresos_listar', 'GET'],
+      ['contable_egresos_listar', 'GET'],
+      ['contable_egreso_archivo', 'GET', { params: { id: 1 } }],
+      ['contable_opcion_guardar', 'POST', { data: {} }],
+      ['contable_opcion_eliminar', 'POST', { data: {} }],
+      ['contable_ingreso_guardar', 'POST', { data: {} }],
+      ['contable_ingreso_eliminar', 'POST', { data: {} }],
+      ['contable_egreso_guardar', 'POST', { data: {} }],
+      ['contable_egreso_eliminar', 'POST', { data: {} }],
       ['socios_listar', 'GET'],
       ['socios_obtener', 'GET', { params: { id: 1 } }],
       ['socios_historial', 'GET', { params: { id: 1 } }],
@@ -99,6 +112,45 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       'auth_usuario_actual',
       { session },
       { status: 401, code: 'SESSION_REQUIRED' },
+    );
+  });
+
+  test('contabilidad valida período, catálogos y datos obligatorios', async ({ request }) => {
+    await expectApiError(
+      request,
+      'contable_resumen',
+      { params: { anio: 'NO_VALIDO', mes: 8 } },
+      { status: 422, code: 'FILTRO_INVALIDO', message: /año/i },
+    );
+    await expectApiError(
+      request,
+      'contable_ingresos_socios',
+      { params: { anio: 2026, mes: 13 } },
+      { status: 422, code: 'FILTRO_INVALIDO', message: /mes/i },
+    );
+    await expectApiError(
+      request,
+      'contable_opcion_guardar',
+      { method: 'POST', data: { tipo: 'TIPO_INEXISTENTE', nombre: 'PRUEBA' } },
+      { status: 422, code: 'TIPO_OPCION_INVALIDO' },
+    );
+    await expectApiError(
+      request,
+      'contable_opcion_eliminar',
+      { method: 'POST', data: { id_opcion: 2147483647 } },
+      { status: 404, code: 'OPCION_CONTABLE_NO_ENCONTRADA' },
+    );
+    await expectApiError(
+      request,
+      'contable_ingreso_guardar',
+      { method: 'POST', data: {} },
+      { status: 422, code: 'VALIDATION_ERROR' },
+    );
+    await expectApiError(
+      request,
+      'contable_egreso_guardar',
+      { method: 'POST', data: {} },
+      { status: 422, code: 'VALIDATION_ERROR' },
     );
   });
 

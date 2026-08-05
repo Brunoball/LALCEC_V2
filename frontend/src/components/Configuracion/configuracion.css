@@ -520,9 +520,9 @@
   }
 }
 
-/* LALCEC V2: configuración reducida a usuarios y catálogos generales. */
+/* LALCEC V2: accesos principales de configuración. */
 .config-accessGrid--compact {
-  grid-template-columns: repeat(2, minmax(280px, 430px));
+  grid-template-columns: repeat(3, minmax(260px, 390px));
   justify-content: start;
   align-content: start;
 }
@@ -666,5 +666,37 @@
 
   .config-catalogTabs button {
     width: 100%;
+  }
+}
+
+
+.config-catalogHeader--contable {
+  align-items: flex-start;
+}
+
+.config-catalogTabs--contable {
+  max-width: 690px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.config-catalogTabs--contable button {
+  flex: 0 1 auto;
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .config-accessGrid--compact {
+    grid-template-columns: repeat(2, minmax(280px, 430px));
+  }
+
+  .config-catalogHeader--contable {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .config-catalogTabs--contable {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
   }
 }
