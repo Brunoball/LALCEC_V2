@@ -70,6 +70,8 @@ test.describe('Permisos de usuario de solo lectura', () => {
       for (const [action, options = {}] of [
         ['auth_usuario_actual'],
         ['dashboard_resumen'],
+        ['cuotas_listar', { params: { tipo: 'PERSONA', estado: 'DEUDORES' } }],
+        ['cuotas_catalogos'],
         ['socios_listar', { params: { tipo: 'PERSONA', estado: 'ACTIVO' } }],
         ['socios_obtener', { params: { id: personItem.id_socio } }],
         ['socios_historial', { params: { id: personItem.id_socio } }],
@@ -93,6 +95,8 @@ test.describe('Permisos de usuario de solo lectura', () => {
       );
 
       const mutationCases = [
+        ['cuotas_registrar_pago', { id_socio: personItem.id_socio }],
+        ['cuotas_eliminar_pago', { id_pago: 1 }],
         ['socios_guardar', { tipo_socio: 'PERSONA' }],
         ['socios_eliminar', { id: personItem.id_socio }],
         ['socios_eliminar_definitivo', { id: personItem.id_socio, confirmacion: 'ELIMINAR' }],
@@ -134,6 +138,11 @@ test.describe('Permisos de usuario de solo lectura', () => {
         { origin: appOrigin, key: SESSION_KEY, session: viewSession },
       );
       const page = await context.newPage();
+
+      await page.goto('/cuotas');
+      await expect(page.getByText(/permiso de consulta.*registrar y eliminar pagos.*deshabilitado/i)).toBeVisible();
+      await expect(page.locator('.module-card__actions .mov-btn--primary')).toHaveCount(0);
+      await expect(page.locator('.cuotas-pay-button:not(:disabled)')).toHaveCount(0);
 
       await page.goto('/socios/personas');
       await expect(page.getByText(/permiso de consulta.*modificaciones.*deshabilitadas/i)).toBeVisible();
