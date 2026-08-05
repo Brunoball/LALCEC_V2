@@ -13,6 +13,7 @@ import {
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../../Global/ModulePage";
+import GlobalDivTable from "../../Global/GlobalDivTable";
 import CrudModal from "../../Global/Modales/CrudModal";
 import InfoModal, {
   InfoEmpty,
@@ -250,10 +251,7 @@ function DiscountForm({ form, setForm }) {
             required
           />
         </FloatingField>
-        <FloatingField
-          label="Vigencia hasta"
-          active={Boolean(form.vigencia_hasta)}
-        >
+        <FloatingField label="Vigencia hasta" active>
           <input
             type="date"
             value={form.vigencia_hasta}
@@ -509,7 +507,6 @@ export default function CategoriasModule({ section = "categorias" }) {
   };
 
   const activeError = section === "categorias" ? error : discountsError;
-  const activeLoading = section === "categorias" ? loading : discountsLoading;
   const historyIsActive =
     historyModal?.activo === true || Number(historyModal?.activo) === 1;
   const primaryAction = section === "categorias" ? openNewCategory : openNewDiscount;
@@ -586,210 +583,176 @@ export default function CategoriasModule({ section = "categorias" }) {
         />
 
         {section === "categorias" ? (
-          <div
-            className="global-divTable categorias-table"
-            role="table"
-            aria-label="Listado de categorías"
+          <GlobalDivTable
+            className="categorias-table"
+            bodyClassName="entity-table-wrap"
+            gridClassName="categorias-grid"
+            ariaLabel="Listado de categorías"
+            loading={loading}
+            loadingLabel="Cargando categorías..."
+            skeletonRows={7}
+            columns={[
+              "Categoría",
+              "Descripción",
+              "Monto mensual",
+              "Socios",
+              "Estado",
+              "Actualización",
+              "Acciones",
+            ]}
           >
-            <div
-              className="mov-tableWrap global-divTable__wrap entity-table-wrap"
-              role="rowgroup"
-            >
-              <div
-                className="mov-gridTable mov-gridTable--head global-divTable__head categorias-grid"
-                role="row"
-              >
-                {[
-                  "Categoría",
-                  "Descripción",
-                  "Monto mensual",
-                  "Socios",
-                  "Estado",
-                  "Actualización",
-                  "Acciones",
-                ].map((column) => (
-                  <div className="mov-gridCell--head" key={column}>{column}</div>
-                ))}
+            {!loading && !error && !items.length ? (
+              <div className="module-empty">
+                <strong>Sin categorías para mostrar</strong>
+                <span>Creá la primera categoría o cambiá los filtros.</span>
               </div>
-              {loading && !items.length ? (
-                <div className="module-empty">
-                  <strong>Cargando categorías...</strong>
-                  <span>Consultando precios e historial.</span>
+            ) : null}
+            {items.map((item) => (
+              <div
+                className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-grid"
+                role="row"
+                key={item.id_categoria}
+              >
+                <div className="mov-gridCell is-strong">{item.nombre}</div>
+                <div className="mov-gridCell">
+                  <span className="entity-wrap-text">{item.descripcion || "—"}</span>
                 </div>
-              ) : null}
-              {!loading && !error && !items.length ? (
-                <div className="module-empty">
-                  <strong>Sin categorías para mostrar</strong>
-                  <span>Creá la primera categoría o cambiá los filtros.</span>
+                <div className="mov-gridCell is-strong">{money(item.monto_actual)}</div>
+                <div className="mov-gridCell is-center">
+                  <span className="mov-chip">{item.cantidad_socios}</span>
                 </div>
-              ) : null}
-              {items.map((item) => (
+                <div className="mov-gridCell">
+                  <span className={`mov-chip ${item.activo ? "mov-chip--ok" : "mov-chip--danger"}`}>
+                    {item.activo ? "ACTIVA" : "BAJA"}
+                  </span>
+                </div>
+                <div className="mov-gridCell">{formatDate(item.updated_at?.slice(0, 10))}</div>
+                <div className="mov-gridCell mov-gridCell--actions">
+                  <div className="mov-actionsInline">
+                    <button
+                      className="mov-iconBtn"
+                      type="button"
+                      title="Ver historial de precios"
+                      onClick={() => openHistory(item)}
+                    >
+                      <FontAwesomeIcon icon={faClockRotateLeft} />
+                    </button>
+                    {writable ? (
+                      <>
+                        <button
+                          className="mov-iconBtn"
+                          type="button"
+                          title="Editar"
+                          onClick={() => openEditCategory(item)}
+                        >
+                          <FontAwesomeIcon icon={faPen} />
+                        </button>
+                        <button
+                          className={`mov-iconBtn ${item.activo ? "mov-iconBtn--danger" : ""}`}
+                          type="button"
+                          title={item.activo ? "Dar de baja" : "Reactivar"}
+                          onClick={() => setStateModal(item)}
+                        >
+                          <FontAwesomeIcon icon={item.activo ? faToggleOff : faRotateLeft} />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </GlobalDivTable>
+        ) : (
+          <GlobalDivTable
+            className="categorias-discountsTable"
+            bodyClassName="entity-table-wrap"
+            gridClassName="categorias-discountsGrid"
+            ariaLabel="Descuentos familiares"
+            loading={discountsLoading}
+            loadingLabel="Cargando descuentos familiares..."
+            skeletonRows={7}
+            columns={[
+              "Aplicación",
+              "Integrantes",
+              "Descuento",
+              "Vigencia",
+              "Descripción",
+              "Estado",
+              "Acciones",
+            ]}
+          >
+            {!discountsLoading && !discountsError && !discounts.length ? (
+              <div className="module-empty">
+                <strong>Sin descuentos para mostrar</strong>
+                <span>
+                  {discountStatus === "vigente"
+                    ? "No hay reglas activas configuradas."
+                    : "Todavía no hay reglas históricas."}
+                </span>
+              </div>
+            ) : null}
+            {discounts.map((item) => {
+              const range = item.cantidad_integrantes_hasta === null
+                ? `DESDE ${item.cantidad_integrantes_desde} INTEGRANTES`
+                : item.cantidad_integrantes_desde === item.cantidad_integrantes_hasta
+                  ? `${item.cantidad_integrantes_desde} INTEGRANTES`
+                  : `DE ${item.cantidad_integrantes_desde} A ${item.cantidad_integrantes_hasta} INTEGRANTES`;
+              return (
                 <div
-                  className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-grid"
+                  className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-discountsGrid"
                   role="row"
-                  key={item.id_categoria}
+                  key={item.id_descuento_familiar}
                 >
-                  <div className="mov-gridCell is-strong">{item.nombre}</div>
+                  <div className="mov-gridCell is-strong">TOTAL FAMILIAR</div>
+                  <div className="mov-gridCell">{range}</div>
+                  <div className="mov-gridCell">
+                    <span className="mov-chip mov-chip--ok">
+                      {percentage(item.porcentaje_descuento)}
+                    </span>
+                  </div>
+                  <div className="mov-gridCell categorias-discount-vigencia">
+                    <span>{formatDate(item.vigencia_desde)}</span>
+                    <span>→ {formatDate(item.vigencia_hasta)}</span>
+                  </div>
                   <div className="mov-gridCell">
                     <span className="entity-wrap-text">{item.descripcion || "—"}</span>
                   </div>
-                  <div className="mov-gridCell is-strong">{money(item.monto_actual)}</div>
-                  <div className="mov-gridCell is-center">
-                    <span className="mov-chip">{item.cantidad_socios}</span>
-                  </div>
                   <div className="mov-gridCell">
                     <span className={`mov-chip ${item.activo ? "mov-chip--ok" : "mov-chip--danger"}`}>
-                      {item.activo ? "ACTIVA" : "BAJA"}
+                      {item.estado_vigencia === "HISTORICO"
+                        ? "HISTÓRICO"
+                        : item.estado_vigencia}
                     </span>
                   </div>
-                  <div className="mov-gridCell">{formatDate(item.updated_at?.slice(0, 10))}</div>
                   <div className="mov-gridCell mov-gridCell--actions">
-                    <div className="mov-actionsInline">
-                      <button
-                        className="mov-iconBtn"
-                        type="button"
-                        title="Ver historial de precios"
-                        onClick={() => openHistory(item)}
-                      >
-                        <FontAwesomeIcon icon={faClockRotateLeft} />
-                      </button>
-                      {writable ? (
-                        <>
-                          <button
-                            className="mov-iconBtn"
-                            type="button"
-                            title="Editar"
-                            onClick={() => openEditCategory(item)}
-                          >
-                            <FontAwesomeIcon icon={faPen} />
-                          </button>
-                          <button
-                            className={`mov-iconBtn ${item.activo ? "mov-iconBtn--danger" : ""}`}
-                            type="button"
-                            title={item.activo ? "Dar de baja" : "Reactivar"}
-                            onClick={() => setStateModal(item)}
-                          >
-                            <FontAwesomeIcon icon={item.activo ? faToggleOff : faRotateLeft} />
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
+                    {writable && item.activo ? (
+                      <div className="mov-actionsInline">
+                        <button
+                          className="mov-iconBtn"
+                          type="button"
+                          title="Editar descuento"
+                          onClick={() => openEditDiscount(item)}
+                        >
+                          <FontAwesomeIcon icon={faPen} />
+                        </button>
+                        <button
+                          className="mov-iconBtn mov-iconBtn--danger"
+                          type="button"
+                          title="Eliminar descuento"
+                          onClick={() => setDeleteDiscountModal(item)}
+                        >
+                          <FontAwesomeIcon icon={faTrashCan} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="entity-readonly">{writable ? "HISTORIAL" : "CONSULTA"}</span>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div
-            className="global-divTable categorias-discountsTable"
-            role="table"
-            aria-label="Descuentos familiares"
-          >
-            <div
-              className="mov-tableWrap global-divTable__wrap entity-table-wrap"
-              role="rowgroup"
-            >
-              <div
-                className="mov-gridTable mov-gridTable--head global-divTable__head categorias-discountsGrid"
-                role="row"
-              >
-                {[
-                  "Aplicación",
-                  "Integrantes",
-                  "Descuento",
-                  "Vigencia",
-                  "Descripción",
-                  "Estado",
-                  "Acciones",
-                ].map((column) => (
-                  <div className="mov-gridCell--head" key={column}>{column}</div>
-                ))}
-              </div>
-              {discountsLoading && !discounts.length ? (
-                <div className="module-empty">
-                  <strong>Cargando descuentos...</strong>
-                  <span>Consultando las reglas familiares.</span>
-                </div>
-              ) : null}
-              {!discountsLoading && !discountsError && !discounts.length ? (
-                <div className="module-empty">
-                  <strong>Sin descuentos para mostrar</strong>
-                  <span>
-                    {discountStatus === "vigente"
-                      ? "No hay reglas activas configuradas."
-                      : "Todavía no hay reglas históricas."}
-                  </span>
-                </div>
-              ) : null}
-              {discounts.map((item) => {
-                const range = item.cantidad_integrantes_hasta === null
-                  ? `DESDE ${item.cantidad_integrantes_desde} INTEGRANTES`
-                  : item.cantidad_integrantes_desde === item.cantidad_integrantes_hasta
-                    ? `${item.cantidad_integrantes_desde} INTEGRANTES`
-                    : `DE ${item.cantidad_integrantes_desde} A ${item.cantidad_integrantes_hasta} INTEGRANTES`;
-                return (
-                  <div
-                    className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-discountsGrid"
-                    role="row"
-                    key={item.id_descuento_familiar}
-                  >
-                    <div className="mov-gridCell is-strong">TOTAL FAMILIAR</div>
-                    <div className="mov-gridCell">{range}</div>
-                    <div className="mov-gridCell">
-                      <span className="mov-chip mov-chip--ok">
-                        {percentage(item.porcentaje_descuento)}
-                      </span>
-                    </div>
-                    <div className="mov-gridCell categorias-discount-vigencia">
-                      <span>{formatDate(item.vigencia_desde)}</span>
-                      <span>→ {formatDate(item.vigencia_hasta)}</span>
-                    </div>
-                    <div className="mov-gridCell">
-                      <span className="entity-wrap-text">{item.descripcion || "—"}</span>
-                    </div>
-                    <div className="mov-gridCell">
-                      <span className={`mov-chip ${item.activo ? "mov-chip--ok" : "mov-chip--danger"}`}>
-                        {item.estado_vigencia === "HISTORICO"
-                          ? "HISTÓRICO"
-                          : item.estado_vigencia}
-                      </span>
-                    </div>
-                    <div className="mov-gridCell mov-gridCell--actions">
-                      {writable && item.activo ? (
-                        <div className="mov-actionsInline">
-                          <button
-                            className="mov-iconBtn"
-                            type="button"
-                            title="Editar descuento"
-                            onClick={() => openEditDiscount(item)}
-                          >
-                            <FontAwesomeIcon icon={faPen} />
-                          </button>
-                          <button
-                            className="mov-iconBtn mov-iconBtn--danger"
-                            type="button"
-                            title="Eliminar descuento"
-                            onClick={() => setDeleteDiscountModal(item)}
-                          >
-                            <FontAwesomeIcon icon={faTrashCan} />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="entity-readonly">{writable ? "HISTORIAL" : "CONSULTA"}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+              );
+            })}
+          </GlobalDivTable>
         )}
-
-        {activeLoading &&
-        ((section === "categorias" && items.length) ||
-          (section === "descuentos" && discounts.length)) ? (
-          <span className="entity-readonly categorias-updating">ACTUALIZANDO...</span>
-        ) : null}
       </ModulePage>
 
       <CrudModal

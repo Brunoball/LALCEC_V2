@@ -377,3 +377,232 @@
     justify-self: end;
   }
 }
+
+/* ===== Selector de integrantes en dos listas ===== */
+.familias-modal--form.entity-modal {
+  width: min(1080px, 100%);
+}
+
+.familias-form-panel__body--members {
+  height: clamp(330px, calc(100vh - 330px), 460px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.familias-members-layout {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+.familias-members-column {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--entity-modal-border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.familias-members-column--current {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.familias-members-column__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.familias-members-column__header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.familias-members-column__header strong {
+  color: var(--entity-modal-ink);
+  font-size: 12px;
+}
+
+.familias-members-column__header span:not(.familias-members-count) {
+  color: var(--entity-modal-text);
+  font-size: 10.5px;
+}
+
+.familias-members-count {
+  min-width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--entity-modal-action);
+  background: color-mix(in srgb, var(--entity-modal-action) 10%, #fff);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.familias-modal__member-list--available,
+.familias-selected-members__list {
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+
+.familias-modal__member-list--available {
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.familias-add-members-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--entity-modal-action);
+  border-radius: 10px;
+  color: #fff;
+  background: var(--entity-modal-action);
+  font-size: 10.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: opacity var(--entity-modal-transition), transform var(--entity-modal-transition);
+}
+
+.familias-add-members-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.familias-add-members-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.familias-selected-members__list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.familias-selected-member {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  padding: 10px;
+}
+
+.familias-selected-member__top {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.familias-selected-member__fields {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(132px, 0.9fr) minmax(150px, 1.2fr);
+  gap: 7px;
+}
+
+.familias-member-remove {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .familias-form-panel__body--members {
+    height: auto;
+    overflow: visible;
+  }
+
+  .familias-members-layout {
+    height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .familias-modal__member-list--available,
+  .familias-selected-members__list {
+    max-height: 270px;
+  }
+}
+
+@media (max-width: 620px) {
+  .familias-selected-member__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.familias-modal--form .entity-modal__body:has(.familias-members-layout) {
+  overflow: hidden;
+}
+
+/* Avatar con inicial, replicado de la estética de Cooperadora. */
+.familias-member-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--entity-modal-action);
+  background: color-mix(in srgb, var(--entity-modal-action) 12%, #fff);
+  border: 1px solid color-mix(in srgb, var(--entity-modal-action) 22%, #fff);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.familias-modal__member {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.familias-selected-member__top {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+/* CrudModal ubica footerStart antes de Cancelar; con auto queda pegado al grupo de acciones. */
+.familias-modal--form .entity-modal__footer-start {
+  margin-left: auto;
+}
+
+.familias-footer-add-members {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Corrección de alineación: checkbox, avatar y datos permanecen en la misma fila. */
+.familias-modal__member-list--available > .familias-modal__member {
+  grid-template-columns: 19px 34px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  min-height: 58px;
+}
+
+.familias-modal__member-list--available > .familias-modal__member .familias-member-avatar,
+.familias-modal__member-list--available > .familias-modal__member .familias-modal__member-copy {
+  min-width: 0;
+  align-self: center;
+}

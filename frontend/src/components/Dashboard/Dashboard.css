@@ -458,11 +458,7 @@
 }
 
 
-@media (max-width: 1420px) {
-  .admin-dashboard__metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
+
 
 @media (max-width: 1040px) {
   .admin-dashboard__mainGrid {

@@ -59,20 +59,57 @@
 }
 
 .entity-info-summary__item {
+  --entity-info-card-tone: var(--entity-modal-action);
+  position: relative;
   min-width: 0;
+  min-height: 94px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
-  border-radius: 13px;
-  background: #fff;
-  box-shadow: 0 10px 25px -25px rgb(15 23 42 / 0.7);
+  overflow: hidden;
+  padding: 13px;
+  border: 1px solid color-mix(
+    in srgb,
+    var(--entity-info-card-tone) 22%,
+    var(--entity-modal-border)
+  );
+  border-radius: var(--blue-inst-radius-lg, 16px);
+  color: var(--entity-info-card-tone);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--entity-info-card-tone) 12%, #fff) 0%,
+    #fff 75%
+  );
+  box-shadow: var(--mov-shadow-sm, 0 8px 22px rgb(15 23 42 / 0.08));
+}
+
+.entity-info-summary__item::before {
+  position: absolute;
+  inset: 14px auto 14px 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--entity-info-card-tone);
+  content: "";
+}
+
+.entity-info-summary__item.is-success {
+  --entity-info-card-tone: var(--success-600, #059669);
+}
+
+.entity-info-summary__item.is-danger {
+  --entity-info-card-tone: var(--entity-modal-danger);
 }
 
 .entity-info-summary__item > svg {
-  width: 18px;
-  color: var(--entity-modal-action);
+  width: 38px;
+  height: 38px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: var(--blue-inst-radius, 12px);
+  color: var(--entity-info-card-tone);
+  background: color-mix(in srgb, currentColor 14%, #fff);
 }
 
 .entity-info-summary__item > div {
@@ -80,27 +117,29 @@
   display: grid;
   gap: 3px;
 }
+
 .entity-info-summary__item span {
-  color: var(--entity-modal-text);
-  font-size: 9.5px;
+  overflow: hidden;
+  color: color-mix(
+    in srgb,
+    var(--entity-info-card-tone) 76%,
+    var(--entity-modal-text)
+  );
+  font-size: 9px;
   font-weight: 750;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.045em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
+
 .entity-info-summary__item strong {
   overflow: hidden;
   color: var(--entity-modal-ink);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.entity-info-summary__item.is-success > svg,
-.entity-info-summary__item.is-success strong {
-  color: var(--balto-success, #10b981);
-}
-.entity-info-summary__item.is-danger > svg,
-.entity-info-summary__item.is-danger strong {
-  color: var(--entity-modal-danger);
 }
 
 .entity-info-section {

@@ -7,10 +7,12 @@ import {
   faClockRotateLeft,
   faHouse,
   faPen,
+  faPlus,
   faRotateLeft,
   faUser,
   faUserSlash,
   faUsers,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../../Global/ModulePage";
 import GlobalDivTable from "../../Global/GlobalDivTable";
@@ -116,7 +118,7 @@ function memberFromCatalog(person) {
   };
 }
 
-function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
+function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMemberIds, setPendingMemberIds }) {
   const [memberSearch, setMemberSearch] = useState("");
   const selectedIds = useMemo(
     () => new Set(form.integrantes.map((member) => Number(member.id_socio))),
@@ -125,6 +127,7 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
   const visible = useMemo(() => {
     const term = memberSearch.trim().toLocaleLowerCase("es-AR");
     return (catalog || []).filter((person) => {
+      if (selectedIds.has(Number(person.id_socio))) return false;
       if (!term) return true;
       return [person.apellido, person.nombre, person.dni, person.categoria]
         .filter(Boolean)
@@ -132,26 +135,15 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
         .toLocaleLowerCase("es-AR")
         .includes(term);
     });
-  }, [catalog, memberSearch]);
+  }, [catalog, memberSearch, selectedIds]);
 
-  const toggleMember = (person) => {
+  const togglePendingMember = (person) => {
     const id = Number(person.id_socio);
-    setForm((current) => {
-      const exists = current.integrantes.some(
-        (member) => Number(member.id_socio) === id,
-      );
-      if (exists) {
-        return {
-          ...current,
-          integrantes: current.integrantes.filter(
-            (member) => Number(member.id_socio) !== id,
-          ),
-        };
-      }
-      return {
-        ...current,
-        integrantes: [...current.integrantes, memberFromCatalog(person)],
-      };
+    setPendingMemberIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -251,168 +243,171 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange }) {
         <EntityFormPanel
           tabValue={FORM_TAB_MEMBERS}
           idPrefix="familia-form-tab"
-          eyebrow="Composición del grupo"
-          title="Integrantes activos"
-          icon={faUsers}
-          tag={`${form.integrantes.length} integrante${form.integrantes.length === 1 ? "" : "s"}`}
           bodyClassName="familias-form-panel__body--members"
         >
-          <FloatingField
-            label="Buscar socio por nombre, DNI o categoría"
-            active={Boolean(memberSearch)}
-            className="familias-modal__member-search"
-          >
-            <input
-              type="search"
-              value={memberSearch}
-              onChange={(event) => setMemberSearch(event.target.value)}
-              placeholder=" "
-            />
-          </FloatingField>
-
-          <fieldset className="entity-checks familias-modal__members">
-            <legend>
-              <FontAwesomeIcon icon={faUsers} /> Socios disponibles
-            </legend>
-            <div className="familias-modal__member-list">
-              {visible.map((person) => {
-                const selected = selectedIds.has(Number(person.id_socio));
-                const belongsElsewhere =
-                  person.familia_activa &&
-                  person.id_familia &&
-                  Number(person.id_familia) !== Number(form.id_familia || 0);
-                const disabled = Boolean(
-                  belongsElsewhere || (!person.activo && !selected),
-                );
-                return (
-                  <label
-                    className={`entity-check-option familias-modal__member ${selected ? "is-selected" : ""}`.trim()}
-                    key={person.id_socio}
-                    title={
-                      belongsElsewhere
-                        ? `Pertenece a ${person.familia}`
-                        : !person.activo
-                          ? "Socio dado de baja"
-                          : ""
-                    }
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      disabled={disabled}
-                      onChange={() => toggleMember(person)}
-                    />
-                    <span className="familias-modal__member-copy">
-                      <strong>
-                        {person.apellido}, {person.nombre}
-                      </strong>
-                      <small>
-                        DNI {person.dni || "—"}
-                        {person.categoria ? ` · ${person.categoria}` : ""}
-                        {belongsElsewhere ? ` · ${person.familia}` : ""}
-                      </small>
-                    </span>
-                  </label>
-                );
-              })}
-              {!visible.length ? (
-                <div className="familias-modal__empty">
-                  <strong>Sin resultados</strong>
-                  <span>No hay socios que coincidan con la búsqueda.</span>
+          <div className="familias-members-layout">
+            <section className="familias-members-column familias-members-column--available">
+              <div className="familias-members-column__header">
+                <div>
+                  <strong>Socios disponibles</strong>
+                  <span>Seleccioná quienes querés incorporar.</span>
                 </div>
-              ) : null}
-            </div>
-          </fieldset>
+                <span className="familias-members-count">{visible.length}</span>
+              </div>
 
-          {form.integrantes.length ? (
-            <div className="familias-selected-members">
-              <header>
-                <strong>Configuración de integrantes</strong>
-                <span>Elegí parentesco, titular y fecha de incorporación.</span>
-              </header>
+              <FloatingField
+                label="Buscar socio por nombre, DNI o categoría"
+                active={Boolean(memberSearch)}
+                className="familias-modal__member-search"
+              >
+                <input
+                  type="search"
+                  value={memberSearch}
+                  onChange={(event) => setMemberSearch(event.target.value)}
+                  placeholder=" "
+                />
+              </FloatingField>
+
+              <div className="familias-modal__member-list familias-modal__member-list--available">
+                {visible.map((person) => {
+                  const id = Number(person.id_socio);
+                  const checked = pendingMemberIds.has(id);
+                  const belongsElsewhere =
+                    person.familia_activa &&
+                    person.id_familia &&
+                    Number(person.id_familia) !== Number(form.id_familia || 0);
+                  const disabled = Boolean(belongsElsewhere || !person.activo);
+                  return (
+                    <label
+                      className={`entity-check-option familias-modal__member ${checked ? "is-selected" : ""}`.trim()}
+                      key={person.id_socio}
+                      title={
+                        belongsElsewhere
+                          ? `Pertenece a ${person.familia}`
+                          : !person.activo
+                            ? "Socio dado de baja"
+                            : ""
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => togglePendingMember(person)}
+                      />
+                      <span className="familias-member-avatar" aria-hidden="true">
+                        {(person.apellido || person.nombre || "?").trim().charAt(0).toLocaleUpperCase("es-AR")}
+                      </span>
+                      <span className="familias-modal__member-copy">
+                        <strong>{person.apellido}, {person.nombre}</strong>
+                        <small>
+                          DNI {person.dni || "—"}
+                          {person.categoria ? ` · ${person.categoria}` : ""}
+                          {belongsElsewhere ? ` · ${person.familia}` : ""}
+                        </small>
+                      </span>
+                    </label>
+                  );
+                })}
+                {!visible.length ? (
+                  <div className="familias-modal__empty">
+                    <strong>Sin socios disponibles</strong>
+                    <span>No hay personas que coincidan con la búsqueda.</span>
+                  </div>
+                ) : null}
+              </div>
+
+            </section>
+
+            <section className="familias-members-column familias-members-column--current">
+              <div className="familias-members-column__header">
+                <div>
+                  <strong>Integrantes de la familia</strong>
+                  <span>Configurá sus datos dentro del grupo.</span>
+                </div>
+                <span className="familias-members-count">{form.integrantes.length}</span>
+              </div>
+
               <div className="familias-selected-members__list">
                 {form.integrantes.map((member) => (
                   <article
                     className={`familias-selected-member ${member.es_titular ? "is-holder" : ""}`}
                     key={member.id_socio}
                   >
-                    <div className="familias-selected-member__identity">
-                      <strong>
-                        {member.apellido}, {member.nombre}
-                      </strong>
-                      <small>DNI {member.dni || "—"}</small>
+                    <div className="familias-selected-member__top">
+                      <span className="familias-member-avatar" aria-hidden="true">
+                        {(member.apellido || member.nombre || "?").trim().charAt(0).toLocaleUpperCase("es-AR")}
+                      </span>
+                      <div className="familias-selected-member__identity">
+                        <strong>{member.apellido}, {member.nombre}</strong>
+                        <small>DNI {member.dni || "—"}</small>
+                      </div>
+                      <label className="familias-holder-toggle">
+                        <input
+                          type="radio"
+                          name="titular-familia"
+                          checked={Boolean(member.es_titular)}
+                          onChange={() => updateMember(member.id_socio, "es_titular", true)}
+                        />
+                        <span>Titular</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="familias-member-remove"
+                        title="Quitar integrante"
+                        aria-label={`Quitar a ${member.apellido}, ${member.nombre}`}
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            integrantes: current.integrantes.filter(
+                              (entry) => Number(entry.id_socio) !== Number(member.id_socio),
+                            ),
+                          }))
+                        }
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
                     </div>
-                    <label className="familias-holder-toggle">
+                    <div className="familias-selected-member__fields">
                       <input
-                        type="radio"
-                        name="titular-familia"
-                        checked={Boolean(member.es_titular)}
-                        onChange={() =>
-                          updateMember(member.id_socio, "es_titular", true)
+                        className="familias-member-input"
+                        value={member.parentesco || ""}
+                        onChange={(event) =>
+                          updateMember(member.id_socio, "parentesco", upper(event.target.value))
+                        }
+                        maxLength={50}
+                        placeholder="Parentesco"
+                      />
+                      <input
+                        className="familias-member-input"
+                        type="date"
+                        value={member.fecha_incorporacion || today()}
+                        max={today()}
+                        onChange={(event) =>
+                          updateMember(member.id_socio, "fecha_incorporacion", event.target.value)
                         }
                       />
-                      <span>Titular</span>
-                    </label>
-                    <input
-                      className="familias-member-input"
-                      value={member.parentesco || ""}
-                      onChange={(event) =>
-                        updateMember(
-                          member.id_socio,
-                          "parentesco",
-                          upper(event.target.value),
-                        )
-                      }
-                      maxLength={50}
-                      placeholder="Parentesco"
-                    />
-                    <input
-                      className="familias-member-input"
-                      type="date"
-                      value={member.fecha_incorporacion || today()}
-                      max={today()}
-                      onChange={(event) =>
-                        updateMember(
-                          member.id_socio,
-                          "fecha_incorporacion",
-                          event.target.value,
-                        )
-                      }
-                    />
-                    <input
-                      className="familias-member-input familias-member-input--observation"
-                      value={member.observaciones || ""}
-                      onChange={(event) =>
-                        updateMember(
-                          member.id_socio,
-                          "observaciones",
-                          upper(event.target.value),
-                        )
-                      }
-                      maxLength={500}
-                      placeholder="Observaciones"
-                    />
-                    <button
-                      type="button"
-                      className="familias-member-remove"
-                      onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          integrantes: current.integrantes.filter(
-                            (entry) =>
-                              Number(entry.id_socio) !==
-                              Number(member.id_socio),
-                          ),
-                        }))
-                      }
-                    >
-                      Quitar
-                    </button>
+                      <input
+                        className="familias-member-input familias-member-input--observation"
+                        value={member.observaciones || ""}
+                        onChange={(event) =>
+                          updateMember(member.id_socio, "observaciones", upper(event.target.value))
+                        }
+                        maxLength={500}
+                        placeholder="Observaciones"
+                      />
+                    </div>
                   </article>
                 ))}
+                {!form.integrantes.length ? (
+                  <div className="familias-modal__empty">
+                    <strong>Sin integrantes</strong>
+                    <span>Seleccioná socios y presioná Agregar miembros.</span>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ) : null}
+            </section>
+          </div>
 
           {removedCount > 0 ? (
             <div className="familias-unlink-panel">
@@ -491,6 +486,7 @@ export default function Familias() {
   const { items, catalogos, loading, error, cargar } = useFamilias(filters);
   const [form, setForm] = useState(emptyForm);
   const [formTab, setFormTab] = useState(FORM_TAB_DETAILS);
+  const [pendingMemberIds, setPendingMemberIds] = useState(() => new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stateModal, setStateModal] = useState(null);
@@ -503,6 +499,7 @@ export default function Familias() {
 
   const openNew = () => {
     setForm(emptyForm());
+    setPendingMemberIds(new Set());
     setFormTab(FORM_TAB_DETAILS);
     setModalOpen(true);
   };
@@ -510,12 +507,28 @@ export default function Familias() {
     try {
       const response = await familiasApi.obtener(item.id_familia);
       setForm(formFromFamily(response.item || item));
+      setPendingMemberIds(new Set());
       setFormTab(FORM_TAB_DETAILS);
       setModalOpen(true);
     } catch (requestError) {
       setFeedback({ type: "error", message: requestError.message });
     }
   };
+  const addPendingMembers = () => {
+    if (!pendingMemberIds.size) return;
+    const peopleToAdd = (catalogos.socios || []).filter((person) =>
+      pendingMemberIds.has(Number(person.id_socio)),
+    );
+    setForm((current) => ({
+      ...current,
+      integrantes: [
+        ...current.integrantes,
+        ...peopleToAdd.map(memberFromCatalog),
+      ],
+    }));
+    setPendingMemberIds(new Set());
+  };
+
   const save = async (event) => {
     event.preventDefault();
     if (!form.nombre.trim()) {
@@ -789,7 +802,20 @@ export default function Familias() {
         saving={saving}
         submitLabel={form.id_familia ? "Guardar cambios" : "Crear familia"}
         modalClassName="familias-modal familias-modal--form"
+        closeOnBackdrop={false}
         wide
+        footerStart={formTab === FORM_TAB_MEMBERS ? (
+          <button
+            type="button"
+            className="mov-btn mov-btn--primary familias-footer-add-members"
+            onClick={addPendingMembers}
+            disabled={!pendingMemberIds.size || saving}
+          >
+            <FontAwesomeIcon icon={faPlus} />
+            Agregar miembros
+            {pendingMemberIds.size ? ` (${pendingMemberIds.size})` : ""}
+          </button>
+        ) : null}
       >
         <FamilyForm
           form={form}
@@ -797,6 +823,8 @@ export default function Familias() {
           catalog={catalogos.socios || []}
           activeTab={formTab}
           onTabChange={setFormTab}
+          pendingMemberIds={pendingMemberIds}
+          setPendingMemberIds={setPendingMemberIds}
         />
       </CrudModal>
 
@@ -825,6 +853,7 @@ export default function Familias() {
         loadingTitle="Cargando familia..."
         loadingText="Consultando integrantes activos e históricos."
         modalClassName="familias-info-modal"
+        closeOnBackdrop={false}
       >
         {detailModal?.error ? (
           <ModuleFeedback type="error" message={detailModal.error} />
