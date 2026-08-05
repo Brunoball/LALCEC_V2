@@ -69,8 +69,8 @@ body.pp-lockScroll{ overflow:hidden !important; }
   align-items:center;
   justify-content:space-between;
   gap:14px;
-  padding:0 16px 0 18px;
-  background: var(--primary-color, #f97316);
+  padding:0 16px 0 28px;
+  background:#f97316;
   border-bottom:1px solid rgba(255,255,255,.12);
   box-shadow:0 10px 24px rgb(124 45 18 / .22);
 }
@@ -1367,10 +1367,53 @@ body.pp-lockScroll{ overflow:hidden !important; }
 
 @media (max-width: 720px){
   .mov-topbar{
-    padding-left:10px;
+    padding-left:14px;
   }
 
   .mov-topbar__brandText small{
     display:none;
+  }
+}
+
+
+/* Ajustes institucionales LALCEC */
+.mov-topbar__left {
+  padding-left: 2px;
+}
+
+.mov-topbar__appBrandMark {
+  flex: 0 0 auto;
+}
+
+.mov-topbar__brandText {
+  gap: 10px;
+}
+
+.pp-brand__mark--image,
+.pp-drawerBrand__mark--image {
+  overflow: hidden;
+}
+
+.pp-brand__mark--image img,
+.pp-drawerBrand__mark--image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 980px) {
+  .mov-topbar {
+    padding-left: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  .mov-topbar {
+    padding-left: 14px;
+  }
+
+  .mov-topbar__brandText small {
+    display: none;
   }
 }
