@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -14,8 +14,10 @@ import GlobalDivTable from "../Global/GlobalDivTable";
 import SummaryCards from "../Global/SummaryCards";
 import CrudModal from "../Global/Modales/CrudModal";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
+import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import ModalComprobantePago from "../Global/Modales/ModalComprobantePago";
 import ModuleFeedback from "../Global/ModuleFeedback";
+import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import Toast from "../Global/Toast";
 import { FloatingField } from "../Global/Formularios/TabbedForm";
 import { canWrite } from "../_shared/auth/session";
@@ -39,6 +41,20 @@ const currentDate = new Date();
 const currentYear = currentDate.getFullYear();
 const currentMonth = currentDate.getMonth() + 1;
 const PAGE_SIZE = 100;
+
+const CUOTAS_EXPORT_COLUMNS = [
+  { key: "denominacion", label: "Socio / Empresa" },
+  { key: "documento", label: "DNI / CUIT" },
+  { key: "categoria", label: "Categoría" },
+  { key: "periodo", label: "Período" },
+  { key: "fecha_pago", label: "Fecha de pago" },
+  { key: "medio_pago", label: "Medio de pago" },
+  {
+    key: "importe_exportacion",
+    label: "Importe",
+    align: "right",
+  },
+];
 
 const DEFAULT_MONTHS = [
   "Enero",
@@ -199,6 +215,7 @@ export default function Cuotas() {
   const [multiMode, setMultiMode] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState({});
   const [receipt, setReceipt] = useState(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const filtros = useMemo(
     () => ({ tipo, estado, buscar, anio, mes, pagina, por_pagina: PAGE_SIZE }),
@@ -264,6 +281,58 @@ export default function Cuotas() {
   const monthOptions = catalogos.meses?.length
     ? catalogos.meses
     : DEFAULT_MONTHS;
+  const isPaid = estado === "PAGADOS";
+  const exportRecords = useCallback(
+    (records) =>
+      (records || []).map((item) => ({
+        ...item,
+        fecha_pago: isPaid ? formatDate(item.fecha_pago) : "—",
+        medio_pago: isPaid ? item.medio_pago || "—" : "PENDIENTE",
+        importe_exportacion: money(
+          isPaid
+            ? item.monto || 0
+            : item.monto_sugerido || item.monto_base || 0,
+        ),
+      })),
+    [isPaid],
+  );
+
+  const obtenerTodosParaExportar = useCallback(async () => {
+    const primeraRespuesta = await cuotasApi.listar({
+      ...filtros,
+      pagina: 1,
+      por_pagina: PAGE_SIZE,
+    });
+    const registros = [...(primeraRespuesta.items || [])];
+    const total = Number(
+      primeraRespuesta.paginacion?.total || registros.length,
+    );
+    const paginas = Number(
+      primeraRespuesta.paginacion?.total_paginas ||
+        Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    );
+
+    for (let paginaActual = 2; paginaActual <= paginas; paginaActual += 1) {
+      const respuesta = await cuotasApi.listar({
+        ...filtros,
+        pagina: paginaActual,
+        por_pagina: PAGE_SIZE,
+      });
+      registros.push(...(respuesta.items || []));
+    }
+
+    return exportRecords(registros);
+  }, [exportRecords, filtros]);
+
+  const exportFilterDescription = [
+    tipo === "EMPRESA" ? "Empresas" : "Socios",
+    isPaid ? "Pagados" : "Adeudados",
+    `Período: ${mes}/${anio}`,
+    buscar ? `Búsqueda: ${buscar}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const paymentYearOptions = Array.from(
     new Set(
       [...(catalogos.anios || []), currentYear, paymentForm.anio]
@@ -287,12 +356,20 @@ export default function Cuotas() {
     availableMonthIds.every((monthId) => selectedMonthIds.includes(monthId));
   const selectedItems = Object.values(selectedPayments);
   const selectedCount = selectedItems.length;
-  const isPaid = estado === "PAGADOS";
   const entityLabel = tipo === "EMPRESA" ? "empresa" : "socio";
   const family = paymentContext?.familia || null;
   const principal = paymentContext?.principal || null;
   const familyPendingMembers = (family?.integrantes || []).filter(
     (member) => member.puede_pagar,
+  );
+  const activePaymentPeriod = paymentPeriods[String(paymentForm.mes)] || null;
+  const paymentPeriodAmount = Number(
+    activePaymentPeriod?.context?.principal?.monto_sugerido ||
+      activePaymentPeriod?.context?.principal?.monto_base ||
+      principal?.monto_sugerido ||
+      principal?.monto_base ||
+      selectedPartner?.monto_sugerido ||
+      0,
   );
   const paymentTotal =
     paymentMode === "multiple"
@@ -437,9 +514,7 @@ export default function Cuotas() {
       id_socio: String(partnerId || ""),
       meses: base.meses || [],
       monto: partner ? String(partner.monto_sugerido || "") : "",
-      id_medio_pago: partner?.id_medio_pago
-        ? String(partner.id_medio_pago)
-        : String(catalogos.medios_pago?.[0]?.id_medio_pago || ""),
+      id_medio_pago: "",
       aplicar_familia: false,
     };
     setPaymentForm(next);
@@ -469,12 +544,7 @@ export default function Cuotas() {
     const resolved = {
       ...next,
       monto: String(row?.monto_sugerido || partner?.monto_sugerido || ""),
-      id_medio_pago: String(
-        row?.id_medio_pago_preferido ||
-          partner?.id_medio_pago ||
-          catalogos.medios_pago?.[0]?.id_medio_pago ||
-          "",
-      ),
+      id_medio_pago: "",
     };
     setPaymentForm(resolved);
     setPaymentOpen(true);
@@ -501,11 +571,7 @@ export default function Cuotas() {
       ...emptyForm(),
       anio,
       mes,
-      id_medio_pago: String(
-        selectedItems[0]?.id_medio_pago_preferido ||
-          catalogos.medios_pago?.[0]?.id_medio_pago ||
-          "",
-      ),
+      id_medio_pago: "",
       pagos: selectedItems.map((item) => ({
         id_socio: item.id_socio,
         anio: item.anio,
@@ -886,7 +952,6 @@ export default function Cuotas() {
   const tableLabel = `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : "adeudadas"}`;
   const baseDebtColumns = [
     tipo === "EMPRESA" ? "Empresa" : "Socio",
-    tipo === "EMPRESA" ? "CUIT" : "DNI",
     "Categoría",
     "Período",
     "Importe sugerido",
@@ -895,7 +960,6 @@ export default function Cuotas() {
   const columns = isPaid
     ? [
         tipo === "EMPRESA" ? "Empresa" : "Socio",
-        tipo === "EMPRESA" ? "CUIT" : "DNI",
         "Categoría",
         "Período",
         "Fecha de pago",
@@ -928,6 +992,14 @@ export default function Cuotas() {
         tabsInTitle
         headLeftClassName="cuotas-header-row"
         headFiltersContainerClassName="cuotas-head-filters"
+        headerActions={
+          <BotonExportarGlobal
+            label="Exportar"
+            onClick={() => setExportModalOpen(true)}
+            disabled={loading || itemsPagina.length === 0}
+            title="Exportar cuotas en Excel o PDF"
+          />
+        }
         secondaryActions={
           !isPaid && writable
             ? [
@@ -1053,17 +1125,22 @@ export default function Cuotas() {
                   </div>
                 ) : null}
                 <div className="mov-gridCell entity-main-cell">
-                  <strong>{item.denominacion || `ID ${item.id_socio}`}</strong>
+                  <strong>{item.denominacion || "SIN DENOMINACIÓN"}</strong>
                   <small>
-                    {item.familia
-                      ? `${item.familia} · ${Number(item.porcentaje_descuento_familiar || 0).toFixed(2)}% DESC.`
-                      : item.estado_socio === "INACTIVO"
-                        ? "REGISTRO DADO DE BAJA"
-                        : `ID ${item.id_socio}`}
+                    {tipo === "EMPRESA"
+                      ? item.documento
+                        ? `CUIT ${item.documento}`
+                        : null
+                      : [
+                          item.documento ? `DNI ${item.documento}` : null,
+                          item.familia || null,
+                          item.estado_socio === "INACTIVO"
+                            ? "REGISTRO DADO DE BAJA"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                   </small>
-                </div>
-                <div className="mov-gridCell is-strong is-center">
-                  {item.documento || "—"}
                 </div>
                 <div className="mov-gridCell is-center">
                   <span
@@ -1146,7 +1223,7 @@ export default function Cuotas() {
 
         <div className="cuotas-table-footer">
           <SummaryCards
-            title="Resumen del período"
+            title=""
             ariaLabel="Resumen de cuotas del período"
             variant="footer"
             items={[
@@ -1216,11 +1293,19 @@ export default function Cuotas() {
             </nav>
           ) : null}
 
-          {writable && !isPaid ? (
-            <div
-              className="cuotas-lower-actions"
-              aria-label="Acciones de cuotas"
-            >
+          <div
+            className="cuotas-lower-actions"
+            aria-label="Acciones de cuotas"
+          >
+            <BotonExportarGlobal
+              label="Exportar"
+              className="cuotas-lower-action mov-btn--compact"
+              onClick={() => setExportModalOpen(true)}
+              disabled={loading || itemsPagina.length === 0}
+              title="Exportar cuotas en Excel o PDF"
+            />
+
+            {writable && !isPaid ? (
               <button
                 type="button"
                 className={`mov-btn cuotas-lower-action ${multiMode ? "mov-btn--danger" : "mov-btn--ghost"}`}
@@ -1229,10 +1314,39 @@ export default function Cuotas() {
                 <FontAwesomeIcon icon={faUserGroup} />
                 {multiMode ? "Cancelar selección" : "Selección múltiple"}
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </ModulePage>
+
+      <ModalExportarGlobal
+        open={exportModalOpen}
+        title="Exportar cuotas"
+        subtitle="Elegí el alcance y descargá la información en Excel o PDF."
+        tituloArchivo="Cuotas"
+        subtituloArchivoActual={`${exportFilterDescription} · Página ${pagina} de ${Math.max(1, totalPaginas)}`}
+        subtituloArchivoTodos={exportFilterDescription}
+        nombreArchivo={`cuotas-${isPaid ? "pagadas" : "adeudadas"}`}
+        columnas={CUOTAS_EXPORT_COLUMNS}
+        registrosActuales={exportRecords(itemsPagina)}
+        obtenerRegistrosTodos={obtenerTodosParaExportar}
+        cantidadActual={itemsPagina.length}
+        cantidadTodos={totalRegistros}
+        mostrarAlcanceTodos={totalRegistros > itemsPagina.length}
+        alcanceActualLabel={totalPaginas > 1 ? "Exportar esta página" : "Exportar registros visibles"}
+        alcanceActualDescription="Descarga las cuotas visibles con los filtros actuales."
+        alcanceTodosLabel="Exportar todas las cuotas filtradas"
+        alcanceTodosDescription="Descarga todas las páginas que coinciden con los filtros actuales."
+        totalLabelSingular="cuota disponible"
+        totalLabelPlural="cuotas disponibles"
+        onClose={() => setExportModalOpen(false)}
+        onSuccess={(message) =>
+          setFeedback({ type: "success", message, duration: 4200 })
+        }
+        onError={(message) =>
+          setFeedback({ type: "error", message, duration: 5200 })
+        }
+      />
 
       <CrudModal
         open={paymentOpen}
@@ -1264,6 +1378,7 @@ export default function Cuotas() {
           !(paymentTotal > 0)
         }
         wide
+        closeOnBackdrop={false}
         footerStart={
           <div className="cuotas-payment-footer-total">
             <span>Total a pagar</span>
@@ -1275,7 +1390,7 @@ export default function Cuotas() {
             </small>
           </div>
         }
-        modalClassName="cuotas-payment-modal cuotas-modal--payment"
+        modalClassName={`cuotas-payment-modal cuotas-modal--payment ${paymentMode === "multiple" ? "cuotas-modal--batch" : ""}`.trim()}
       >
         {paymentMode === "single" ? (
           <>
@@ -1344,6 +1459,17 @@ export default function Cuotas() {
                     onChange={updatePaymentYear}
                     disabled={contextLoading || !paymentForm.id_socio}
                   />
+                  <div
+                    className="cuotas-period-amount"
+                    aria-label={`Importe ${money(paymentPeriodAmount)}`}
+                  >
+                    <span>Importe</span>
+                    <strong>
+                      {contextLoading
+                        ? "Consultando…"
+                        : money(paymentPeriodAmount)}
+                    </strong>
+                  </div>
                   <button
                     type="button"
                     className="cuotas-select-all"
@@ -1368,7 +1494,6 @@ export default function Cuotas() {
                   const paid = Boolean(period?.paid);
                   const unavailable = Boolean(period?.unavailable);
                   const disabled = contextLoading || paid || unavailable;
-                  const principalForMonth = period?.context?.principal;
 
                   return (
                     <button
@@ -1381,22 +1506,6 @@ export default function Cuotas() {
                       aria-label={`${item.nombre} ${paymentForm.anio}: ${paid ? "pagado" : unavailable ? "no disponible" : selected ? "seleccionado" : "disponible"}`}
                     >
                       <strong>{item.nombre}</strong>
-                      <span>
-                        {contextLoading
-                          ? "Consultando…"
-                          : paid
-                            ? "Pagado"
-                            : unavailable
-                              ? "No disponible"
-                              : selected
-                                ? "Seleccionado"
-                                : money(
-                                    principalForMonth?.monto_sugerido ||
-                                      principalForMonth?.monto_base ||
-                                      selectedPartner?.monto_sugerido ||
-                                      0,
-                                  )}
-                      </span>
                       <small>{paymentForm.anio}</small>
                     </button>
                   );
@@ -1421,7 +1530,7 @@ export default function Cuotas() {
               !(paymentForm.aplicar_familia && family) ? (
                 <FloatingField
                   label="Monto *"
-                  active={Boolean(paymentForm.monto)}
+                  active
                 >
                   <input
                     type="number"
@@ -1442,7 +1551,7 @@ export default function Cuotas() {
 
               <FloatingField
                 label="Medio de pago *"
-                active={Boolean(paymentForm.id_medio_pago)}
+                active
               >
                 <select
                   value={paymentForm.id_medio_pago}
@@ -1588,7 +1697,7 @@ export default function Cuotas() {
               </FloatingField>
               <FloatingField
                 label="Medio de pago *"
-                active={Boolean(paymentForm.id_medio_pago)}
+                active
               >
                 <select
                   value={paymentForm.id_medio_pago}
@@ -1628,6 +1737,9 @@ export default function Cuotas() {
                   <article
                     key={`${payment.id_socio}-${payment.anio}-${payment.mes}`}
                   >
+                    <span className="cuotas-batch-list__index" aria-hidden="true">
+                      {index + 1}
+                    </span>
                     <div>
                       <strong>{payment.denominacion}</strong>
                       <span>

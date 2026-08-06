@@ -11,8 +11,8 @@ import {
   faArrowTrendUp,
   faChartPie,
   faEye,
-  faFileExcel,
   faFileInvoiceDollar,
+  faMoneyBillTransfer,
   faPaperclip,
   faPen,
   faPlus,
@@ -25,6 +25,8 @@ import {
 import GlobalDivTable from "../Global/GlobalDivTable";
 import CrudModal from "../Global/Modales/CrudModal";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
+import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
+import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import ModuleFeedback from "../Global/ModuleFeedback";
 import {
   EntityFormPanel,
@@ -75,43 +77,6 @@ const localDate = () => {
 };
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
-
-const escapeHtml = (value) =>
-  String(value ?? "").replace(/[&<>'"]/g, (character) => {
-    const entities = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "'": "&#039;",
-      '"': "&quot;",
-    };
-    return entities[character];
-  });
-
-function exportExcel(filename, headers, rows) {
-  const table = `<table><thead><tr>${headers
-    .map((header) => `<th>${escapeHtml(header)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${row
-          .map((cell) => `<td>${escapeHtml(cell)}</td>`)
-          .join("")}</tr>`,
-    )
-    .join("")}</tbody></table>`;
-  const blob = new Blob(
-    ["\ufeff", `<html><meta charset="utf-8"><body>${table}</body></html>`],
-    { type: "application/vnd.ms-excel;charset=utf-8" },
-  );
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${filename}.xls`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 const emptyCatalogs = {
   opciones: {
@@ -186,19 +151,12 @@ function OptionSelect({
   );
 }
 
-function EmptyState({ loading, message = "No hay registros para mostrar." }) {
+function EmptyState({ message = "No hay registros para mostrar." }) {
   return (
     <div className="module-empty">
-      <strong>
-        {loading
-          ? "Cargando información contable..."
-          : "Sin movimientos para mostrar"}
-      </strong>
-      <span>
-        {loading
-          ? "Consultando los movimientos del período seleccionado."
-          : message}
-      </span>
+      <FontAwesomeIcon icon={faMoneyBillTransfer} />
+      <strong>Sin movimientos para mostrar</strong>
+      <span>{message}</span>
     </div>
   );
 }
@@ -221,7 +179,13 @@ function SummaryView({ summary, loading, mode }) {
 
   return (
     <section className={`ct-summary ct-summary--${mode}`}>
-      {loading ? <EmptyState loading /> : null}
+      {loading ? (
+        <div className="module-empty">
+          <FontAwesomeIcon icon={faMoneyBillTransfer} />
+          <strong>Cargando información contable...</strong>
+          <span>Consultando los movimientos del período seleccionado.</span>
+        </div>
+      ) : null}
 
       {!loading ? (
         <>
@@ -406,6 +370,7 @@ export default function ContableModule({ view = "summary" }) {
   const [optionModal, setOptionModal] = useState(null);
   const [optionName, setOptionName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const requestId = useRef(0);
 
   const loadCatalogs = useCallback(async () => {
@@ -660,80 +625,69 @@ export default function ContableModule({ view = "summary" }) {
     return catalogs.opciones.CATEGORIA_EGRESO || [];
   }, [catalogs, view, incomeTab]);
 
-  const exportCurrent = () => {
+  const exportConfig = useMemo(() => {
     const items = data.items || [];
+
     if (view === "income" && incomeTab === "partners") {
-      exportExcel(
-        `ingresos_socios_${year}_${month}`,
-        [
-          "Fecha de cobro",
-          "Socio",
-          "DNI",
-          "Categoría",
-          "Período pagado",
-          "Medio",
-          "Monto",
-          "Tipo de importe",
+      return {
+        title: "Exportar ingresos de socios",
+        fileTitle: "Ingresos de socios",
+        fileName: `ingresos_socios_${year}_${month}`,
+        columns: [
+          { label: "Fecha de cobro", value: (item) => formatDate(item.fecha) },
+          { label: "Socio", key: "socio" },
+          { label: "DNI", key: "dni" },
+          { label: "Categoría", key: "categoria" },
+          { label: "Período pagado", key: "periodo" },
+          { label: "Medio", key: "medio" },
+          { label: "Monto", key: "monto" },
+          {
+            label: "Tipo de importe",
+            value: (item) => item.monto_estimado ? "ESTIMADO" : "REGISTRADO",
+          },
         ],
-        items.map((item) => [
-          formatDate(item.fecha),
-          item.socio,
-          item.dni,
-          item.categoria,
-          item.periodo,
-          item.medio,
-          item.monto,
-          item.monto_estimado ? "ESTIMADO" : "REGISTRADO",
-        ]),
-      );
-    } else if (view === "income") {
-      exportExcel(
-        `otros_ingresos_${year}_${month}`,
-        [
-          "Fecha",
-          "Medio",
-          "Proveedor / Persona",
-          "Categoría",
-          "Concepto",
-          "Detalle",
-          "Importe",
-        ],
-        items.map((item) => [
-          formatDate(item.fecha),
-          item.medio,
-          item.proveedor,
-          item.categoria,
-          item.concepto,
-          item.detalle || "",
-          item.importe,
-        ]),
-      );
-    } else {
-      exportExcel(
-        `egresos_${year}_${month}`,
-        [
-          "Fecha",
-          "Categoría",
-          "Comprobante",
-          "Concepto",
-          "Proveedor",
-          "Medio",
-          "Detalle",
-          "Importe",
-        ],
-        items.map((item) => [
-          formatDate(item.fecha),
-          item.categoria,
-          item.numero_comprobante || "",
-          item.concepto,
-          item.proveedor,
-          item.medio,
-          item.detalle || "",
-          item.importe,
-        ]),
-      );
+        records: items,
+      };
     }
-  };
+
+    if (view === "income") {
+      return {
+        title: "Exportar otros ingresos",
+        fileTitle: "Otros ingresos",
+        fileName: `otros_ingresos_${year}_${month}`,
+        columns: [
+          { label: "Fecha", value: (item) => formatDate(item.fecha) },
+          { label: "Proveedor / Persona", key: "proveedor" },
+          { label: "Categoría", key: "categoria" },
+          { label: "Concepto", key: "concepto" },
+          { label: "Medio", key: "medio" },
+          { label: "Detalle", value: (item) => item.detalle || "" },
+          { label: "Importe", key: "importe" },
+        ],
+        records: items,
+      };
+    }
+
+    return {
+      title: "Exportar egresos",
+      fileTitle: "Egresos",
+      fileName: `egresos_${year}_${month}`,
+      columns: [
+        { label: "Proveedor", key: "proveedor" },
+        { label: "Categoría", key: "categoria" },
+        { label: "Fecha", value: (item) => formatDate(item.fecha) },
+        {
+          label: "N.º comprobante",
+          value: (item) => item.numero_comprobante || "",
+        },
+        { label: "Concepto", key: "concepto" },
+        { label: "Medio", key: "medio" },
+        { label: "Detalle", value: (item) => item.detalle || "" },
+        { label: "Importe", key: "importe" },
+      ],
+      records: items,
+    };
+  }, [data.items, incomeTab, month, view, year]);
 
   const summaryCategories = data.resumen?.categorias || [];
   const periodFilters = [
@@ -845,29 +799,26 @@ export default function ContableModule({ view = "summary" }) {
   const tableColumns =
     view === "income" && incomeTab === "partners"
       ? [
-          "Fecha de cobro",
           "Socio",
-          "Categoría",
+          "Fecha de cobro",
           "Período pagado",
           "Medio",
           "Monto",
         ]
       : view === "income"
         ? [
+            "Persona / Proveedor",
             "Fecha",
             "Medio",
-            "Persona / Proveedor",
-            "Categoría",
             "Descripción / concepto",
             "Importe",
             ...(writable ? ["Acciones"] : []),
           ]
         : [
+            "Proveedor",
             "Fecha",
-            "Categoría",
             "N.º comprobante",
             "Descripción",
-            "Proveedor",
             "Medio",
             "Monto",
             "Acciones",
@@ -901,19 +852,14 @@ export default function ContableModule({ view = "summary" }) {
         onPrimaryAction={openMovement}
         canCreate={canCreateMovement}
         primaryActionClassName={canCreateMovement ? "contable-create-top" : ""}
-        secondaryActions={
-          view === "summary" || compactActions
-            ? []
-            : [
-                {
-                  key: "excel",
-                  label: "Excel",
-                  icon: faFileExcel,
-                  onClick: exportCurrent,
-                  disabled: !data.items?.length,
-                  className: "mov-btn--excel contable-export-top",
-                },
-              ]
+        headerActions={
+          view !== "summary" && !compactActions ? (
+            <BotonExportarGlobal
+              className="contable-export-top"
+              onClick={() => setExportOpen(true)}
+              disabled={!data.items?.length}
+            />
+          ) : null
         }
         notice={
           !writable
@@ -936,6 +882,13 @@ export default function ContableModule({ view = "summary" }) {
               bodyClassName="entity-table-wrap"
               gridClassName={tableGridClassName}
               columns={tableColumns}
+              loading={loading}
+              loadingLabel="Cargando movimientos contables..."
+              skeletonActionColumn={
+                view === "income"
+                  ? incomeTab === "manual" && writable
+                  : true
+              }
               ariaLabel={
                 view === "income" ? "Listado de ingresos" : "Listado de egresos"
               }
@@ -943,10 +896,7 @@ export default function ContableModule({ view = "summary" }) {
               {view === "income" && incomeTab === "partners" ? (
                 <>
                   {!data.items?.length ? (
-                    <EmptyState
-                      loading={loading}
-                      message="No hubo cobros de socios en el mes seleccionado."
-                    />
+                    <EmptyState message="No hubo cobros de socios en el mes seleccionado." />
                   ) : null}
                   {data.items?.map((item, index) => (
                     <div
@@ -957,17 +907,15 @@ export default function ContableModule({ view = "summary" }) {
                         `${item.origen || "COBRO"}-${item.id_registro || index}`
                       }
                     >
-                      <div className="mov-gridCell">
-                        {formatDate(item.fecha)}
-                      </div>
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.socio}</strong>
-                        <small>{item.dni}</small>
+                        <small>
+                          Categoría: {item.categoria || "Sin categoría"}
+                          {item.dni ? ` · ${item.dni}` : ""}
+                        </small>
                       </div>
                       <div className="mov-gridCell is-center">
-                        <span className="entity-wrap-text">
-                          {item.categoria}
-                        </span>
+                        {formatDate(item.fecha)}
                       </div>
                       <div className="mov-gridCell is-center">
                         {item.periodo}
@@ -989,10 +937,7 @@ export default function ContableModule({ view = "summary" }) {
               {view === "income" && incomeTab === "manual" ? (
                 <>
                   {!data.items?.length ? (
-                    <EmptyState
-                      loading={loading}
-                      message="No hay otros ingresos registrados en el mes."
-                    />
+                    <EmptyState message="No hay otros ingresos registrados en el mes." />
                   ) : null}
                   {data.items?.map((item) => (
                     <div
@@ -1000,14 +945,14 @@ export default function ContableModule({ view = "summary" }) {
                       role="row"
                       key={item.id_ingreso}
                     >
-                      <div className="mov-gridCell">
+                      <div className="mov-gridCell entity-main-cell">
+                        <strong>{item.proveedor}</strong>
+                        <small>Categoría: {item.categoria || "Sin categoría"}</small>
+                      </div>
+                      <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
-                      <div className="mov-gridCell">{item.proveedor}</div>
-                      <div className="mov-gridCell is-center">
-                        {item.categoria}
-                      </div>
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.concepto}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
@@ -1047,10 +992,7 @@ export default function ContableModule({ view = "summary" }) {
               {view === "expense" ? (
                 <>
                   {!data.items?.length ? (
-                    <EmptyState
-                      loading={loading}
-                      message="No hay egresos registrados en el mes."
-                    />
+                    <EmptyState message="No hay egresos registrados en el mes." />
                   ) : null}
                   {data.items?.map((item) => (
                     <div
@@ -1058,11 +1000,12 @@ export default function ContableModule({ view = "summary" }) {
                       role="row"
                       key={item.id_egreso}
                     >
-                      <div className="mov-gridCell">
-                        {formatDate(item.fecha)}
+                      <div className="mov-gridCell entity-main-cell">
+                        <strong>{item.proveedor}</strong>
+                        <small>Categoría: {item.categoria || "Sin categoría"}</small>
                       </div>
                       <div className="mov-gridCell is-center">
-                        {item.categoria}
+                        {formatDate(item.fecha)}
                       </div>
                       <div className="mov-gridCell is-center">
                         {item.numero_comprobante || "—"}
@@ -1071,7 +1014,6 @@ export default function ContableModule({ view = "summary" }) {
                         <strong>{item.concepto}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
                       </div>
-                      <div className="mov-gridCell">{item.proveedor}</div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
                       <div className="mov-gridCell is-center is-strong">
                         {money(item.importe)}
@@ -1148,15 +1090,11 @@ export default function ContableModule({ view = "summary" }) {
                 className={`contable-lower-actions ${view === "expense" || (view === "income" && incomeTab === "manual") ? "contable-lower-actions--right" : ""}`.trim()}
               >
                 {compactActions ? (
-                  <button
-                    type="button"
-                    className="mov-btn mov-btn--excel mov-btn--compact"
-                    onClick={exportCurrent}
+                  <BotonExportarGlobal
+                    className="mov-btn--compact"
+                    onClick={() => setExportOpen(true)}
                     disabled={!data.items?.length}
-                  >
-                    <FontAwesomeIcon icon={faFileExcel} />
-                    Excel
-                  </button>
+                  />
                 ) : null}
                 {canCreateMovement ? (
                   <button
@@ -1554,6 +1492,23 @@ export default function ContableModule({ view = "summary" }) {
         </FloatingField>
       </CrudModal>
 
+
+      <ModalExportarGlobal
+        open={exportOpen}
+        title={exportConfig.title}
+        tituloArchivo={exportConfig.fileTitle}
+        subtituloArchivoActual={`${MONTHS[Number(month) - 1] || ""} ${year}`}
+        nombreArchivo={exportConfig.fileName}
+        columnas={exportConfig.columns}
+        registrosActuales={exportConfig.records}
+        cantidadActual={exportConfig.records.length}
+        mostrarAlcanceTodos={false}
+        alcanceActualLabel="Exportar registros filtrados"
+        alcanceActualDescription="Descarga todos los movimientos que coinciden con los filtros actuales."
+        onClose={() => setExportOpen(false)}
+        onSuccess={(message) => setFeedback({ type: "success", message })}
+        onError={(message) => setFeedback({ type: "error", message })}
+      />
       <ModalEliminarGlobal
         open={Boolean(deleteTarget)}
         operacion="advertencia"

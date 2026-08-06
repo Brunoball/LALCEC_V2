@@ -115,7 +115,8 @@
   margin-left: 6px;
   color: var(--primary-600);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 800;
+  text-align: right;
 }
 
 .cuotas-pagination__controls {
@@ -172,26 +173,34 @@
 
 .cuotas-grid--debt {
   grid-template-columns:
-    minmax(230px, 1.5fr)
-    minmax(100px, 0.72fr)
-    minmax(120px, 0.75fr)
-    minmax(130px, 0.8fr)
+    minmax(280px, 1.8fr)
     minmax(130px, 0.82fr)
+    minmax(130px, 0.82fr)
+    minmax(140px, 0.9fr)
     minmax(100px, 0.58fr);
-  min-width: 980px;
+  min-width: 880px;
 }
 
 .cuotas-grid--paid {
   grid-template-columns:
-    minmax(220px, 1.45fr)
-    minmax(100px, 0.7fr)
-    minmax(115px, 0.72fr)
+    minmax(270px, 1.7fr)
+    minmax(125px, 0.78fr)
     minmax(125px, 0.78fr)
     minmax(115px, 0.72fr)
-    minmax(130px, 0.8fr)
-    minmax(115px, 0.72fr)
+    minmax(130px, 0.82fr)
+    minmax(120px, 0.75fr)
     minmax(100px, 0.56fr);
-  min-width: 1160px;
+  min-width: 1040px;
+}
+
+.cuotas-grid--selecting {
+  grid-template-columns:
+    44px
+    minmax(280px, 1.8fr)
+    minmax(130px, 0.82fr)
+    minmax(130px, 0.82fr)
+    minmax(140px, 0.9fr);
+  min-width: 850px;
 }
 
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
@@ -199,26 +208,39 @@
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
   > .mov-gridCell--head:nth-child(3),
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
-  > .mov-gridCell--head:nth-child(4),
-.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
-  > .mov-gridCell--head:nth-child(6),
+  > .mov-gridCell--head:nth-child(5),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(2),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(3),
-.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(4),
-.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(8),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(7),
 .cuotas-grid--selecting.mov-gridTable--head
   > .mov-gridCell--head:nth-child(3),
 .cuotas-grid--selecting.mov-gridTable--head
-  > .mov-gridCell--head:nth-child(4),
-.cuotas-grid--selecting.mov-gridTable--head
-  > .mov-gridCell--head:nth-child(5) {
+  > .mov-gridCell--head:nth-child(4) {
   justify-content: center;
   text-align: center;
 }
 
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(6),
+.cuotas-grid--selecting.mov-gridTable--head
+  > .mov-gridCell--head:nth-child(5) {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .cuotas-money-cell {
+  width: 100%;
+  justify-self: stretch;
+  justify-content: flex-end !important;
+  text-align: right !important;
   font-weight: 800;
   color: var(--color-text-strong, #0f172a);
+}
+
+.cuotas-money-cell .cuotas-discount-note {
+  width: 100%;
+  text-align: right;
 }
 
 .cuotas-category-chip {
@@ -710,14 +732,23 @@
 }
 
 .cuotas-payment-grid--multiple {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+}
+
+.cuotas-modal--batch.entity-modal {
+  width: min(860px, 100%);
+}
+
+.cuotas-modal--batch .entity-modal__body {
+  padding: 16px 18px 18px;
 }
 
 .cuotas-batch-list {
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 14%, #e2e8f0);
+  border-radius: 16px;
   background: #fff;
+  box-shadow: 0 14px 34px -30px rgb(15 23 42 / 0.55);
 }
 
 .cuotas-batch-list > header {
@@ -725,9 +756,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 15px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  padding: 14px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-color) 12%, #e2e8f0);
+  background: color-mix(in srgb, var(--primary-color) 4%, #fff);
 }
 
 .cuotas-batch-list > header > div {
@@ -736,23 +767,40 @@
 }
 
 .cuotas-batch-list > header > strong {
-  color: var(--balto-action, #b52d35);
-  font-size: 1.12rem;
+  color: var(--balto-action, #f97316);
+  font-size: 1.08rem;
+  font-weight: 850;
 }
 
 .cuotas-batch-list > div {
   display: grid;
-  max-height: 350px;
-  overflow: auto;
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .cuotas-batch-list article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 14px;
+  grid-template-columns: 30px minmax(0, 1fr) 150px;
+  gap: 12px;
   align-items: center;
-  padding: 12px 15px;
+  padding: 12px 16px;
   border-bottom: 1px solid #eef2f7;
+}
+
+
+.cuotas-batch-list__index {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 18%, transparent);
+  border-radius: 9px;
+  color: var(--balto-action, #f97316);
+  background: color-mix(in srgb, var(--primary-color) 8%, #fff);
+  font-size: 0.7rem;
+  font-weight: 850;
 }
 
 .cuotas-batch-list article:last-child {
@@ -780,6 +828,7 @@
 .cuotas-batch-list article > label {
   display: grid;
   gap: 4px;
+  justify-items: stretch;
 }
 
 .cuotas-batch-list article > label span {
@@ -866,9 +915,16 @@ html[data-theme="oscuro"] .cuotas-family-toggle input:not(:checked) {
     flex: 1 1 0;
   }
 
-  .cuotas-family-members article,
-  .cuotas-batch-list article {
+  .cuotas-family-members article {
     grid-template-columns: 1fr;
+  }
+
+  .cuotas-batch-list article {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .cuotas-batch-list article > label {
+    grid-column: 1 / -1;
   }
 
   .cuotas-family-members article {

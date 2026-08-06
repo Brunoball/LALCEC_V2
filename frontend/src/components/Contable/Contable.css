@@ -77,73 +77,68 @@
 
 .contable-grid--partners {
   grid-template-columns:
-    minmax(0, 0.78fr)
-    minmax(0, 1.35fr)
-    minmax(0, 1.12fr)
+    minmax(0, 1.55fr)
+    minmax(0, 0.82fr)
     minmax(0, 1fr)
     minmax(0, 0.95fr)
-    minmax(0, 0.82fr);
+    minmax(0, 0.86fr);
 }
 
 .contable-grid--income {
   grid-template-columns:
-    minmax(0, 0.7fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.05fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.35fr)
-    minmax(0, 0.8fr)
-    minmax(0, 0.55fr);
+    minmax(0, 1.22fr)
+    minmax(0, 0.75fr)
+    minmax(0, 0.92fr)
+    minmax(0, 1.45fr)
+    minmax(0, 0.82fr)
+    minmax(0, 0.58fr);
 }
 
 .contable-grid--income-readonly {
   grid-template-columns:
-    minmax(0, 0.7fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.05fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.35fr)
-    minmax(0, 0.8fr);
+    minmax(0, 1.22fr)
+    minmax(0, 0.75fr)
+    minmax(0, 0.92fr)
+    minmax(0, 1.45fr)
+    minmax(0, 0.82fr);
 }
 
 .contable-grid--expense {
   min-width: 0;
   grid-template-columns:
-    minmax(0, 0.65fr)
-    minmax(0, 0.85fr)
-    minmax(0, 0.85fr)
-    minmax(0, 1.3fr)
-    minmax(0, 0.95fr)
-    minmax(0, 0.8fr)
-    minmax(0, 0.8fr)
-    minmax(0, 0.58fr);
+    minmax(0, 1.18fr)
+    minmax(0, 0.72fr)
+    minmax(0, 0.9fr)
+    minmax(0, 1.35fr)
+    minmax(0, 0.82fr)
+    minmax(0, 0.82fr)
+    minmax(0, 0.6fr);
 }
 
 .contable-grid > * {
   min-width: 0;
 }
 
+.contable-grid--partners > :nth-child(2),
 .contable-grid--partners > :nth-child(3),
 .contable-grid--partners > :nth-child(4),
 .contable-grid--partners > :nth-child(5),
-.contable-grid--partners > :nth-child(6),
 .contable-grid--income > :nth-child(2),
-.contable-grid--income > :nth-child(4),
+.contable-grid--income > :nth-child(3),
+.contable-grid--income > :nth-child(5),
 .contable-grid--income > :nth-child(6),
-.contable-grid--income > :nth-child(7),
 .contable-grid--income-readonly > :nth-child(2),
-.contable-grid--income-readonly > :nth-child(4),
-.contable-grid--income-readonly > :nth-child(6),
+.contable-grid--income-readonly > :nth-child(3),
+.contable-grid--income-readonly > :nth-child(5),
 .contable-grid--expense > :nth-child(2),
 .contable-grid--expense > :nth-child(3),
+.contable-grid--expense > :nth-child(5),
 .contable-grid--expense > :nth-child(6),
-.contable-grid--expense > :nth-child(7),
-.contable-grid--expense > :nth-child(8) {
+.contable-grid--expense > :nth-child(7) {
   justify-content: center;
   text-align: center;
 }
-
-.contable-grid--partners > :nth-child(6) {
+.contable-grid--partners > :nth-child(5) {
   flex-direction: column;
   gap: 3px;
 }

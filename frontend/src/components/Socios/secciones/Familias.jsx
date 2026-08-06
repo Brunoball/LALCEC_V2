@@ -688,6 +688,7 @@ export default function Familias() {
         >
           {!loading && !error && !items.length ? (
             <div className="module-empty">
+              <FontAwesomeIcon icon={faUsers} />
               <strong>Sin familias para mostrar</strong>
               <span>Creá la primera familia o cambiá los filtros.</span>
             </div>
@@ -700,7 +701,6 @@ export default function Familias() {
             >
               <div className="mov-gridCell entity-main-cell">
                 <strong>{item.nombre}</strong>
-                <small>ID {item.id_familia}</small>
               </div>
               <div className="mov-gridCell">
                 <span className="entity-wrap-text">

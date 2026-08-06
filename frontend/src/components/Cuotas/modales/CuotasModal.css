@@ -897,3 +897,40 @@
     width: 100%;
   }
 }
+
+/* Importe compacto junto al selector de año del modal de pagos. */
+.cuotas-period-amount {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--balto-action) 22%, var(--mov-border));
+  border-radius: 9px;
+  color: var(--balto-text);
+  background: color-mix(in srgb, var(--balto-action) 4%, #fff);
+  white-space: nowrap;
+}
+
+.cuotas-period-amount span {
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.cuotas-period-amount strong {
+  color: var(--balto-action);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cuotas-month-grid button {
+  min-height: 50px;
+}
+
+.cuotas-month-grid button strong {
+  line-height: 1.1;
+}
+
+.cuotas-month-grid button small {
+  margin-top: 2px;
+}

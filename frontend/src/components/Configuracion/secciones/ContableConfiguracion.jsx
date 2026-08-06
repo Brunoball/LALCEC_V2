@@ -6,6 +6,7 @@ import {
   faArrowLeft,
   faArrowUp,
   faCalculator,
+  faCircleCheck,
   faList,
   faPen,
   faTag,
@@ -19,6 +20,7 @@ import ModuleFeedback from "../../Global/ModuleFeedback";
 import { canWrite } from "../../_shared/auth/session";
 import { contableApi } from "../../Contable/api/contableApi";
 import "../configuracion.css";
+import "./ContableConfiguracion.css";
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
 
@@ -76,39 +78,61 @@ const initialLists = Object.keys(LIST_META).reduce((result, key) => {
 }, {});
 
 function OptionList({ items, meta, writable, onEdit, onDelete }) {
-  if (!items.length) return <div className="config-list__empty">{meta.empty}</div>;
+  if (!items.length) {
+    return (
+      <div className="config-contableEmpty">
+        <span aria-hidden="true"><FontAwesomeIcon icon={meta.icon} /></span>
+        <strong>Sin registros</strong>
+        <p>{meta.empty}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="config-list">
+    <div className="config-contableTable__body">
       {items.map((item) => (
-        <article className="config-list__item" key={item.id_opcion}>
-          <div className="config-list__main">
-            <strong>{item.nombre}</strong>
-            <span>Disponible en los selectores de Contabilidad</span>
-          </div>
-          {writable ? (
-            <div className="config-list__actions">
-              <button
-                type="button"
-                className="config-iconButton"
-                onClick={() => onEdit(item)}
-                title={`Editar ${meta.label}`}
-                aria-label={`Editar ${item.nombre}`}
-              >
-                <FontAwesomeIcon icon={faPen} />
-              </button>
-              <button
-                type="button"
-                className="config-iconButton is-danger"
-                onClick={() => onDelete(item)}
-                title={`Eliminar ${meta.label}`}
-                aria-label={`Eliminar ${item.nombre}`}
-              >
-                <FontAwesomeIcon icon={faTrashCan} />
-              </button>
+        <article className="config-contableTable__row" key={item.id_opcion}>
+          <div className="config-contableIdentity">
+            <span className="config-contableIdentity__icon" aria-hidden="true">
+              <FontAwesomeIcon icon={meta.icon} />
+            </span>
+            <div>
+              <strong>{item.nombre}</strong>
+              <small>{meta.title}</small>
             </div>
-          ) : null}
+          </div>
+          <span className="config-contableStatus">
+            <FontAwesomeIcon icon={faCircleCheck} /> Disponible
+          </span>
+          <span className="config-contableUsage">Selectores de Contabilidad</span>
+          <div className="config-contableActions">
+            {writable ? (
+              <>
+                <button type="button" className="config-iconButton" onClick={() => onEdit(item)} title={`Editar ${meta.label}`} aria-label={`Editar ${item.nombre}`}>
+                  <FontAwesomeIcon icon={faPen} />
+                </button>
+                <button type="button" className="config-iconButton is-danger" onClick={() => onDelete(item)} title={`Eliminar ${meta.label}`} aria-label={`Eliminar ${item.nombre}`}>
+                  <FontAwesomeIcon icon={faTrashCan} />
+                </button>
+              </>
+            ) : <span className="config-contableReadOnly">Solo lectura</span>}
+          </div>
         </article>
+      ))}
+    </div>
+  );
+}
+
+function ContableSkeleton() {
+  return (
+    <div className="config-contableTable__body" aria-hidden="true">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div className="config-contableTable__skeletonRow" key={index}>
+          <span className="config-contableSkeleton config-contableSkeleton--name" />
+          <span className="config-contableSkeleton config-contableSkeleton--status" />
+          <span className="config-contableSkeleton config-contableSkeleton--usage" />
+          <span className="config-contableSkeleton config-contableSkeleton--actions" />
+        </div>
       ))}
     </div>
   );
@@ -120,7 +144,6 @@ export default function ContableConfiguracion() {
   const requestId = useRef(0);
   const [activeType, setActiveType] = useState("PROVEEDOR");
   const [lists, setLists] = useState(initialLists);
-  const [summary, setSummary] = useState({});
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,7 +161,6 @@ export default function ContableConfiguracion() {
       String(item.nombre || "").toLocaleLowerCase("es-AR").includes(term),
     );
   }, [items, search]);
-  const totalCount = Number(summary[`${activeType}_total`] ?? items.length);
 
   const loadOptions = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -147,7 +169,6 @@ export default function ContableConfiguracion() {
       const response = await contableApi.opcionesConfiguracion();
       if (currentRequest === requestId.current) {
         setLists({ ...initialLists, ...(response.listas || {}) });
-        setSummary(response.resumen || {});
       }
       return response;
     } catch (error) {
@@ -256,24 +277,13 @@ export default function ContableConfiguracion() {
           onClose={() => setFeedback(null)}
         />
 
-        <section className="config-detailPanel config-detailPanel--list config-catalogPanel">
-          <header className="config-catalogHeader config-catalogHeader--contable">
-            <div className="config-catalogHeader__intro">
-              <span className="config-detailPanel__icon" aria-hidden="true">
-                <FontAwesomeIcon icon={faCalculator} />
-              </span>
-              <div>
-                <small>LISTAS DE CONTABILIDAD</small>
-                <h2>{meta.title}</h2>
-                <p>{meta.description}</p>
-              </div>
+        <section className="config-detailPanel config-detailPanel--list config-contablePanel">
+          <div className="config-contableToolbar">
+            <div className="config-contableIntro">
+              <span className="config-contableIntro__icon"><FontAwesomeIcon icon={faCalculator} /></span>
+              <div><small>LISTAS DE CONTABILIDAD</small><strong>{meta.title}</strong><p>{meta.description}</p></div>
             </div>
-
-            <div
-              className="config-catalogTabs config-catalogTabs--contable"
-              role="tablist"
-              aria-label="Listas contables"
-            >
+            <div className="config-contableTabs" role="tablist" aria-label="Listas contables">
               {Object.entries(LIST_META).map(([type, option]) => (
                 <button
                   key={type}
@@ -288,36 +298,18 @@ export default function ContableConfiguracion() {
                   }}
                 >
                   <FontAwesomeIcon icon={option.icon} />
-                  {option.title}
+                  <span>{option.title}</span>
                 </button>
               ))}
             </div>
-          </header>
-
-          <div className="config-catalogSummary">
-            <div>
-              <strong>{meta.detail}</strong>
-              <span>
-                {loading
-                  ? "Cargando opciones..."
-                  : `Mostrando ${filteredItems.length} de ${items.length} opciones`}
-              </span>
-            </div>
-            <span className="config-listSummary__count">
-              <strong>{totalCount}</strong>
-              <small>{totalCount === 1 ? "opción" : "opciones"}</small>
-            </span>
           </div>
 
-          {!loading ? (
-            <OptionList
-              items={filteredItems}
-              meta={meta}
-              writable={writable}
-              onEdit={openEdit}
-              onDelete={setDeleteModal}
-            />
-          ) : null}
+          <div className="config-contableTable">
+            <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
+            {loading ? <ContableSkeleton /> : (
+              <OptionList items={filteredItems} meta={meta} writable={writable} onEdit={openEdit} onDelete={setDeleteModal} />
+            )}
+          </div>
         </section>
       </ModulePage>
 

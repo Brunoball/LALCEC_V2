@@ -603,6 +603,7 @@ export default function CategoriasModule({ section = "categorias" }) {
           >
             {!loading && !error && !items.length ? (
               <div className="module-empty">
+                <FontAwesomeIcon icon={faTags} />
                 <strong>Sin categorías para mostrar</strong>
                 <span>Creá la primera categoría o cambiá los filtros.</span>
               </div>
@@ -683,6 +684,7 @@ export default function CategoriasModule({ section = "categorias" }) {
           >
             {!discountsLoading && !discountsError && !discounts.length ? (
               <div className="module-empty">
+                <FontAwesomeIcon icon={faUsers} />
                 <strong>Sin descuentos para mostrar</strong>
                 <span>
                   {discountStatus === "vigente"

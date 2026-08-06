@@ -1037,6 +1037,7 @@ export default function Socios({ tipo = PERSON }) {
         >
           {!loading && !error && !items.length ? (
             <div className="module-empty">
+              <FontAwesomeIcon icon={isCompany ? faBuilding : faUser} />
               <strong>Sin {title.toLowerCase()} para mostrar</strong>
               <span>Creá el primer registro o cambiá los filtros.</span>
             </div>
@@ -1049,13 +1050,13 @@ export default function Socios({ tipo = PERSON }) {
             >
               <div className="mov-gridCell entity-main-cell">
                 <strong>{item.denominacion}</strong>
-                <small>
-                  {isCompany
-                    ? `ID EMPRESA ${item.id_empresa_anterior || "—"}`
-                    : [item.localidad, item.domicilio, item.numero_domicilio]
-                        .filter(Boolean)
-                        .join(" · ") || "SIN DOMICILIO"}
-                </small>
+                {!isCompany ? (
+                  <small>
+                    {[item.localidad, item.domicilio, item.numero_domicilio]
+                      .filter(Boolean)
+                      .join(" · ") || "SIN DOMICILIO"}
+                  </small>
+                ) : null}
               </div>
               <div className="mov-gridCell is-strong">
                 {isCompany ? item.cuit || "—" : item.dni || "—"}
