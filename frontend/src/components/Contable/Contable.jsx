@@ -10,6 +10,7 @@ import {
   faArrowTrendDown,
   faArrowTrendUp,
   faChartPie,
+  faCircleInfo,
   faEye,
   faFileInvoiceDollar,
   faMoneyBillTransfer,
@@ -28,6 +29,7 @@ import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
 import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import ModuleFeedback from "../Global/ModuleFeedback";
+import SummaryCards from "../Global/SummaryCards";
 import {
   EntityFormPanel,
   EntityTabs,
@@ -172,7 +174,6 @@ function SummaryView({ summary, loading, mode }) {
   const result = Number(visibleTotals.resultado || income - expenses);
   const partnerIncome = Number(visibleTotals.ingresos_socios || 0);
   const otherIncome = Number(visibleTotals.otros_ingresos || 0);
-  const estimatedPayments = Number(visibleTotals.pagos_estimados || 0);
   const sum = income + expenses;
   const incomeDegrees = sum > 0 ? (income / sum) * 360 : 0;
   const detail = summary?.detalle_mes || {};
@@ -185,43 +186,6 @@ function SummaryView({ summary, loading, mode }) {
           <strong>Cargando información contable...</strong>
           <span>Consultando los movimientos del período seleccionado.</span>
         </div>
-      ) : null}
-
-      {!loading ? (
-        <>
-          <div className="ct-kpis" aria-label="Totales del período">
-            <article>
-              <span>Ingresos</span>
-              <strong>{money(income)}</strong>
-              <small>
-                Cuotas {money(partnerIncome)} · Otros {money(otherIncome)}
-              </small>
-            </article>
-            <article>
-              <span>Egresos</span>
-              <strong>{money(expenses)}</strong>
-              <small>Gastos registrados manualmente</small>
-            </article>
-            <article className={result >= 0 ? "is-positive" : "is-negative"}>
-              <span>Resultado</span>
-              <strong>{money(result)}</strong>
-              <small>
-                {mode === "monthly"
-                  ? selectedMonth?.nombre || "Mes seleccionado"
-                  : `Año ${summary?.anio || ""}`}
-              </small>
-            </article>
-          </div>
-
-          {estimatedPayments > 0 ? (
-            <div className="ct-estimate-note" role="note">
-              <strong>{estimatedPayments}</strong> cobro
-              {estimatedPayments === 1 ? " histórico tiene" : "s históricos tienen"}{" "}
-              el importe estimado según la cuota de su categoría porque la base
-              anterior no guardó el monto exacto.
-            </div>
-          ) : null}
-        </>
       ) : null}
 
       {!loading && mode === "annual" ? (
@@ -320,6 +284,38 @@ function SummaryView({ summary, loading, mode }) {
             <Breakdown title="Medios de cobro" items={detail.medios} />
           </div>
         </div>
+      ) : null}
+
+      {!loading ? (
+        <SummaryCards
+          title="Resumen del período"
+          ariaLabel="Totales del período"
+          variant="footer"
+          className={`ct-summaryCards ${result >= 0 ? "is-positive" : "is-negative"}`}
+          items={[
+            {
+              key: "income",
+              label: "Ingresos",
+              detail: `Cuotas ${money(partnerIncome)} · Otros ${money(otherIncome)}`,
+              value: money(income),
+            },
+            {
+              key: "expenses",
+              label: "Egresos",
+              detail: "Gastos registrados manualmente",
+              value: money(expenses),
+            },
+            {
+              key: "result",
+              label: "Resultado",
+              detail:
+                mode === "monthly"
+                  ? selectedMonth?.nombre || "Mes seleccionado"
+                  : `Año ${summary?.anio || ""}`,
+              value: money(result),
+            },
+          ]}
+        />
       ) : null}
     </section>
   );
@@ -843,7 +839,7 @@ export default function ContableModule({ view = "summary" }) {
           "Fecha de cobro",
           "Período pagado",
           "Medio",
-          "Monto",
+          { label: "Monto", align: "right" },
         ]
       : view === "income"
         ? [
@@ -851,7 +847,7 @@ export default function ContableModule({ view = "summary" }) {
             "Fecha",
             "Medio",
             "Descripción / concepto",
-            "Importe",
+            { label: "Importe", align: "right" },
             ...(writable ? ["Acciones"] : []),
           ]
         : [
@@ -860,7 +856,7 @@ export default function ContableModule({ view = "summary" }) {
             "N.º comprobante",
             "Descripción",
             "Medio",
-            "Monto",
+            { label: "Monto", align: "right" },
             "Acciones",
           ];
   const tableGridClassName =
@@ -869,16 +865,52 @@ export default function ContableModule({ view = "summary" }) {
       : view === "income"
         ? `contable-grid ${writable ? "contable-grid--income" : "contable-grid--income-readonly"}`
         : "contable-grid contable-grid--expense";
+  const selectedSummaryMonth = (summary?.meses || []).find(
+    (item) => Number(item.mes) === Number(summary?.mes_seleccionado),
+  );
+  const summaryVisibleTotals =
+    summaryMode === "monthly" ? selectedSummaryMonth || {} : summary?.totales || {};
+  const summaryEstimatedPayments = Number(
+    summaryVisibleTotals.pagos_estimados || 0,
+  );
+  const summaryEstimateMessage = `${summaryEstimatedPayments} cobro${
+    summaryEstimatedPayments === 1
+      ? " histórico tiene"
+      : "s históricos tienen"
+  } el importe estimado según la cuota de su categoría porque la base anterior no guardó el monto exacto.`;
 
   return (
     <>
       <ModulePage
         title={
-          view === "summary"
-            ? "Resumen contable"
-            : view === "income"
-              ? "Ingresos"
-              : "Egresos"
+          view === "summary" ? (
+            <span className="ct-page-title">
+              <span>Resumen contable</span>
+              {!loading && summaryEstimatedPayments > 0 ? (
+                <span className="ct-estimate-help">
+                  <button
+                    className="ct-estimate-help__button"
+                    type="button"
+                    aria-label={summaryEstimateMessage}
+                    aria-describedby="ct-estimate-tooltip"
+                  >
+                    <FontAwesomeIcon icon={faCircleInfo} />
+                  </button>
+                  <span
+                    className="ct-estimate-tooltip"
+                    id="ct-estimate-tooltip"
+                    role="tooltip"
+                  >
+                    {summaryEstimateMessage}
+                  </span>
+                </span>
+              ) : null}
+            </span>
+          ) : view === "income" ? (
+            "Ingresos"
+          ) : (
+            "Egresos"
+          )
         }
         description={
           view === "expense" ? "Administración de gastos" : undefined
@@ -961,7 +993,7 @@ export default function ContableModule({ view = "summary" }) {
                         {item.periodo}
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
-                      <div className="mov-gridCell is-center is-strong">
+                      <div className="mov-gridCell is-right is-strong contable-money-cell">
                         <strong>{money(item.monto)}</strong>
                         {item.monto_estimado ? (
                           <small className="contable-estimated">
@@ -997,7 +1029,7 @@ export default function ContableModule({ view = "summary" }) {
                         <strong>{item.concepto}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
                       </div>
-                      <div className="mov-gridCell is-center is-strong">
+                      <div className="mov-gridCell is-right is-strong contable-money-cell">
                         {money(item.importe)}
                       </div>
                       {writable ? (
@@ -1055,7 +1087,7 @@ export default function ContableModule({ view = "summary" }) {
                         {item.detalle ? <small>{item.detalle}</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
-                      <div className="mov-gridCell is-center is-strong">
+                      <div className="mov-gridCell is-right is-strong contable-money-cell">
                         {money(item.importe)}
                       </div>
                       <div className="mov-gridCell mov-gridCell--actions">
@@ -1163,6 +1195,7 @@ export default function ContableModule({ view = "summary" }) {
         saving={saving}
         submitLabel="Guardar ingreso"
         modalClassName="contable-modal"
+        closeOnBackdrop={false}
         wide
       >
         <div className="entity-form contable-modal__form">
@@ -1293,6 +1326,7 @@ export default function ContableModule({ view = "summary" }) {
         saving={saving}
         submitLabel="Guardar egreso"
         modalClassName="contable-modal contable-modal--expense"
+        closeOnBackdrop={false}
         wide
       >
         <div className="entity-form contable-modal__form">
@@ -1521,6 +1555,7 @@ export default function ContableModule({ view = "summary" }) {
         saving={saving}
         submitLabel="Agregar opción"
         modalClassName="contable-option-modal"
+        closeOnBackdrop={false}
       >
         <FloatingField label="Nombre *" active={Boolean(optionName)}>
           <input
@@ -1554,6 +1589,8 @@ export default function ContableModule({ view = "summary" }) {
       <ModalEliminarGlobal
         open={Boolean(deleteTarget)}
         operacion="advertencia"
+        tone="danger"
+        icon={faTrashCan}
         row={deleteTarget?.item}
         title={
           deleteTarget?.type === "income" ? "Eliminar ingreso" : "Eliminar egreso"

@@ -85,14 +85,30 @@ export default function GlobalDivTable({
         className={`mov-gridTable mov-gridTable--head global-divTable__head ${gridClassName}`.trim()}
         role="row"
       >
-        {columns.map((column, index) => (
-          <div
-            className="mov-gridCell--head"
-            key={typeof column === "string" ? column : index}
-          >
-            {column}
-          </div>
-        ))}
+        {columns.map((column, index) => {
+          const isDefinition =
+            column &&
+            typeof column === "object" &&
+            !React.isValidElement(column) &&
+            Object.prototype.hasOwnProperty.call(column, "label");
+          const definition = isDefinition ? column : { label: column };
+          const alignmentClass = definition.align
+            ? `is-${definition.align}`
+            : "";
+
+          return (
+            <div
+              className={`mov-gridCell--head ${alignmentClass} ${definition.className || ""}`.trim()}
+              key={
+                definition.key ||
+                (typeof definition.label === "string" ? definition.label : index)
+              }
+              role="columnheader"
+            >
+              {definition.label}
+            </div>
+          );
+        })}
       </div>
 
       <div

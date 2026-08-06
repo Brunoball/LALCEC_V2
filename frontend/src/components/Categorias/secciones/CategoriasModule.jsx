@@ -509,6 +509,7 @@ export default function CategoriasModule({ section = "categorias" }) {
   const activeError = section === "categorias" ? error : discountsError;
   const historyIsActive =
     historyModal?.activo === true || Number(historyModal?.activo) === 1;
+  const discountHistoryView = discountStatus === "historial";
   const primaryAction = section === "categorias" ? openNewCategory : openNewDiscount;
   const primaryLabel = section === "categorias" ? "Nueva categoría" : "Nuevo descuento";
   const pageFilters = section === "categorias"
@@ -594,7 +595,7 @@ export default function CategoriasModule({ section = "categorias" }) {
             columns={[
               "Categoría",
               "Descripción",
-              "Monto mensual",
+              { label: "Monto mensual", align: "right" },
               "Socios",
               "Estado",
               "Actualización",
@@ -618,7 +619,9 @@ export default function CategoriasModule({ section = "categorias" }) {
                 <div className="mov-gridCell">
                   <span className="entity-wrap-text">{item.descripcion || "—"}</span>
                 </div>
-                <div className="mov-gridCell is-strong">{money(item.monto_actual)}</div>
+                <div className="mov-gridCell is-right is-strong categorias-money-cell">
+                  {money(item.monto_actual)}
+                </div>
                 <div className="mov-gridCell is-center">
                   <span className="mov-chip">{item.cantidad_socios}</span>
                 </div>
@@ -667,11 +670,12 @@ export default function CategoriasModule({ section = "categorias" }) {
           <GlobalDivTable
             className="categorias-discountsTable"
             bodyClassName="entity-table-wrap"
-            gridClassName="categorias-discountsGrid"
+            gridClassName={`categorias-discountsGrid ${discountHistoryView ? "categorias-discountsGrid--history" : ""}`.trim()}
             ariaLabel="Descuentos familiares"
             loading={discountsLoading}
             loadingLabel="Cargando descuentos familiares..."
             skeletonRows={7}
+            skeletonActionColumn={!discountHistoryView}
             columns={[
               "Aplicación",
               "Integrantes",
@@ -679,7 +683,7 @@ export default function CategoriasModule({ section = "categorias" }) {
               "Vigencia",
               "Descripción",
               "Estado",
-              "Acciones",
+              ...(!discountHistoryView ? ["Acciones"] : []),
             ]}
           >
             {!discountsLoading && !discountsError && !discounts.length ? (
@@ -701,7 +705,7 @@ export default function CategoriasModule({ section = "categorias" }) {
                   : `DE ${item.cantidad_integrantes_desde} A ${item.cantidad_integrantes_hasta} INTEGRANTES`;
               return (
                 <div
-                  className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-discountsGrid"
+                  className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row categorias-discountsGrid ${discountHistoryView ? "categorias-discountsGrid--history" : ""}`.trim()}
                   role="row"
                   key={item.id_descuento_familiar}
                 >
@@ -726,30 +730,32 @@ export default function CategoriasModule({ section = "categorias" }) {
                         : item.estado_vigencia}
                     </span>
                   </div>
-                  <div className="mov-gridCell mov-gridCell--actions">
-                    {writable && item.activo ? (
-                      <div className="mov-actionsInline">
-                        <button
-                          className="mov-iconBtn"
-                          type="button"
-                          title="Editar descuento"
-                          onClick={() => openEditDiscount(item)}
-                        >
-                          <FontAwesomeIcon icon={faPen} />
-                        </button>
-                        <button
-                          className="mov-iconBtn mov-iconBtn--danger"
-                          type="button"
-                          title="Eliminar descuento"
-                          onClick={() => setDeleteDiscountModal(item)}
-                        >
-                          <FontAwesomeIcon icon={faTrashCan} />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="entity-readonly">{writable ? "HISTORIAL" : "CONSULTA"}</span>
-                    )}
-                  </div>
+                  {!discountHistoryView ? (
+                    <div className="mov-gridCell mov-gridCell--actions">
+                      {writable && item.activo ? (
+                        <div className="mov-actionsInline">
+                          <button
+                            className="mov-iconBtn"
+                            type="button"
+                            title="Editar descuento"
+                            onClick={() => openEditDiscount(item)}
+                          >
+                            <FontAwesomeIcon icon={faPen} />
+                          </button>
+                          <button
+                            className="mov-iconBtn mov-iconBtn--danger"
+                            type="button"
+                            title="Eliminar descuento"
+                            onClick={() => setDeleteDiscountModal(item)}
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="entity-readonly">CONSULTA</span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -766,6 +772,7 @@ export default function CategoriasModule({ section = "categorias" }) {
         saving={saving}
         submitLabel={categoryForm.id_categoria ? "Guardar cambios" : "Crear categoría"}
         modalClassName="categorias-modal categorias-modal--form"
+        closeOnBackdrop={false}
         wide
       >
         <CategoryForm
@@ -791,6 +798,7 @@ export default function CategoriasModule({ section = "categorias" }) {
           discountForm.id_descuento_familiar ? "Guardar cambios" : "Crear descuento"
         }
         modalClassName="categorias-modal categorias-modal--discount"
+        closeOnBackdrop={false}
         wide
       >
         <DiscountForm form={discountForm} setForm={setDiscountForm} />
@@ -884,6 +892,7 @@ export default function CategoriasModule({ section = "categorias" }) {
         loadingTitle="Cargando historial de precios..."
         loadingText="Consultando los cambios registrados para esta categoría."
         modalClassName="categorias-info-modal"
+        closeOnBackdrop={false}
       >
         <div className="categorias-info-content">
           <InfoSummary
