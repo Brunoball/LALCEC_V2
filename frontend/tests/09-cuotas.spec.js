@@ -228,6 +228,45 @@ test.describe('Cuotas de socios y empresas', () => {
     }
   });
 
+  test('mantiene operativos los alias históricos de registrar cobro y anular', async ({ request }) => {
+    await cleanupSocioByDocument(request, { tipo: 'PERSONA', documento: person.dni });
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const savedPerson = await createPerson(request, person, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    const debt = await apiCall(request, 'cuotas_listar', {
+      params: {
+        tipo: 'PERSONA',
+        estado: 'DEUDORES',
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: person.dni,
+      },
+    });
+    expect(debt.items).toHaveLength(1);
+
+    const paid = await apiCall(request, 'cuotas_registrar_cobro', {
+      method: 'POST',
+      data: {
+        id_socio: savedPerson.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        monto: debt.items[0].monto_sugerido,
+        id_medio_pago: medium.id_medio_pago,
+      },
+    });
+    expect(paid.item.id_pago).toBeGreaterThan(0);
+
+    const removed = await apiCall(request, 'cuotas_anular', {
+      method: 'POST',
+      data: { id_pago: paid.item.id_pago },
+    });
+    expect(removed.item.id_pago).toBe(paid.item.id_pago);
+  });
+
   test('detecta el grupo familiar, calcula el descuento y registra todas sus cuotas pendientes', async ({ request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);
     const discount = await ensureTwoMemberDiscount(request);

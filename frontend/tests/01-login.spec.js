@@ -13,12 +13,22 @@ loadTestEnv();
 
 const privateRoutes = [
   '/panel',
+  '/socios',
   '/socios/personas',
   '/socios/empresas',
   '/socios/familias',
+  '/cuotas',
+  '/categorias',
+  '/categorias/descuentos',
+  '/contable',
+  '/contable/ingresos',
+  '/contable/egresos',
+  '/contable/resumen',
   '/configuracion',
   '/configuracion/catalogos',
   '/configuracion/usuarios',
+  '/configuracion/contable',
+  '/ruta-inexistente',
 ];
 
 test.describe('Login y sesión', () => {

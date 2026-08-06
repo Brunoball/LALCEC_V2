@@ -105,7 +105,12 @@ test.describe('Configuración general', () => {
 
   test('muestra solamente las secciones actuales y navega correctamente', async ({ page }) => {
     await page.goto('/configuracion');
-    await expect(page.getByText('Solo las opciones que utiliza LALCEC V2')).toBeVisible();
+    await expect(
+      page.getByText('Administración y configuración general', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Gestioná usuarios, roles y los catálogos vinculados/i),
+    ).toBeVisible();
 
     const sections = page.getByRole('navigation', { name: 'Secciones de configuración' });
     await expect(sections.getByRole('button')).toHaveCount(3);

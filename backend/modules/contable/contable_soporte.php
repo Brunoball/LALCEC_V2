@@ -279,6 +279,59 @@ trait ContableSoporte
         return dirname(__DIR__, 2) . '/uploads/contable/' . self::uploadFolder();
     }
 
+    protected static function mimeArchivoEgreso(string $path): string
+    {
+        $mime = '';
+
+        // Algunos entornos locales de PHP no tienen habilitada la extensión
+        // fileinfo. La carga del comprobante no debe terminar en un HTTP 500
+        // por instanciar una clase inexistente.
+        if (class_exists('finfo') && defined('FILEINFO_MIME_TYPE')) {
+            try {
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $detected = $finfo->file($path);
+                if (is_string($detected)) $mime = strtolower(trim($detected));
+            } catch (Throwable) {
+                $mime = '';
+            }
+        }
+
+        if ($mime === '' && function_exists('mime_content_type')) {
+            try {
+                $detected = mime_content_type($path);
+                if (is_string($detected)) $mime = strtolower(trim($detected));
+            } catch (Throwable) {
+                $mime = '';
+            }
+        }
+
+        $aliases = [
+            'application/x-pdf' => 'application/pdf',
+            'application/acrobat' => 'application/pdf',
+            'applications/vnd.pdf' => 'application/pdf',
+            'image/jpg' => 'image/jpeg',
+            'image/pjpeg' => 'image/jpeg',
+            'image/x-png' => 'image/png',
+        ];
+        $mime = $aliases[$mime] ?? $mime;
+
+        // La firma binaria es el respaldo seguro para Windows o instalaciones
+        // sin fileinfo, y también corrige detecciones genéricas como text/plain.
+        $handle = @fopen($path, 'rb');
+        $header = $handle ? (string)fread($handle, 16) : '';
+        if (is_resource($handle)) fclose($handle);
+
+        if (str_starts_with($header, '%PDF-')) return 'application/pdf';
+        if (strlen($header) >= 3 && substr($header, 0, 3) === "\xFF\xD8\xFF") return 'image/jpeg';
+        if (str_starts_with($header, "\x89PNG\r\n\x1A\n")) return 'image/png';
+        if (str_starts_with($header, 'GIF87a') || str_starts_with($header, 'GIF89a')) return 'image/gif';
+        if (strlen($header) >= 12 && substr($header, 0, 4) === 'RIFF' && substr($header, 8, 4) === 'WEBP') {
+            return 'image/webp';
+        }
+
+        return $mime;
+    }
+
     protected static function guardarArchivoEgreso(array $auth): ?array
     {
         if (!isset($_FILES['archivo']) || !is_array($_FILES['archivo'])) return null;
@@ -295,8 +348,6 @@ trait ContableSoporte
         $tmp = (string)($file['tmp_name'] ?? '');
         if ($tmp === '' || !is_uploaded_file($tmp)) api_error('El archivo recibido no es válido.', 'ARCHIVO_INVALIDO');
 
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = (string)$finfo->file($tmp);
         $allowed = [
             'application/pdf' => 'pdf',
             'image/jpeg' => 'jpg',
@@ -304,6 +355,7 @@ trait ContableSoporte
             'image/gif' => 'gif',
             'image/webp' => 'webp',
         ];
+        $mime = self::mimeArchivoEgreso($tmp);
         if (!isset($allowed[$mime])) {
             api_error('Solo se permiten archivos PDF, JPG, PNG, GIF o WEBP.', 'TIPO_ARCHIVO_INVALIDO');
         }
@@ -312,10 +364,27 @@ trait ContableSoporte
         if (!is_dir($root) && !mkdir($root, 0775, true) && !is_dir($root)) {
             api_error('No se pudo preparar la carpeta de comprobantes.', 'ARCHIVO_DIRECTORIO_ERROR', 500);
         }
+        if (!is_writable($root)) {
+            api_error('La carpeta de comprobantes no tiene permisos de escritura.', 'ARCHIVO_DIRECTORIO_ERROR', 500);
+        }
 
-        $stored = date('YmdHis') . '-' . bin2hex(random_bytes(10)) . '.' . $allowed[$mime];
-        $destination = $root . '/' . $stored;
-        if (!move_uploaded_file($tmp, $destination)) {
+        try {
+            $random = bin2hex(random_bytes(10));
+        } catch (Throwable) {
+            $random = str_replace('.', '', uniqid('', true));
+        }
+        $stored = date('YmdHis') . '-' . $random . '.' . $allowed[$mime];
+        $destination = $root . DIRECTORY_SEPARATOR . $stored;
+
+        // move_uploaded_file es la vía principal. El copy de respaldo sólo se
+        // usa después de haber validado is_uploaded_file, para tolerar ciertos
+        // entornos locales de Windows donde el movimiento puede fallar.
+        $moved = move_uploaded_file($tmp, $destination);
+        if (!$moved) {
+            $moved = @copy($tmp, $destination);
+        }
+        if (!$moved || !is_file($destination) || filesize($destination) !== $size) {
+            if (is_file($destination)) @unlink($destination);
             api_error('No se pudo guardar el comprobante en el servidor.', 'ARCHIVO_GUARDADO_ERROR', 500);
         }
 
