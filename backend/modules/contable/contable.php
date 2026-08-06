@@ -134,8 +134,7 @@ final class Contable
         }
 
         $filename = basename(str_replace('\\', '/', $cleanPath));
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = (string)$finfo->file($realFile);
+        $mime = self::mimeArchivoEgreso($realFile);
         header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
         header('Content-Length: ' . filesize($realFile));
         header("Content-Disposition: inline; filename*=UTF-8''" . rawurlencode($filename));

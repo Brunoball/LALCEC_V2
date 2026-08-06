@@ -407,6 +407,7 @@ export default function ContableModule({ view = "summary" }) {
   const [optionName, setOptionName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const requestId = useRef(0);
+  const expenseFileInputRef = useRef(null);
 
   const loadCatalogs = useCallback(async () => {
     const response = await contableApi.catalogos();
@@ -558,6 +559,12 @@ export default function ContableModule({ view = "summary" }) {
     setExpenseOpen(true);
   };
 
+  const clearExpenseFileInput = () => {
+    if (expenseFileInputRef.current) {
+      expenseFileInputRef.current.value = "";
+    }
+  };
+
   const chooseFile = (file) => {
     if (!file) return;
     const allowed = [
@@ -641,12 +648,45 @@ export default function ContableModule({ view = "summary" }) {
 
   const viewFile = async (item) => {
     const popup = window.open("", "_blank");
+    if (popup) {
+      popup.document.title = "Comprobante";
+      popup.document.body.innerHTML =
+        '<p style="font-family:Arial,sans-serif;padding:24px">Cargando comprobante...</p>';
+    }
+
     try {
       const blob = await contableApi.archivoEgreso(item.id_egreso);
       const url = URL.createObjectURL(blob);
-      if (popup) popup.location.href = url;
-      else window.open(url, "_blank");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      const isImage = /^image\//i.test(String(blob.type || ""));
+      const preview = isImage
+        ? `<img src="${url}" alt="Comprobante" style="display:block;max-width:100%;max-height:100vh;margin:auto;object-fit:contain" />`
+        : `<iframe title="Vista previa del comprobante" src="${url}" style="width:100%;height:100vh;border:0" allow="fullscreen"></iframe>`;
+
+      if (popup && !popup.closed) {
+        popup.document.open();
+        popup.document.write(`<!doctype html>
+          <html lang="es">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width,initial-scale=1" />
+              <title>Comprobante</title>
+              <style>html,body{width:100%;height:100%;margin:0;background:#f5f5f5;overflow:auto}</style>
+            </head>
+            <body>${preview}</body>
+          </html>`);
+        popup.document.close();
+        popup.focus?.();
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 300000);
     } catch (error) {
       popup?.close();
       setFeedback({ type: "error", message: error.message });
@@ -1504,6 +1544,7 @@ export default function ContableModule({ view = "summary" }) {
                 <label className="mov-btn mov-btn--ghost">
                   Elegir archivo
                   <input
+                    ref={expenseFileInputRef}
                     type="file"
                     hidden
                     accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
@@ -1514,14 +1555,15 @@ export default function ContableModule({ view = "summary" }) {
                   <button
                     type="button"
                     className="mov-btn mov-btn--danger"
-                    onClick={() =>
+                    onClick={() => {
+                      clearExpenseFileInput();
                       setExpenseForm((current) => ({
                         ...current,
                         archivo: null,
                         archivo_nombre: "",
                         eliminar_archivo: true,
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     Quitar comprobante
                   </button>

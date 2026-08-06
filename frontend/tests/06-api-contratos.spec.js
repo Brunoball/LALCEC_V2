@@ -40,6 +40,8 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['cuotas_registrar_pago', 'POST', { data: {} }],
       ['cuotas_registrar_pagos', 'POST', { data: {} }],
       ['cuotas_eliminar_pago', 'POST', { data: {} }],
+      ['cuotas_registrar_cobro', 'POST', { data: {} }],
+      ['cuotas_anular', 'POST', { data: {} }],
       ['contable_resumen', 'GET'],
       ['contable_catalogos', 'GET'],
       ['contable_opciones_configuracion', 'GET'],
