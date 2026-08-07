@@ -93,12 +93,43 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Selección múltiple',
   'Registrar pago',
   'Registrar 2 pagos',
+  'Aplicar pago a todo el grupo familiar',
+  'Ver integrantes',
+  'Hay cuotas ya pagadas en la selección.',
+  'Monto personalizado',
+  '+ Agregar',
   'Imprimir',
-  'Exportar PDF',
+  'Comprobante',
+  'PDF',
   'Eliminar pago',
 ];
 
 test.describe('Contrato de cobertura total fuera del panel del bot', () => {
+  test('el arranque del frontend no vuelve a envolver la aplicación en React.StrictMode', () => {
+    const indexSource = read(path.join(SRC_ROOT, 'index.js'));
+    expect(indexSource).not.toContain('<React.StrictMode>');
+    expect(indexSource).not.toContain('</React.StrictMode>');
+  });
+
+  test('conserva las optimizaciones de respuesta de modales y Cuotas', () => {
+    const modalSizeHook = read(
+      path.join(SRC_ROOT, 'components', 'Global', 'Modales', 'useAnimatedModalSize.js'),
+    );
+    const cuotasSource = read(path.join(SRC_ROOT, 'components', 'Cuotas', 'Cuotas.jsx'));
+    const cuotasApiSource = read(
+      path.join(SRC_ROOT, 'components', 'Cuotas', 'api', 'cuotasApi.js'),
+    );
+    const cuotasModalCss = read(
+      path.join(SRC_ROOT, 'components', 'Cuotas', 'modales', 'CuotasModal.css'),
+    );
+
+    expect(modalSizeHook).not.toContain('.animate(');
+    expect(cuotasSource).toContain('React.memo(function CuotasTableRows');
+    expect(cuotasSource).toContain('cuotasApi.contextosPago');
+    expect(cuotasApiSource).toContain('cuotas_contextos_pago');
+    expect(cuotasModalCss).toContain('width: min(100%, 190px)');
+  });
+
   test('cada acción registrada por el backend aparece cubierta por la suite', () => {
     expect(fs.existsSync(BACKEND_ROOT), `No se encontró el backend en ${BACKEND_ROOT}`).toBe(true);
     const source = testSources();

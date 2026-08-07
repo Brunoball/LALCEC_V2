@@ -361,7 +361,7 @@ body.pp-lockScroll{ overflow:hidden !important; }
   position:fixed;
   inset:var(--mov-topbar-h) 0 0 0;
   background:rgb(15 23 42 / .55);
-  backdrop-filter:blur(6px);
+  backdrop-filter:blur(2px);
   opacity:0;
   pointer-events:none;
   transition:opacity 180ms ease;
@@ -383,7 +383,7 @@ body.pp-lockScroll{ overflow:hidden !important; }
   background:rgba(255,255,255,.84);
   border-right:1px solid var(--border-color, #e2e8f0);
   box-shadow:var(--shadow-sm);
-  backdrop-filter:blur(10px);
+  backdrop-filter:blur(4px);
   transition: width 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, background 180ms ease;
   display:flex;
   flex-direction:column;
@@ -835,7 +835,7 @@ body.pp-lockScroll{ overflow:hidden !important; }
   border:1px solid var(--border-color, #e2e8f0);
   border-radius:var(--r-lg);
   box-shadow:var(--shadow-md);
-  backdrop-filter:blur(10px);
+  backdrop-filter:none;
   contain:layout paint style;
   overflow:hidden;
 }

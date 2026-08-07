@@ -57,8 +57,8 @@
   padding: 18px;
   overflow: auto;
   background: rgba(8, 16, 30, 0.56);
-  backdrop-filter: blur(6px);
-  animation: entityModalFade 0.14s ease-out;
+  backdrop-filter: blur(2px);
+  animation: entityModalFade 0.1s ease-out;
 }
 
 .entity-modal {
@@ -81,7 +81,7 @@
     Roboto,
     Arial,
     sans-serif;
-  animation: entityModalPop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: entityModalPop 0.11s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .entity-modal--wide {

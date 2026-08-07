@@ -413,7 +413,7 @@ function CatalogsPanel() {
       });
       setFormOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await cargar();
+      void cargar();
     } catch (requestError) {
       setFeedback({
         type: "error",
@@ -433,7 +433,7 @@ function CatalogsPanel() {
         stateModal.action === "reactivar"
           ? await configuracionApi.reactivarItem(activeList, id)
           : await configuracionApi.eliminarItem(activeList, id);
-      await cargar();
+      void cargar();
       return response;
     } finally {
       setSaving(false);

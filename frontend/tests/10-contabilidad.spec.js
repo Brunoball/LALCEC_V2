@@ -31,8 +31,6 @@ function rowByText(page, tableName, text) {
     .last();
 }
 
-test.describe.configure({ mode: 'serial' });
-
 test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
 
   test('elimina físicamente una opción usada sin romper el movimiento guardado', async ({ request }) => {
@@ -236,16 +234,19 @@ test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
 
       await page.goto('/contable/resumen');
       await expect(page.getByText('Resumen contable', { exact: true })).toBeVisible();
-      const kpis = page.locator('.ct-kpis');
-      await expect(kpis.getByText('Ingresos', { exact: true })).toBeVisible();
-      await expect(kpis.getByText('Egresos', { exact: true })).toBeVisible();
-      await expect(kpis.getByText('Resultado', { exact: true })).toBeVisible();
-      const monthRow = page
-        .getByRole('table', { name: 'Resumen anual por mes' })
-        .getByRole('row')
-        .filter({ hasText: MONTHS[month - 1] })
-        .last();
-      await expect(monthRow).toBeVisible();
+      const totals = page.getByRole('region', { name: 'Totales del período' });
+      await expect(totals).toBeVisible();
+      await expect(totals.getByText('Ingresos', { exact: true })).toBeVisible();
+      await expect(totals.getByText('Egresos', { exact: true })).toBeVisible();
+      await expect(totals.getByText('Resultado', { exact: true })).toBeVisible();
+
+      const chart = page.getByRole('group', {
+        name: 'Gráfico de barras de ingresos y egresos por mes',
+      });
+      await expect(chart).toBeVisible();
+      await expect(
+        chart.getByLabel(new RegExp(`^${MONTHS[month - 1]}:`, 'i')),
+      ).toBeVisible();
     } finally {
       if (incomeId) {
         await apiCall(request, 'contable_ingreso_eliminar', {

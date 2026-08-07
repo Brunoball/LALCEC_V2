@@ -12,7 +12,7 @@ export const BOT_PANEL_ROUTE = "/panel-bot";
 // botApi.js agrega automáticamente /endpoints o /puntos según la acción.
 export const BOT_URL = withoutTrailingSlash(
   process.env.REACT_APP_BOT_URL ||
-    "https://lalcec.3devsnet.com/api/bot_whatshapp/funciones/Panel",
+    "https://lalcec.3devsnet.com/api/bot_whatsapp/funciones/Panel",
 );
 
 export default BASE_URL;

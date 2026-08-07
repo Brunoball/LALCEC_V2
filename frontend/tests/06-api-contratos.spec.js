@@ -37,6 +37,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['cuotas_listar', 'GET'],
       ['cuotas_catalogos', 'GET'],
       ['cuotas_contexto_pago', 'GET', { params: { id_socio: 1, anio: 2026, mes: 8 } }],
+      ['cuotas_contextos_pago', 'GET', { params: { id_socio: 1, anio: 2026 } }],
       ['cuotas_registrar_pago', 'POST', { data: {} }],
       ['cuotas_registrar_pagos', 'POST', { data: {} }],
       ['cuotas_eliminar_pago', 'POST', { data: {} }],

@@ -203,7 +203,7 @@ export default function UsuariosConfiguracion({ onBack }) {
 
       setFormOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await cargar();
+      void cargar();
     } catch (error) {
       setFeedback({
         type: "error",
@@ -222,7 +222,7 @@ export default function UsuariosConfiguracion({ onBack }) {
         stateModal.id,
         !stateModal.activo,
       );
-      await cargar();
+      void cargar();
       return response;
     } finally {
       setSaving(false);
@@ -234,7 +234,7 @@ export default function UsuariosConfiguracion({ onBack }) {
     setSaving(true);
     try {
       const response = await configuracionApi.eliminarUsuario(deleteModal.id);
-      await cargar();
+      void cargar();
       return response;
     } finally {
       setSaving(false);

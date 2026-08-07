@@ -277,7 +277,7 @@ test.describe('Socios, empresas y familias', () => {
     await search.fill(family.prefix);
     let row = tableRow(page, 'Listado de familias', family.prefix);
     await expect(row).toContainText(familyMember.apellido);
-    await expect(row).toContainText('ACTIVA');
+    await expect(row.getByTitle('Dar de baja')).toBeVisible();
 
     await row.getByTitle('Ver integrantes e historial').click();
     let infoDialog = page.getByRole('dialog', { name: 'Ficha de la familia' });
@@ -305,14 +305,16 @@ test.describe('Socios, empresas y familias', () => {
 
     await page.getByRole('tab', { name: 'Bajas' }).click();
     row = tableRow(page, 'Listado de familias', family.nombreEditado);
-    await expect(row).toContainText('BAJA');
+    await expect(row.getByTitle('Reactivar')).toBeVisible();
     await row.getByTitle('Reactivar').click();
     stateDialog = page.getByRole('dialog', { name: 'Reactivar familia' });
     await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
     await expectToast(page, 'Familia reactivada correctamente.');
 
     await page.getByRole('tab', { name: 'Activas' }).click();
-    await expect(tableRow(page, 'Listado de familias', family.nombreEditado)).toBeVisible();
+    row = tableRow(page, 'Listado de familias', family.nombreEditado);
+    await expect(row).toBeVisible();
+    await expect(row.getByTitle('Dar de baja')).toBeVisible();
 
     cleanupFamilyByPrefix(family.prefix);
     await cleanupSocioByDocument(request, {

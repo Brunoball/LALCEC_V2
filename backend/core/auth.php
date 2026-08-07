@@ -63,7 +63,12 @@ function require_auth(): array
         api_error('El usuario se encuentra deshabilitado.', 'USER_DISABLED', 403);
     }
 
-    $db->prepare('UPDATE sis_sesiones SET ultimo_uso = NOW() WHERE idSesion = ?')->execute([(int)$row['idSesion']]);
+    $db->prepare(
+        'UPDATE sis_sesiones
+         SET ultimo_uso = NOW()
+         WHERE idSesion = ?
+           AND (ultimo_uso IS NULL OR ultimo_uso < DATE_SUB(NOW(), INTERVAL 1 MINUTE))'
+    )->execute([(int)$row['idSesion']]);
 
     $organization = application_profile();
     $userId = (int)$row['idUsuario'];

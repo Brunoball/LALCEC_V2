@@ -236,18 +236,10 @@ trait ContableSoporte
         }
         unset($partnerCategory);
 
-        $years = [(int)date('Y') => (int)date('Y')];
-        foreach ([
-            'SELECT DISTINCT YEAR(fecha_pago) AS anio FROM pagos',
-            'SELECT DISTINCT YEAR(fecha) AS anio FROM contable_ingresos',
-            'SELECT DISTINCT YEAR(fecha) AS anio FROM contable_egresos',
-        ] as $query) {
-            foreach ($db->query($query)->fetchAll() as $row) {
-                $year = (int)($row['anio'] ?? 0);
-                if ($year >= 2000 && $year <= 2100) $years[$year] = $year;
-            }
-        }
-        rsort($years, SORT_NUMERIC);
+        // Los años de Contabilidad se determinan por la fecha real del
+        // movimiento de dinero, no por el período al que se imputó una cuota.
+        // Ej.: una cuota 2025 cobrada en 2026 es un ingreso contable de 2026.
+        $years = self::aniosContables($db);
 
         return [
             'opciones' => $grouped,
@@ -259,6 +251,45 @@ trait ContableSoporte
                 'nombre' => self::nombreMes($month),
             ], range(1, 12)),
         ];
+    }
+
+    private static function aniosContables(PDO $db): array
+    {
+        $currentYear = (int)date('Y');
+        $years = [$currentYear => $currentYear];
+
+        $statement = $db->query(
+            "SELECT movimientos.anio
+             FROM (
+                 SELECT YEAR(p.fecha_pago) AS anio
+                 FROM pagos p
+                 WHERE p.fecha_pago IS NOT NULL
+
+                 UNION
+
+                 SELECT YEAR(i.fecha) AS anio
+                 FROM contable_ingresos i
+                 WHERE i.fecha IS NOT NULL
+
+                 UNION
+
+                 SELECT YEAR(e.fecha) AS anio
+                 FROM contable_egresos e
+                 WHERE e.fecha IS NOT NULL
+             ) movimientos
+             WHERE movimientos.anio BETWEEN 2000 AND 2100
+             ORDER BY movimientos.anio DESC"
+        );
+
+        foreach ($statement->fetchAll() as $row) {
+            $year = (int)($row['anio'] ?? 0);
+            if ($year >= 2000 && $year <= 2100) {
+                $years[$year] = $year;
+            }
+        }
+
+        rsort($years, SORT_NUMERIC);
+        return array_values($years);
     }
 
     protected static function uploadFolder(): string

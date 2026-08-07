@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -9,7 +9,29 @@ import CrudModal from "../../Global/Modales/CrudModal";
 import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import "./CuotasModal.css";
 
-function PaymentYearChip({ value, options, onChange, disabled = false }) {
+const formatOptionDate = (value) => {
+  if (!value) return "";
+  const [year, month, day] = String(value).slice(0, 10).split("-");
+  if (!year || !month || !day) return String(value);
+  return `${day}/${month}/${year.slice(-2)}`;
+};
+
+const amountOptionPeriodLabel = (option) => {
+  if (option?.actual) return "actual";
+  if (option?.vigente_hasta) return `hasta ${formatOptionDate(option.vigente_hasta)}`;
+  return "histórico";
+};
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+function PaymentYearChip({
+  value,
+  options,
+  onChange,
+  disabled = false,
+  nextYear = null,
+  onAddNextYear,
+}) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -57,6 +79,19 @@ function PaymentYearChip({ value, options, onChange, disabled = false }) {
               </button>
             );
           })}
+          {nextYear && onAddNextYear ? (
+            <button
+              type="button"
+              role="option"
+              aria-selected="false"
+              onClick={() => {
+                onAddNextYear();
+                setOpen(false);
+              }}
+            >
+              + Agregar {nextYear}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -74,14 +109,12 @@ export default function ModalPagoCuota({
   saving,
   selectedMonthIds,
   family,
-  familyPendingMembers,
+  familyPaymentCount,
   contextLoading,
   paymentTotal,
   money,
   selectedPartner,
   principal,
-  familyExpanded,
-  setFamilyExpanded,
   setPaymentForm,
   updatePaymentDate,
   paymentYearOptions,
@@ -94,8 +127,85 @@ export default function ModalPagoCuota({
   paymentPeriods,
   togglePaymentMonth,
   catalogos,
+  updateMonthAmountOption,
+  toggleMonthCustomAmount,
+  updateMonthCustomAmount,
   updateBatchAmount,
 }) {
+  const [familyExpanded, setFamilyExpanded] = useState(false);
+  const [extraPaymentYears, setExtraPaymentYears] = useState([]);
+
+  useEffect(() => {
+    setFamilyExpanded(false);
+  }, [paymentOpen, paymentForm.id_socio, paymentForm.anio]);
+
+  useEffect(() => {
+    if (paymentOpen) setExtraPaymentYears([]);
+  }, [paymentOpen]);
+
+  const modalPaymentYearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [...paymentYearOptions, ...extraPaymentYears, paymentForm.anio]
+            .filter(Boolean)
+            .map(String),
+        ),
+      ).sort((left, right) => Number(right) - Number(left)),
+    [extraPaymentYears, paymentForm.anio, paymentYearOptions],
+  );
+
+  const nextPaymentYear = useMemo(() => {
+    const enabledYears = new Set(
+      modalPaymentYearOptions.map(Number).filter(Number.isFinite),
+    );
+    let candidate = CURRENT_YEAR + 1;
+    while (candidate <= 2100 && enabledYears.has(candidate)) candidate += 1;
+    return candidate <= 2100 ? candidate : null;
+  }, [modalPaymentYearOptions]);
+
+  const addNextPaymentYear = () => {
+    if (!nextPaymentYear) return;
+    const nextYear = String(nextPaymentYear);
+    setExtraPaymentYears((current) =>
+      current.includes(nextYear) ? current : [...current, nextYear],
+    );
+    updatePaymentYear(nextYear);
+  };
+
+  const selectedMonthKey = selectedMonthIds.join(",");
+  const familyPaidPeriodsByMember = useMemo(() => {
+    const result = new Map();
+    if (!family?.id_familia || !selectedMonthKey) return result;
+
+    const monthNameById = new Map(
+      monthOptions.map((item) => [String(item.id_mes), String(item.nombre || item.id_mes)]),
+    );
+
+    selectedMonthKey.split(",").filter(Boolean).forEach((monthId) => {
+      const periodFamily = paymentPeriods[String(monthId)]?.context?.familia;
+      if (!periodFamily || String(periodFamily.id_familia) !== String(family.id_familia)) return;
+
+      (periodFamily.integrantes || []).forEach((member) => {
+        if (!member?.pagado) return;
+
+        const memberId = String(member.id_socio);
+        const monthName = monthNameById.get(String(monthId)) || `Mes ${monthId}`;
+        const shortMonth = monthName.slice(0, 3);
+        const periodLabel = `${shortMonth.charAt(0).toUpperCase()}${shortMonth.slice(1).toLowerCase()}/${paymentForm.anio}`;
+        const current = result.get(memberId) || [];
+        if (!current.includes(periodLabel)) current.push(periodLabel);
+        result.set(memberId, current);
+      });
+    });
+
+    return result;
+  }, [family?.id_familia, monthOptions, paymentForm.anio, paymentPeriods, selectedMonthKey]);
+
+  const hasFamilyPaidSelectedPeriods = Array.from(
+    familyPaidPeriodsByMember.values(),
+  ).some((periods) => periods.length > 0);
+
   return (
     <CrudModal
       open={paymentOpen}
@@ -126,7 +236,10 @@ export default function ModalPagoCuota({
             </span>
             <span>
               Cuota {money(
-                principal?.monto_sugerido || selectedPartner?.monto_sugerido || 0,
+                paymentPeriodAmount ||
+                  principal?.monto_sugerido ||
+                  selectedPartner?.monto_sugerido ||
+                  0,
               )}
             </span>
           </span>
@@ -141,10 +254,10 @@ export default function ModalPagoCuota({
       submitLabel={
         paymentMode === "multiple"
           ? `Registrar ${paymentForm.pagos.length} pagos`
-          : selectedMonthIds.length > 1
-            ? `Registrar ${selectedMonthIds.length} cuotas`
-            : paymentForm.aplicar_familia && family
-              ? `Registrar pago familiar (${familyPendingMembers.length})`
+          : paymentForm.aplicar_familia && family
+            ? `Registrar pago familiar (${familyPaymentCount} ${familyPaymentCount === 1 ? "cuota" : "cuotas"})`
+            : selectedMonthIds.length > 1
+              ? `Registrar ${selectedMonthIds.length} cuotas`
               : "Registrar pago"
       }
       submitDisabled={
@@ -212,8 +325,7 @@ export default function ModalPagoCuota({
                       type="checkbox"
                       checked={Boolean(paymentForm.aplicar_familia)}
                       disabled={
-                        familyPendingMembers.length < 2 ||
-                        selectedMonthIds.length !== 1
+                        !selectedMonthIds.length || familyPaymentCount < 1
                       }
                       onChange={(event) =>
                         setPaymentForm((current) => ({
@@ -226,52 +338,89 @@ export default function ModalPagoCuota({
                     <span>
                       <strong>Aplicar pago a todo el grupo familiar</strong>
                       <small>
-                        {selectedMonthIds.length > 1
-                          ? "Para cobrar varios meses, las cuotas se registran únicamente para el socio seleccionado."
-                          : `Está seleccionado por defecto. Al desmarcarlo, se registra únicamente la cuota de ${
-                              principal?.denominacion ||
-                              selectedPartner?.denominacion ||
-                              "este socio"
-                            }.`}
+                        {!selectedMonthIds.length
+                          ? "Seleccioná uno o más meses para habilitar el pago del grupo familiar."
+                          : hasFamilyPaidSelectedPeriods
+                            ? "Se cobrarán todos los meses pendientes del grupo. Los períodos ya pagados se omiten automáticamente; abrí “Ver integrantes” para identificarlos."
+                            : selectedMonthIds.length > 1
+                              ? `Se registrarán los ${selectedMonthIds.length} meses seleccionados para todos los integrantes que los tengan pendientes.`
+                              : `Está seleccionado por defecto. Al desmarcarlo, se registra únicamente la cuota de ${
+                                  principal?.denominacion ||
+                                  selectedPartner?.denominacion ||
+                                  "este socio"
+                                }.`}
                       </small>
                     </span>
                   </label>
 
-                  <div
-                    className={`cuotas-family-members-shell ${familyExpanded ? "is-open" : ""}`.trim()}
-                    aria-hidden={!familyExpanded}
-                  >
-                    <div
-                      id="cuotas-family-members-list"
-                      className="cuotas-family-members"
-                    >
-                      {family.integrantes.map((member) => (
-                        <article
-                          key={member.id_socio}
-                          className={member.puede_pagar ? "" : "is-unavailable"}
-                        >
-                          <div>
-                            <strong>{member.denominacion}</strong>
-                            <span>
-                              {member.documento || "SIN DNI"} · {member.categoria || "SIN CATEGORÍA"}
-                            </span>
-                          </div>
-                          <div>
-                            {member.puede_pagar ? (
-                              <>
-                                <strong>{money(member.monto_sugerido)}</strong>
-                                <small>Base {money(member.monto_base)}</small>
-                              </>
-                            ) : (
-                              <strong>
-                                {member.pagado ? "YA PAGADO" : "NO DISPONIBLE"}
-                              </strong>
-                            )}
-                          </div>
-                        </article>
-                      ))}
+                  {hasFamilyPaidSelectedPeriods ? (
+                    <div className="cuotas-family-paid-note" role="status">
+                      <strong>Hay cuotas ya pagadas en la selección.</strong>
+                      <span>
+                        Los integrantes marcados en verde ya abonaron esos períodos.
+                        Esos cruces se omiten y el resto del grupo sí se registra normalmente.
+                      </span>
                     </div>
-                  </div>
+                  ) : null}
+
+                  {familyExpanded ? (
+                    <div className="cuotas-family-members-shell is-open">
+                      <div
+                        id="cuotas-family-members-list"
+                        className="cuotas-family-members"
+                      >
+                        {family.integrantes.map((member) => {
+                          const paidPeriods =
+                            familyPaidPeriodsByMember.get(String(member.id_socio)) || [];
+                          const memberClassName = [
+                            member.puede_pagar ? "" : "is-unavailable",
+                            paidPeriods.length ? "has-paid-selected-period" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+
+                          return (
+                            <article
+                              key={member.id_socio}
+                              className={memberClassName}
+                            >
+                              <div>
+                                <strong>{member.denominacion}</strong>
+                                <span>
+                                  {member.documento || "SIN DNI"} · {member.categoria || "SIN CATEGORÍA"}
+                                </span>
+                                {paidPeriods.length ? (
+                                  <small
+                                    className="cuotas-family-paid-badge"
+                                    title={`Períodos ya pagados: ${paidPeriods.join(", ")}`}
+                                  >
+                                    Pagó {paidPeriods.join(" · ")}
+                                  </small>
+                                ) : null}
+                              </div>
+                              <div>
+                                {paidPeriods.length ? (
+                                  <>
+                                    <strong className="cuotas-family-paid-status">PAGADO</strong>
+                                    <small>{paidPeriods.join(" · ")}</small>
+                                  </>
+                                ) : member.puede_pagar ? (
+                                  <>
+                                    <strong>{money(member.monto_sugerido)}</strong>
+                                    <small>Base {money(member.monto_base)}</small>
+                                  </>
+                                ) : (
+                                  <strong>
+                                    {member.pagado ? "YA PAGADO" : "NO DISPONIBLE"}
+                                  </strong>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
             </div>
@@ -291,9 +440,11 @@ export default function ModalPagoCuota({
                 <div className="cuotas-period-selector__actions">
                   <PaymentYearChip
                     value={paymentForm.anio}
-                    options={paymentYearOptions}
+                    options={modalPaymentYearOptions}
                     onChange={updatePaymentYear}
                     disabled={contextLoading || !paymentForm.id_socio}
+                    nextYear={nextPaymentYear}
+                    onAddNextYear={addNextPaymentYear}
                   />
                   <div
                     className="cuotas-period-amount"
@@ -375,24 +526,105 @@ export default function ModalPagoCuota({
                   />
                 </FloatingField>
 
-                {selectedMonthIds.length <= 1 &&
-                !(paymentForm.aplicar_familia && family) ? (
-                  <FloatingField label="Monto *" active>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={paymentForm.monto}
-                      onChange={(event) =>
-                        setPaymentForm((current) => ({
-                          ...current,
-                          monto: event.target.value,
-                        }))
-                      }
-                      aria-label="Monto *"
-                      placeholder="0,00"
-                    />
-                  </FloatingField>
+                {selectedMonthIds.length ? (
+                  <div className="cuotas-month-amount-editor">
+                    <div className="cuotas-month-amount-editor__title">
+                      <span>Importe por mes</span>
+                      <small>
+                        {paymentForm.aplicar_familia && family
+                          ? "Monto del socio; al cambiarlo se cobra individual."
+                          : "Actual o histórico según el período."}
+                      </small>
+                    </div>
+
+                    <div className="cuotas-month-amount-editor__list">
+                      {selectedMonthIds.map((monthId) => {
+                        const period = paymentPeriods[monthId];
+                        const principalForMonth = period?.context?.principal || null;
+                        const options = Array.isArray(principalForMonth?.opciones_monto)
+                          ? principalForMonth.opciones_monto
+                          : [];
+                        const amountState =
+                          paymentForm.montos_por_mes?.[monthId] || {};
+                        const monthLabel =
+                          monthOptions.find(
+                            (item) => String(item.id_mes) === String(monthId),
+                          )?.nombre || `Mes ${monthId}`;
+
+                        return (
+                          <section
+                            className="cuotas-month-amount-row"
+                            key={`amount-${paymentForm.anio}-${monthId}`}
+                          >
+                            <div className="cuotas-month-amount-row__head">
+                              <strong>{monthLabel}</strong>
+                              <span>{money(amountState.monto || 0)}</span>
+                            </div>
+
+                            <label className="cuotas-month-amount-field">
+                              <span>Monto</span>
+                              <select
+                                value={
+                                  options.length
+                                    ? amountState.opcion_id || options[0]?.id || ""
+                                    : ""
+                                }
+                                disabled={Boolean(amountState.personalizado)}
+                                onChange={(event) =>
+                                  updateMonthAmountOption(monthId, event.target.value)
+                                }
+                                aria-label={`Monto de categoría para ${monthLabel}`}
+                              >
+                                {options.length ? (
+                                  options.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {money(option.monto)} · {amountOptionPeriodLabel(option)}
+                                    </option>
+                                  ))
+                                ) : (
+                                  <option value="">
+                                    {money(
+                                      principalForMonth?.monto_sugerido ||
+                                        principalForMonth?.monto_base ||
+                                        0,
+                                    )}
+                                  </option>
+                                )}
+                              </select>
+                            </label>
+
+                            <label className="cuotas-custom-amount-toggle">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(amountState.personalizado)}
+                                onChange={(event) =>
+                                  toggleMonthCustomAmount(monthId, event.target.checked)
+                                }
+                              />
+                              <span>Monto personalizado</span>
+                            </label>
+
+                            {amountState.personalizado ? (
+                              <FloatingField label="Monto personalizado *" active>
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  value={amountState.monto ?? ""}
+                                  onChange={(event) =>
+                                    updateMonthCustomAmount(monthId, event.target.value)
+                                  }
+                                  aria-label={`Monto personalizado para ${monthLabel}`}
+                                  placeholder="0,00"
+                                  autoFocus={selectedMonthIds.length === 1}
+                                />
+                              </FloatingField>
+                            ) : null}
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ) : null}
 
                 <FloatingField label="Medio de pago *" active>

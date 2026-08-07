@@ -391,7 +391,7 @@ export default function CategoriasModule({ section = "categorias" }) {
         type: "success",
         message: response.mensaje || "Categoría guardada correctamente.",
       });
-      await cargar();
+      void cargar();
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
@@ -478,7 +478,7 @@ export default function CategoriasModule({ section = "categorias" }) {
     const response = stateModal.activo
       ? await categoriasApi.darBaja(stateModal.id_categoria)
       : await categoriasApi.reactivar(stateModal.id_categoria);
-    await cargar();
+    void cargar();
     return response;
   };
 

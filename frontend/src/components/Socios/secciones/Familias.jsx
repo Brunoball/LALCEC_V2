@@ -634,7 +634,7 @@ export default function Familias() {
       });
       setModalOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await cargar();
+      void cargar();
     } catch (requestError) {
       setFeedback({ type: "error", message: requestError.message });
     } finally {
@@ -663,7 +663,7 @@ export default function Familias() {
           motivo_baja: motivo,
         })
       : await familiasApi.reactivar(stateModal.id_familia);
-    await cargar();
+    void cargar();
     return response;
   };
 

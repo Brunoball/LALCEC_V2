@@ -101,7 +101,7 @@ test.describe('Categorías y descuentos familiares', () => {
     let row = tableRow(page, 'Listado de categorías', category.nombre);
     await expect(row).toBeVisible();
     await expect(row).toContainText(category.descripcion);
-    await expect(row).toContainText('ACTIVA');
+    await expect(row.getByTitle('Dar de baja')).toBeVisible();
 
     const created = await findCategory(request, category.nombre);
     expect(created).toBeTruthy();
@@ -144,7 +144,7 @@ test.describe('Categorías y descuentos familiares', () => {
 
     await page.getByRole('tab', { name: 'Dadas de baja' }).click();
     row = tableRow(page, 'Listado de categorías', category.nombreEditado);
-    await expect(row).toContainText('BAJA');
+    await expect(row.getByTitle('Reactivar')).toBeVisible();
     await row.getByTitle('Reactivar').click();
     stateDialog = page.getByRole('dialog', { name: 'Reactivar categoría' });
     await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
@@ -152,7 +152,7 @@ test.describe('Categorías y descuentos familiares', () => {
 
     await page.getByRole('tab', { name: 'Activas' }).click();
     row = tableRow(page, 'Listado de categorías', category.nombreEditado);
-    await expect(row).toContainText('ACTIVA');
+    await expect(row.getByTitle('Dar de baja')).toBeVisible();
 
     await expectApiError(
       request,

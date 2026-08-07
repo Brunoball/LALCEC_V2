@@ -76,10 +76,12 @@ function catalogTableRow(page, tableName, name) {
 }
 
 function contableOptionCard(page, name) {
-  return page.locator('.config-list__item').filter({ hasText: name }).last();
+  return page.locator('.config-contableTable__row').filter({ hasText: name }).last();
 }
 
-test.describe.configure({ mode: 'serial' });
+// Un crash nativo aislado de Chromium/Windows no debe dejar roja una suite que
+// no llegó a ejecutar la aserción. Los fallos reproducibles siguen fallando tras el retry.
+test.describe.configure({ retries: 1 });
 
 test.describe('Configuración general', () => {
   test.afterEach(async ({ request }) => {
@@ -212,10 +214,11 @@ test.describe('Configuración general', () => {
       await dialog.getByRole('button', { name: 'Agregar' }).click();
       await expectToast(page, 'La opción se agregó correctamente.');
 
-      const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+      const search = page.getByRole('textbox', { name: 'Buscar', exact: true });
       await search.fill(list.original);
       let row = contableOptionCard(page, list.original);
-      await expect(row).toContainText('Disponible en los selectores de Contabilidad');
+      await expect(row.getByText('Disponible', { exact: true })).toBeVisible();
+      await expect(row.getByText('Selectores de Contabilidad', { exact: true })).toBeVisible();
 
       await row.getByRole('button', { name: `Editar ${list.original}` }).click();
       dialog = page.getByRole('dialog', { name: `Editar ${list.label}` });

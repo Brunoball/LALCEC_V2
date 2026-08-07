@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAddressBook,
@@ -169,6 +169,118 @@ function paginationItems(currentPage, totalPages) {
   items.push(totalPages);
   return items;
 }
+
+const SociosRows = memo(function SociosRows({
+  items,
+  isCompany,
+  writable,
+  onHistory,
+  onEdit,
+  onState,
+  onDelete,
+}) {
+  return items.map((item) => (
+    <div
+      className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
+      role="row"
+      key={item.id_socio}
+    >
+      <div className="mov-gridCell entity-main-cell">
+        <strong>{item.denominacion}</strong>
+        {!isCompany ? (
+          <small>
+            {[item.localidad, item.domicilio, item.numero_domicilio]
+              .filter(Boolean)
+              .join(" · ") || "SIN DOMICILIO"}
+          </small>
+        ) : null}
+      </div>
+      <div className="mov-gridCell is-strong">
+        {isCompany ? item.cuit || "—" : item.dni || "—"}
+      </div>
+      <div className="mov-gridCell">
+        {isCompany ? (
+          item.condicion_iva || "—"
+        ) : item.categoria ? (
+          <span className="mov-categoryChip">{item.categoria}</span>
+        ) : (
+          "—"
+        )}
+      </div>
+      {isCompany ? (
+        <div className="mov-gridCell">
+          {item.categoria ? (
+            <span className="mov-categoryChip">{item.categoria}</span>
+          ) : (
+            "—"
+          )}
+        </div>
+      ) : null}
+      <div className="mov-gridCell entity-main-cell">
+        <span>{item.telefono || "—"}</span>
+        <small>{item.email || ""}</small>
+      </div>
+      <div className="mov-gridCell">
+        <span
+          className={`socios-reminder-chip ${item.enviar_recordatorio ? "is-enabled" : "is-disabled"}`}
+          title={
+            item.enviar_recordatorio
+              ? "Incluido en los recordatorios de pago del bot de WhatsApp"
+              : "No recibe recordatorios de pago por WhatsApp"
+          }
+        >
+          <FontAwesomeIcon icon={faBell} />
+          <span>{item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}</span>
+        </span>
+      </div>
+      <div className="mov-gridCell mov-gridCell--actions">
+        <div className="mov-actionsInline">
+          <button
+            className="mov-iconBtn"
+            type="button"
+            title="Ver ficha e historial"
+            onClick={() => onHistory(item)}
+          >
+            <FontAwesomeIcon icon={faCircleInfo} />
+          </button>
+          {writable ? (
+            <>
+              <button
+                className="mov-iconBtn"
+                type="button"
+                title="Editar"
+                onClick={() => onEdit(item)}
+              >
+                <FontAwesomeIcon icon={faPen} />
+              </button>
+              <button
+                className={`mov-iconBtn socios-state-action ${
+                  item.activo ? "is-deactivation" : "is-reactivation"
+                }`}
+                type="button"
+                title={item.activo ? "Dar de baja" : "Reactivar"}
+                onClick={() => onState(item)}
+              >
+                <FontAwesomeIcon
+                  icon={item.activo ? faUserSlash : faRotateLeft}
+                />
+              </button>
+              <button
+                className="mov-iconBtn mov-iconBtn--danger socios-delete-action"
+                type="button"
+                title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
+                aria-label={`Eliminar definitivamente ${item.denominacion}`}
+                onClick={() => onDelete(item)}
+              >
+                <FontAwesomeIcon icon={faTrash} />
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  ));
+});
 
 function PaymentCalendar({ payments = [], item }) {
   const now = new Date();
@@ -829,16 +941,13 @@ export default function Socios({ tipo = PERSON }) {
     setFormTab(FORM_TAB_MAIN);
     setModalOpen(true);
   };
-  const openEdit = async (item) => {
-    try {
-      const response = await sociosApi.obtener(item.id_socio);
-      setForm(formFromItem(response.item || item));
-      setFormTab(FORM_TAB_MAIN);
-      setModalOpen(true);
-    } catch (requestError) {
-      setFeedback({ type: "error", message: requestError.message });
-    }
-  };
+  const openEdit = useCallback((item) => {
+    // La fila ya contiene los datos de edición: abrir primero evita una espera
+    // de red perceptible entre el click y la aparición del modal.
+    setForm(formFromItem(item));
+    setFormTab(FORM_TAB_MAIN);
+    setModalOpen(true);
+  }, []);
   const save = async (event) => {
     event.preventDefault();
     const missingMain = isCompany
@@ -865,14 +974,14 @@ export default function Socios({ tipo = PERSON }) {
       });
       setModalOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await cargar();
+      void cargar();
     } catch (requestError) {
       setFeedback({ type: "error", message: requestError.message });
     } finally {
       setSaving(false);
     }
   };
-  const openHistory = async (item) => {
+  const openHistory = useCallback(async (item) => {
     setHistoryModal({ item, data: null, error: "" });
     setHistoryTab(INFO_TAB_SUMMARY);
     setHistoryLoading(true);
@@ -884,7 +993,7 @@ export default function Socios({ tipo = PERSON }) {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, []);
   const changeState = async ({ motivo }) => {
     if (!stateModal) return null;
     const response = stateModal.activo
@@ -897,11 +1006,11 @@ export default function Socios({ tipo = PERSON }) {
           id: stateModal.id_socio,
           fecha_reactivacion: today(),
         });
-    await cargar();
+    void cargar();
     return response;
   };
 
-  const openPermanentDelete = async (item) => {
+  const openPermanentDelete = useCallback(async (item) => {
     if (!item) return;
     setDeleteModal({ item, data: null, loading: true, error: "" });
     try {
@@ -917,7 +1026,12 @@ export default function Socios({ tipo = PERSON }) {
           "No se pudo calcular el impacto de la eliminación.",
       });
     }
-  };
+  }, []);
+
+  const openStateModal = useCallback((item) => {
+    setStateDate(today());
+    setStateModal(item);
+  }, []);
 
   const deletePermanently = async () => {
     if (!deleteModal?.item) return null;
@@ -925,7 +1039,7 @@ export default function Socios({ tipo = PERSON }) {
       id: deleteModal.item.id_socio,
       confirmacion: "ELIMINAR",
     });
-    await cargar();
+    void cargar();
     return response;
   };
 
@@ -1042,112 +1156,15 @@ export default function Socios({ tipo = PERSON }) {
               <span>Creá el primer registro o cambiá los filtros.</span>
             </div>
           ) : null}
-          {items.map((item) => (
-            <div
-              className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
-              role="row"
-              key={item.id_socio}
-            >
-              <div className="mov-gridCell entity-main-cell">
-                <strong>{item.denominacion}</strong>
-                {!isCompany ? (
-                  <small>
-                    {[item.localidad, item.domicilio, item.numero_domicilio]
-                      .filter(Boolean)
-                      .join(" · ") || "SIN DOMICILIO"}
-                  </small>
-                ) : null}
-              </div>
-              <div className="mov-gridCell is-strong">
-                {isCompany ? item.cuit || "—" : item.dni || "—"}
-              </div>
-              <div className="mov-gridCell">
-                {isCompany ? (
-                  item.condicion_iva || "—"
-                ) : item.categoria ? (
-                  <span className="mov-categoryChip">{item.categoria}</span>
-                ) : (
-                  "—"
-                )}
-              </div>
-              {isCompany ? (
-                <div className="mov-gridCell">
-                  {item.categoria ? (
-                    <span className="mov-categoryChip">{item.categoria}</span>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              ) : null}
-              <div className="mov-gridCell entity-main-cell">
-                <span>{item.telefono || "—"}</span>
-                <small>{item.email || ""}</small>
-              </div>
-              <div className="mov-gridCell">
-                <span
-                  className={`socios-reminder-chip ${item.enviar_recordatorio ? "is-enabled" : "is-disabled"}`}
-                  title={
-                    item.enviar_recordatorio
-                      ? "Incluido en los recordatorios de pago del bot de WhatsApp"
-                      : "No recibe recordatorios de pago por WhatsApp"
-                  }
-                >
-                  <FontAwesomeIcon icon={faBell} />
-                  <span>
-                    {item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}
-                  </span>
-                </span>
-              </div>
-              <div className="mov-gridCell mov-gridCell--actions">
-                <div className="mov-actionsInline">
-                  <button
-                    className="mov-iconBtn"
-                    type="button"
-                    title="Ver ficha e historial"
-                    onClick={() => openHistory(item)}
-                  >
-                    <FontAwesomeIcon icon={faCircleInfo} />
-                  </button>
-                  {writable ? (
-                    <>
-                      <button
-                        className="mov-iconBtn"
-                        type="button"
-                        title="Editar"
-                        onClick={() => openEdit(item)}
-                      >
-                        <FontAwesomeIcon icon={faPen} />
-                      </button>
-                      <button
-                        className={`mov-iconBtn socios-state-action ${
-                          item.activo ? "is-deactivation" : "is-reactivation"
-                        }`}
-                        type="button"
-                        title={item.activo ? "Dar de baja" : "Reactivar"}
-                        onClick={() => {
-                          setStateDate(today());
-                          setStateModal(item);
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={item.activo ? faUserSlash : faRotateLeft}
-                        />
-                      </button>
-                      <button
-                        className="mov-iconBtn mov-iconBtn--danger socios-delete-action"
-                        type="button"
-                        title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
-                        aria-label={`Eliminar definitivamente ${item.denominacion}`}
-                        onClick={() => openPermanentDelete(item)}
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ))}
+          <SociosRows
+            items={items}
+            isCompany={isCompany}
+            writable={writable}
+            onHistory={openHistory}
+            onEdit={openEdit}
+            onState={openStateModal}
+            onDelete={openPermanentDelete}
+          />
         </GlobalDivTable>
 
         {Number(paginacion?.total || 0) > 0 ? (

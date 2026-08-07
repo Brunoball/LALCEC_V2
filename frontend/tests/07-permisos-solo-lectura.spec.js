@@ -79,6 +79,12 @@ test.describe('Permisos de usuario de solo lectura', () => {
             mes: new Date().getMonth() + 1,
           },
         }],
+        ['cuotas_contextos_pago', {
+          params: {
+            id_socio: personItem.id_socio,
+            anio: new Date().getFullYear(),
+          },
+        }],
         ['contable_resumen', {
           params: { anio: new Date().getFullYear(), mes: new Date().getMonth() + 1 },
         }],

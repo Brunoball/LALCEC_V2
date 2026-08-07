@@ -566,6 +566,7 @@
 }
 
 .cuotas-year-chip > button,
+.cuotas-add-year,
 .cuotas-select-all {
   min-height: 32px;
   display: inline-flex;
@@ -591,6 +592,7 @@
 
 .cuotas-year-chip > button:hover:not(:disabled),
 .cuotas-year-chip > button.is-open,
+.cuotas-add-year:hover:not(:disabled),
 .cuotas-select-all:hover:not(:disabled) {
   border-color: var(--balto-action);
   background: color-mix(in srgb, var(--balto-action) 10%, #fff);
@@ -598,12 +600,14 @@
 }
 
 .cuotas-year-chip > button:focus-visible,
+.cuotas-add-year:focus-visible,
 .cuotas-select-all:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--balto-action) 18%, transparent);
 }
 
 .cuotas-year-chip > button:disabled,
+.cuotas-add-year:disabled,
 .cuotas-select-all:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -658,9 +662,15 @@
   background: var(--balto-action);
 }
 
+.cuotas-add-year,
 .cuotas-select-all {
   border-radius: 9px;
   white-space: nowrap;
+}
+
+.cuotas-add-year {
+  border-style: dashed;
+  background: #fff;
 }
 
 .cuotas-month-grid {
@@ -682,7 +692,7 @@
   background: color-mix(in srgb, #fff 96%, var(--balto-bg));
   cursor: pointer;
   font-family: inherit;
-  transition: 150ms ease;
+  transition: none;
 }
 
 .cuotas-month-grid button strong {
@@ -1340,4 +1350,208 @@
   .cuotas-payment-date-card__fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* Selector de importes históricos/personalizados por mes. */
+.cuotas-month-amount-editor {
+  display: grid;
+  gap: 9px;
+}
+
+.cuotas-month-amount-editor__title {
+  display: grid;
+  gap: 2px;
+}
+
+.cuotas-month-amount-editor__title > span {
+  color: var(--balto-action);
+  font-size: 10.5px;
+  font-weight: 760;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.cuotas-month-amount-editor__title > small {
+  color: var(--balto-text);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.cuotas-month-amount-editor__list {
+  display: grid;
+  gap: 8px;
+  max-height: 310px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.cuotas-month-amount-row {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--balto-action) 16%, var(--mov-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--balto-action) 2.5%, #fff);
+}
+
+.cuotas-month-amount-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cuotas-month-amount-row__head strong {
+  color: var(--balto-text-strong, var(--balto-text));
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.cuotas-month-amount-row__head span {
+  color: var(--balto-action);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cuotas-custom-amount-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  color: var(--balto-text);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+  user-select: none;
+}
+
+.cuotas-custom-amount-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--balto-action);
+  cursor: pointer;
+}
+
+.cuotas-custom-amount-toggle span {
+  line-height: 1.2;
+}
+
+@media (max-width: 760px) {
+  .cuotas-month-amount-editor__list {
+    max-height: none;
+  }
+}
+
+/* Ajuste compacto del selector de monto por período. */
+.cuotas-month-amount-field {
+  width: min(100%, 190px);
+  display: grid;
+  gap: 3px;
+}
+
+.cuotas-month-amount-field > span {
+  color: var(--balto-text);
+  font-size: 9px;
+  font-weight: 720;
+}
+
+.cuotas-month-amount-field select {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 28px 6px 9px;
+  border: 1px solid var(--mov-border);
+  border-radius: 8px;
+  color: var(--balto-ink);
+  background: #fff;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.cuotas-month-amount-field select:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--balto-action) 48%, var(--mov-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--balto-action) 9%, transparent);
+}
+
+.cuotas-month-amount-field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+
+/* Estados de pagos ya existentes dentro del grupo familiar. */
+.cuotas-family-paid-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid #86efac;
+  border-radius: 9px;
+  color: #166534;
+  background: #f0fdf4;
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.cuotas-family-paid-note strong {
+  flex: 0 0 auto;
+  color: #166534;
+  font-size: 9.5px;
+}
+
+.cuotas-family-paid-note span {
+  color: #15803d;
+}
+
+.cuotas-family-card .cuotas-family-members article.has-paid-selected-period {
+  border-color: #86efac;
+  background: #f0fdf4;
+  box-shadow: inset 3px 0 0 #22c55e;
+  opacity: 1;
+}
+
+.cuotas-family-card .cuotas-family-members article.has-paid-selected-period:hover {
+  border-color: #4ade80;
+  background: #ecfdf3;
+}
+
+.cuotas-family-card .cuotas-family-members .cuotas-family-paid-badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #166534;
+  background: #dcfce7;
+  font-size: 8.5px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.cuotas-family-card .cuotas-family-members .cuotas-family-paid-status {
+  color: #15803d;
+}
+
+html[data-theme="oscuro"] .cuotas-family-paid-note,
+html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members article.has-paid-selected-period {
+  border-color: rgb(74 222 128 / 0.45);
+  color: #bbf7d0;
+  background: rgb(22 101 52 / 0.2);
+}
+
+html[data-theme="oscuro"] .cuotas-family-paid-note strong,
+html[data-theme="oscuro"] .cuotas-family-paid-note span,
+html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-family-paid-status,
+html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-family-paid-badge {
+  color: #bbf7d0;
+}
+
+html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-family-paid-badge {
+  background: rgb(22 101 52 / 0.38);
 }

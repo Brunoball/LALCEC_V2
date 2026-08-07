@@ -808,7 +808,7 @@ export default function ContableModule({ view = "summary" }) {
       deleteTarget.type === "income"
         ? await contableApi.eliminarIngreso(deleteTarget.item.id_ingreso)
         : await contableApi.eliminarEgreso(deleteTarget.item.id_egreso);
-    await loadData();
+    await Promise.all([loadData(), loadCatalogs()]);
     setDeleteTarget(null);
     return response;
   };
@@ -866,6 +866,24 @@ export default function ContableModule({ view = "summary" }) {
     if (view === "income") return catalogs.opciones.CATEGORIA_INGRESO || [];
     return catalogs.opciones.CATEGORIA_EGRESO || [];
   }, [catalogs, view, incomeTab]);
+
+  const accountingYears = useMemo(() => {
+    const values = Array.isArray(catalogs.anios) ? catalogs.anios : [];
+    return Array.from(
+      new Set(
+        [CURRENT_YEAR, ...values]
+          .map((item) => Number(item))
+          .filter((item) => Number.isInteger(item) && item >= 2000 && item <= 2100),
+      ),
+    ).sort((a, b) => b - a);
+  }, [catalogs.anios]);
+
+  useEffect(() => {
+    if (!accountingYears.length) return;
+    const selected = Number(year);
+    if (accountingYears.includes(selected)) return;
+    setYear(String(accountingYears[0]));
+  }, [accountingYears, year]);
 
   const exportConfig = useMemo(() => {
     const items = data.items || [];
@@ -962,7 +980,7 @@ export default function ContableModule({ view = "summary" }) {
       value: year,
       onChange: setYear,
       includeEmptyOption: false,
-      options: (catalogs.anios || [CURRENT_YEAR]).map((item) => ({
+      options: accountingYears.map((item) => ({
         value: String(item),
         label: String(item),
       })),
@@ -1220,7 +1238,6 @@ export default function ContableModule({ view = "summary" }) {
                         <strong>{item.socio}</strong>
                         <small>
                           Categoría: {item.categoria || "Sin categoría"}
-                          {item.dni ? ` · ${item.dni}` : ""}
                         </small>
                       </div>
                       <div className="mov-gridCell is-center">

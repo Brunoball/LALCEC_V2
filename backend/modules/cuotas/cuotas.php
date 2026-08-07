@@ -16,7 +16,13 @@ final class Cuotas
     public static function catalogos(): never
     {
         $auth = auth_context();
-        api_success(self::catalogosDatos($auth['db']));
+        $year = isset($_GET['anio']) && $_GET['anio'] !== ''
+            ? self::validYear($_GET['anio'])
+            : null;
+        $month = isset($_GET['mes']) && $_GET['mes'] !== ''
+            ? self::validMonth($_GET['mes'])
+            : null;
+        api_success(self::catalogosDatos($auth['db'], $year, $month));
     }
 
     public static function contextoPago(): never
@@ -27,6 +33,25 @@ final class Cuotas
         $month = self::validMonth($_GET['mes'] ?? date('n'));
         $paymentDate = valid_date($_GET['fecha_pago'] ?? date('Y-m-d'), 'pago');
         api_success(self::paymentContextData($auth['db'], $partnerId, $year, $month, $paymentDate));
+    }
+
+    public static function contextosPago(): never
+    {
+        $auth = auth_context();
+        $partnerId = positive_id($_GET['id_socio'] ?? null, 'socio o empresa');
+        $year = self::validYear($_GET['anio'] ?? date('Y'));
+        $paymentDate = valid_date($_GET['fecha_pago'] ?? date('Y-m-d'), 'pago');
+
+        api_success([
+            'anio' => $year,
+            'fecha_pago' => $paymentDate,
+            'periodos' => self::paymentContextsData(
+                $auth['db'],
+                $partnerId,
+                $year,
+                $paymentDate
+            ),
+        ]);
     }
 
     public static function registrarPago(): never
@@ -80,6 +105,14 @@ final class Cuotas
         $buscar = clean_text($filters['buscar'] ?? '', 120, false);
         $categoria = self::optionalPositiveId($filters['categoria'] ?? null);
         $periodEnd = self::periodEnd($anio, $mes);
+        $page = max(1, (int)($filters['pagina'] ?? 1));
+        $perPage = max(1, min(200, (int)($filters['por_pagina'] ?? 100)));
+        $includeCatalogs = filter_var(
+            $filters['incluir_catalogos'] ?? true,
+            FILTER_VALIDATE_BOOL,
+            FILTER_NULL_ON_FAILURE
+        );
+        if ($includeCatalogs === null) $includeCatalogs = true;
 
         $where = ['s.tipo_socio = ?'];
         $params = [$anio, $mes, $tipo];
@@ -196,20 +229,44 @@ final class Cuotas
             $totalAmount += (float)($estado === 'PAGADOS' ? ($item['monto'] ?? 0) : $item['monto_sugerido']);
         }
 
-        return array_merge([
-            'items' => $items,
+        $totalItems = count($items);
+        $totalPages = $totalItems === 0 ? 0 : (int)ceil($totalItems / $perPage);
+        if ($totalPages > 0 && $page > $totalPages) $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+        $pagedItems = array_slice($items, $offset, $perPage);
+        $from = $totalItems === 0 ? 0 : $offset + 1;
+        $to = $totalItems === 0 ? 0 : min($offset + count($pagedItems), $totalItems);
+
+        $result = [
+            'items' => $pagedItems,
             'resumen' => [
-                'total' => count($items),
+                'total' => $totalItems,
                 'importe' => number_format($totalAmount, 2, '.', ''),
                 'con_categoria' => $withCategory,
-                'sin_categoria' => count($items) - $withCategory,
+                'sin_categoria' => $totalItems - $withCategory,
             ],
             'periodo' => [
                 'anio' => $anio,
                 'mes' => $mes,
                 'mes_nombre' => self::monthName($mes),
             ],
-        ], self::catalogosDatos($db, $anio, $mes));
+            'paginacion' => [
+                'pagina' => $page,
+                'por_pagina' => $perPage,
+                'total' => $totalItems,
+                'total_paginas' => $totalPages,
+                'desde' => $from,
+                'hasta' => $to,
+                'tiene_anterior' => $page > 1,
+                'tiene_siguiente' => $totalPages > 0 && $page < $totalPages,
+            ],
+        ];
+
+        if ($includeCatalogs) {
+            $result = array_merge($result, self::catalogosDatos($db, $anio, $mes));
+        }
+
+        return $result;
     }
 
     private static function catalogosDatos(PDO $db, ?int $year = null, ?int $month = null): array
@@ -304,20 +361,36 @@ final class Cuotas
         }
         unset($partner);
 
+        // Años visibles en Cuotas:
+        // - desde el alta del socio más antiguo hasta el año actual;
+        // - años futuros únicamente cuando ya existe al menos un pago registrado.
+        // Así evitamos mostrar años futuros vacíos como si ya fueran períodos normales.
         $firstPartnerYear = $db->query(
             "SELECT MIN(YEAR(fecha_alta))
              FROM socios
              WHERE fecha_alta IS NOT NULL"
         )->fetchColumn();
-        $firstPaymentYear = $db->query('SELECT MIN(anio) FROM pagos')->fetchColumn();
         $currentYear = (int)date('Y');
-        $yearCandidates = [$currentYear];
-        if ($firstPartnerYear !== false && $firstPartnerYear !== null) $yearCandidates[] = (int)$firstPartnerYear;
-        if ($firstPaymentYear !== false && $firstPaymentYear !== null) $yearCandidates[] = (int)$firstPaymentYear;
-        $firstYear = max(2000, min($yearCandidates));
-        $lastYear = $currentYear + 1;
-        $years = [];
-        for ($catalogYear = $lastYear; $catalogYear >= $firstYear; $catalogYear--) $years[] = $catalogYear;
+        $firstYear = $firstPartnerYear !== false && $firstPartnerYear !== null
+            ? max(2000, min($currentYear, (int)$firstPartnerYear))
+            : $currentYear;
+
+        $futurePaymentYearsStatement = $db->prepare(
+            'SELECT DISTINCT anio
+             FROM pagos
+             WHERE anio > ?
+             ORDER BY anio DESC'
+        );
+        $futurePaymentYearsStatement->execute([$currentYear]);
+        $futurePaymentYears = array_map(
+            'intval',
+            array_column($futurePaymentYearsStatement->fetchAll(), 'anio')
+        );
+
+        $years = $futurePaymentYears;
+        for ($catalogYear = $currentYear; $catalogYear >= $firstYear; $catalogYear--) {
+            $years[] = $catalogYear;
+        }
 
         $months = [];
         for ($catalogMonth = 1; $catalogMonth <= 12; $catalogMonth++) {
@@ -334,6 +407,182 @@ final class Cuotas
                 'meses' => $months,
             ],
         ];
+    }
+
+    private static function paymentContextsData(PDO $db, int $partnerId, int $year, string $paymentDate): array
+    {
+        $principalStatement = $db->prepare(
+            "SELECT
+                s.id_socio, s.tipo_socio, s.estado AS estado_socio, s.fecha_alta,
+                s.id_categoria, s.id_medio_pago AS id_medio_pago_preferido,
+                CASE
+                    WHEN s.tipo_socio = 'EMPRESA' THEN se.razon_social
+                    ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
+                END AS denominacion,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                c.nombre AS categoria, c.monto_cuota AS monto_actual,
+                f.id_familia, f.nombre AS familia,
+                fc.cantidad_integrantes
+             FROM socios s
+             LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
+             LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
+             LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
+             LEFT JOIN familias_socios fs
+                    ON fs.id_socio = s.id_socio
+                   AND fs.fecha_desvinculacion IS NULL
+             LEFT JOIN familias f
+                    ON f.id_familia = fs.id_familia
+                   AND f.activo = 1
+             LEFT JOIN (" . self::familyCountSql() . ") fc ON fc.id_familia = f.id_familia
+             WHERE s.id_socio = ?
+             LIMIT 1"
+        );
+        $principalStatement->execute([$partnerId]);
+        $principalRow = $principalStatement->fetch();
+        if (!$principalRow) api_error('El socio o empresa seleccionado no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+
+        $familyCount = (int)($principalRow['cantidad_integrantes'] ?? 0);
+        $discountRules = self::discountRulesForDate($db, $paymentDate);
+        $discount = $principalRow['id_familia'] === null
+            ? 0.0
+            : self::discountForCount($discountRules, $familyCount);
+
+        $memberRows = [$principalRow];
+        if ($principalRow['tipo_socio'] === 'PERSONA' && $principalRow['id_familia'] !== null) {
+            $membersStatement = $db->prepare(
+                "SELECT
+                    s.id_socio, s.tipo_socio, s.estado AS estado_socio, s.fecha_alta,
+                    s.id_categoria, s.id_medio_pago AS id_medio_pago_preferido,
+                    TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))) AS denominacion,
+                    sp.dni AS documento,
+                    c.nombre AS categoria, c.monto_cuota AS monto_actual,
+                    fs.es_titular, fs.parentesco
+                 FROM familias_socios fs
+                 INNER JOIN socios s ON s.id_socio = fs.id_socio
+                 INNER JOIN socios_personas sp ON sp.id_socio = s.id_socio
+                 LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
+                 WHERE fs.id_familia = ?
+                   AND fs.fecha_desvinculacion IS NULL
+                 ORDER BY fs.es_titular DESC, sp.apellido ASC, sp.nombre ASC"
+            );
+            $membersStatement->execute([(int)$principalRow['id_familia']]);
+            $memberRows = $membersStatement->fetchAll();
+            foreach ($memberRows as &$memberRow) {
+                $memberRow['id_familia'] = (int)$principalRow['id_familia'];
+                $memberRow['familia'] = (string)$principalRow['familia'];
+            }
+            unset($memberRow);
+        }
+
+        $categoryIds = [];
+        $memberIds = [];
+        foreach ($memberRows as $memberRow) {
+            $memberIds[] = (int)$memberRow['id_socio'];
+            if ($memberRow['id_categoria'] !== null) {
+                $categoryIds[(int)$memberRow['id_categoria']] = true;
+            }
+        }
+        $history = self::priceHistoryByCategory($db, array_keys($categoryIds));
+
+        $paymentsByPartner = [];
+        if ($memberIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
+            $paymentsStatement = $db->prepare(
+                "SELECT id_pago, id_socio, mes, fecha_pago, monto, id_medio_pago
+                 FROM pagos
+                 WHERE anio = ?
+                   AND id_socio IN ($placeholders)"
+            );
+            $paymentsStatement->execute(array_merge([$year], $memberIds));
+            foreach ($paymentsStatement->fetchAll() as $payment) {
+                $paymentsByPartner[(int)$payment['id_socio']][(int)$payment['mes']] = $payment;
+            }
+        }
+
+        $periods = [];
+        for ($month = 1; $month <= 12; $month++) {
+            $periodEnd = self::periodEnd($year, $month);
+            $members = [];
+
+            foreach ($memberRows as $memberRow) {
+                $payment = $paymentsByPartner[(int)$memberRow['id_socio']][$month] ?? null;
+                $row = $memberRow;
+                $row['id_pago'] = $payment['id_pago'] ?? null;
+                $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
+                $row['monto'] = $payment['monto'] ?? null;
+                $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
+                $members[] = self::hydratePaymentCandidate(
+                    $row,
+                    $year,
+                    $month,
+                    $periodEnd,
+                    $history,
+                    $discount
+                );
+            }
+
+            $principal = null;
+            foreach ($members as $member) {
+                if ((int)$member['id_socio'] === $partnerId) {
+                    $principal = $member;
+                    break;
+                }
+            }
+
+            if ($principal === null) {
+                $payment = $paymentsByPartner[$partnerId][$month] ?? null;
+                $row = $principalRow;
+                $row['id_pago'] = $payment['id_pago'] ?? null;
+                $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
+                $row['monto'] = $payment['monto'] ?? null;
+                $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
+                $principal = self::hydratePaymentCandidate(
+                    $row,
+                    $year,
+                    $month,
+                    $periodEnd,
+                    $history,
+                    $discount
+                );
+            }
+
+            $family = null;
+            if ($principalRow['tipo_socio'] === 'PERSONA' && $principalRow['id_familia'] !== null) {
+                $pendingMembers = array_values(array_filter(
+                    $members,
+                    static fn(array $member): bool => (bool)$member['puede_pagar']
+                ));
+                $family = [
+                    'id_familia' => (int)$principalRow['id_familia'],
+                    'nombre' => (string)$principalRow['familia'],
+                    'cantidad_integrantes' => $familyCount,
+                    'porcentaje_descuento' => number_format($discount, 2, '.', ''),
+                    'integrantes' => $members,
+                    'cantidad_pendientes' => count($pendingMembers),
+                    'monto_base_total' => number_format(array_sum(array_map(
+                        static fn(array $member): float => (bool)$member['puede_pagar'] ? (float)$member['monto_base'] : 0.0,
+                        $members
+                    )), 2, '.', ''),
+                    'monto_total' => number_format(array_sum(array_map(
+                        static fn(array $member): float => (bool)$member['puede_pagar'] ? (float)$member['monto_sugerido'] : 0.0,
+                        $members
+                    )), 2, '.', ''),
+                ];
+            }
+
+            $periods[(string)$month] = [
+                'principal' => $principal,
+                'familia' => $family,
+                'periodo' => [
+                    'anio' => $year,
+                    'mes' => $month,
+                    'mes_nombre' => self::monthName($month),
+                ],
+                'fecha_pago' => $paymentDate,
+            ];
+        }
+
+        return $periods;
     }
 
     private static function paymentContextData(PDO $db, int $partnerId, int $year, int $month, string $paymentDate): array
@@ -504,19 +753,49 @@ final class Cuotas
         if ($applyFamily) {
             $principalId = positive_id($body['id_socio'] ?? null, 'socio');
             $year = self::validYear($body['anio'] ?? null);
-            $month = self::validMonth($body['mes'] ?? null);
-            $context = self::paymentContextData($db, $principalId, $year, $month, $paymentDate);
-            if (!(bool)$context['principal']['puede_pagar']) {
-                self::paymentCandidateError($context['principal']);
+
+            $requestedMonths = [];
+            if (is_array($body['meses'] ?? null)) {
+                foreach ($body['meses'] as $rawMonth) {
+                    $month = self::validMonth($rawMonth);
+                    $requestedMonths[$month] = $month;
+                }
+            } elseif (array_key_exists('mes', $body)) {
+                $month = self::validMonth($body['mes']);
+                $requestedMonths[$month] = $month;
             }
 
-            $familyData = $context['familia'];
-            if ($familyData === null) {
-                $targets[] = self::targetFromCandidate($context['principal'], $body['monto'] ?? null);
-            } else {
-                foreach ($familyData['integrantes'] as $member) {
-                    if (!(bool)$member['puede_pagar']) continue;
-                    $targets[] = self::targetFromCandidate($member, null);
+            if ($requestedMonths === []) {
+                api_error('Seleccioná al menos un mes para registrar el pago familiar.', 'VALIDATION_ERROR');
+            }
+
+            ksort($requestedMonths, SORT_NUMERIC);
+            $contexts = self::paymentContextsData($db, $principalId, $year, $paymentDate);
+
+            foreach ($requestedMonths as $month) {
+                $context = $contexts[(string)$month] ?? null;
+                if (!is_array($context)) continue;
+
+                $contextFamily = $context['familia'] ?? null;
+                if ($contextFamily !== null) {
+                    if ($familyData === null) $familyData = $contextFamily;
+                    foreach ($contextFamily['integrantes'] as $member) {
+                        // Los períodos ya pagados o no disponibles se omiten de forma
+                        // individual. Esto permite cobrar varios meses a una familia
+                        // aunque algún integrante ya tenga uno de ellos abonado.
+                        if (!(bool)($member['puede_pagar'] ?? false)) continue;
+                        $targets[] = self::targetFromCandidate($member, null);
+                    }
+                    continue;
+                }
+
+                // Compatibilidad: si por algún motivo el socio ya no tiene una familia
+                // asociada, no perdemos el cobro del período del socio principal.
+                if ((bool)($context['principal']['puede_pagar'] ?? false)) {
+                    $targets[] = self::targetFromCandidate(
+                        $context['principal'],
+                        count($requestedMonths) === 1 ? ($body['monto'] ?? null) : null
+                    );
                 }
             }
         } elseif (is_array($body['pagos'] ?? null)) {
@@ -763,6 +1042,14 @@ final class Cuotas
         elseif ($categoryId === null) $reason = 'CATEGORIA_REQUERIDA';
         elseif (!$afterRegistration) $reason = 'PERIODO_ANTERIOR_AL_ALTA';
 
+        $amountOptions = $categoryId === null
+            ? []
+            : self::amountOptionsForCategory(
+                $history[$categoryId] ?? [],
+                (float)($row['monto_actual'] ?? 0),
+                $discount
+            );
+
         return [
             'id_socio' => (int)$row['id_socio'],
             'tipo_socio' => (string)$row['tipo_socio'],
@@ -778,8 +1065,10 @@ final class Cuotas
                 ? (int)$row['id_medio_pago_preferido']
                 : null,
             'monto_base' => number_format($baseAmount, 2, '.', ''),
+            'monto_actual_categoria' => number_format((float)($row['monto_actual'] ?? 0), 2, '.', ''),
             'porcentaje_descuento_familiar' => number_format($discount, 2, '.', ''),
             'monto_sugerido' => number_format(self::discountedAmount($baseAmount, $discount), 2, '.', ''),
+            'opciones_monto' => $amountOptions,
             'id_familia' => isset($row['id_familia']) && $row['id_familia'] !== null ? (int)$row['id_familia'] : null,
             'familia' => $row['familia'] ?? null,
             'es_titular' => isset($row['es_titular']) ? (bool)$row['es_titular'] : false,
@@ -919,6 +1208,67 @@ final class Cuotas
     private static function discountedAmount(float $baseAmount, float $discount): float
     {
         return round(max(0.0, $baseAmount) * (1 - max(0.0, min(100.0, $discount)) / 100), 2);
+    }
+
+    private static function amountOptionsForCategory(array $history, float $currentAmount, float $discount): array
+    {
+        $options = [];
+        $currentAmount = max(0.0, $currentAmount);
+
+        if ($currentAmount > 0) {
+            $currentFrom = null;
+            if ($history !== []) {
+                $latest = $history[0];
+                if (abs((float)$latest['monto_nuevo'] - $currentAmount) < 0.005) {
+                    $currentFrom = substr((string)$latest['fecha_cambio'], 0, 10);
+                }
+            }
+
+            $options[] = [
+                'id' => 'actual',
+                'actual' => true,
+                'monto_base' => number_format($currentAmount, 2, '.', ''),
+                'monto' => number_format(self::discountedAmount($currentAmount, $discount), 2, '.', ''),
+                'vigente_desde' => $currentFrom,
+                'vigente_hasta' => null,
+            ];
+        }
+
+        foreach ($history as $index => $row) {
+            $historicalAmount = max(0.0, (float)$row['monto_anterior']);
+            if ($historicalAmount <= 0) continue;
+
+            $changeDate = substr((string)$row['fecha_cambio'], 0, 10);
+            $previousChangeDate = isset($history[$index + 1])
+                ? substr((string)$history[$index + 1]['fecha_cambio'], 0, 10)
+                : null;
+
+            $validUntil = null;
+            try {
+                $validUntil = (new DateTimeImmutable($changeDate))
+                    ->modify('-1 day')
+                    ->format('Y-m-d');
+            } catch (Throwable) {
+                $validUntil = $changeDate;
+            }
+
+            // Si hubo varios cambios el mismo día, evitamos mostrar un rango invertido.
+            if ($previousChangeDate !== null && $previousChangeDate > $validUntil) {
+                $previousChangeDate = $changeDate;
+                $validUntil = $changeDate;
+            }
+
+            $options[] = [
+                'id' => 'hist-' . (int)$index,
+                'actual' => false,
+                'monto_base' => number_format($historicalAmount, 2, '.', ''),
+                'monto' => number_format(self::discountedAmount($historicalAmount, $discount), 2, '.', ''),
+                'vigente_desde' => $previousChangeDate,
+                'vigente_hasta' => $validUntil,
+            ];
+        }
+
+        return $options;
     }
 
     private static function priceHistoryByCategory(PDO $db, array $categoryIds): array

@@ -161,7 +161,7 @@ test.describe('Login y sesión', () => {
       page
         .getByRole('dialog')
         .filter({ hasText: 'Confirmar cierre de sesión' })
-        .getByRole('button', { name: 'Cerrar sesión' })
+        .getByRole('button', { name: 'Confirmar', exact: true })
         .click(),
     ]);
 
@@ -204,7 +204,7 @@ test.describe('Login y sesión', () => {
     await page
       .getByRole('dialog')
       .filter({ hasText: 'Confirmar cierre de sesión' })
-      .getByRole('button', { name: 'Cerrar sesión' })
+      .getByRole('button', { name: 'Confirmar', exact: true })
       .click();
 
     await expect(page).toHaveURL(/\/$/);

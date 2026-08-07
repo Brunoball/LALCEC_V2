@@ -2,6 +2,7 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const { companyData, familyData, personData } = require('./fixtures/socios.fixture');
 const {
   apiCall,
+  cleanupCategoriesByPrefix,
   cleanupDiscountsByThresholds,
   cleanupFamilyByPrefix,
   cleanupSocioByDocument,
@@ -12,7 +13,7 @@ const {
   createFamily,
   createPerson,
 } = require('./helpers/entities.helper');
-const { todayIso } = require('./helpers/data.helper');
+const { todayIso, uniqueSuffix } = require('./helpers/data.helper');
 
 const person = personData();
 const company = companyData();
@@ -20,10 +21,59 @@ const familyPersonOne = personData();
 const familyPersonTwo = personData();
 const batchPersonOne = personData();
 const batchPersonTwo = personData();
+const historicalPricePerson = personData();
+const yearRangePerson = personData();
 const family = familyData();
 const now = new Date();
 const currentYear = now.getFullYear();
 const currentMonth = now.getMonth() + 1;
+const previousYear = currentYear - 1;
+const secondaryMonth = currentMonth === 1 ? 2 : 1;
+const historicalMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+const historicalYear = currentMonth === 1 ? previousYear : currentYear;
+
+const pad2 = (value) => String(value).padStart(2, '0');
+
+async function createHistoricalCategory(request) {
+  const suffix = uniqueSuffix();
+  const name = `PW E2E CAT CUOTAS ${suffix}`;
+  const oldAmount = '1200.00';
+  const currentAmount = '2400.00';
+  const firstEffectiveYear = Math.max(2000, historicalYear - 1);
+  const firstEffectiveDate = `${firstEffectiveYear}-01-01`;
+  const changeDate = `${currentYear}-${pad2(currentMonth)}-01`;
+
+  const created = await apiCall(request, 'categorias_guardar', {
+    method: 'POST',
+    data: {
+      nombre: name,
+      descripcion: 'PW E2E HISTORIAL DE MONTOS PARA CUOTAS',
+      monto_actual: oldAmount,
+      vigente_desde: firstEffectiveDate,
+    },
+  });
+
+  const updated = await apiCall(request, 'categorias_guardar', {
+    method: 'POST',
+    data: {
+      id_categoria: created.item.id_categoria,
+      nombre: name,
+      descripcion: 'PW E2E HISTORIAL DE MONTOS PARA CUOTAS',
+      monto_actual: currentAmount,
+      vigente_desde: changeDate,
+    },
+  });
+
+  return {
+    id_categoria: Number(updated.item.id_categoria),
+    name,
+    prefix: name,
+    oldAmount: Number(oldAmount),
+    currentAmount: Number(currentAmount),
+    firstEffectiveDate,
+    changeDate,
+  };
+}
 
 function discountAppliesToday(rule, memberCount) {
   const today = todayIso();
@@ -83,7 +133,12 @@ async function removePayments(request, items = []) {
   }
 }
 
-test.describe.configure({ mode: 'serial' });
+
+function singlePaymentDialog(page, person) {
+  return page.getByRole('dialog', {
+    name: new RegExp(person.apellido, 'i'),
+  });
+}
 
 test.describe('Cuotas de socios y empresas', () => {
   test.afterEach(async ({ request }) => {
@@ -105,6 +160,8 @@ test.describe('Cuotas de socios y empresas', () => {
       { tipo: 'PERSONA', documento: familyPersonTwo.dni },
       { tipo: 'PERSONA', documento: batchPersonOne.dni },
       { tipo: 'PERSONA', documento: batchPersonTwo.dni },
+      { tipo: 'PERSONA', documento: historicalPricePerson.dni },
+      { tipo: 'PERSONA', documento: yearRangePerson.dni },
     ]) {
       try {
         await cleanupSocioByDocument(request, target);
@@ -487,19 +544,24 @@ test.describe('Cuotas de socios y empresas', () => {
     await expect(debtRow).toBeVisible();
     await debtRow.getByRole('button', { name: 'Registrar pago' }).click();
 
-    const paymentDialog = page.getByRole('dialog', { name: 'Registrar pago de cuota' });
+    const paymentDialog = singlePaymentDialog(page, familyPersonOne);
+    await expect(paymentDialog).toBeVisible();
     const familyCheck = paymentDialog.getByRole('checkbox', {
       name: 'Aplicar pago a todo el grupo familiar',
     });
     await expect(familyCheck).toBeChecked();
-    await paymentDialog.getByRole('button', { name: 'Ver quiénes forman parte' }).click();
+    await paymentDialog.getByRole('button', { name: 'Ver integrantes' }).click();
     await expect(paymentDialog).toContainText(familyPersonTwo.apellido);
-    await paymentDialog.getByRole('button', { name: /Registrar pago familiar \(2\)/ }).click();
+    await paymentDialog
+      .getByLabel('Medio de pago *')
+      .selectOption(String(medium.id_medio_pago));
+    await paymentDialog.getByRole('button', { name: /Registrar pago familiar \(2 cuotas\)/ }).click();
 
-    const receiptDialog = page.getByRole('dialog', { name: 'Pago realizado' });
-    await expect(receiptDialog).toContainText(/se registró correctamente/i);
-    await expect(receiptDialog.getByRole('button', { name: 'Imprimir' })).toBeVisible();
-    await expect(receiptDialog.getByRole('button', { name: 'Exportar PDF' })).toBeVisible();
+    const receiptDialog = page.getByRole('dialog', { name: 'Registro de pagos' });
+    await expect(receiptDialog).toContainText(/Pago realizado con éxito/i);
+    await expect(receiptDialog.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
+    await expect(receiptDialog.getByRole('button', { name: 'Comprobante' })).toBeVisible();
+    await expect(receiptDialog.getByRole('button', { name: 'PDF', exact: true })).toBeVisible();
     await receiptDialog.getByText('Cerrar', { exact: true }).click();
 
     const paid = await apiCall(request, 'cuotas_listar', {
@@ -523,6 +585,205 @@ test.describe('Cuotas de socios y empresas', () => {
     await removePayments(request, [...paid.items, ...paidSecond.items]);
   });
 
+  test('expone los 12 contextos de pago y conserva montos históricos por vigencia real', async ({ request }) => {
+    const historicalCategory = await createHistoricalCategory(request);
+    let savedPerson = null;
+
+    try {
+      const { medium } = await activeCategoryAndMedium(request);
+      savedPerson = await createPerson(request, historicalPricePerson, {
+        fecha_alta: `${Math.max(2000, historicalYear - 1)}-01-01`,
+        id_categoria: historicalCategory.id_categoria,
+        id_medio_pago: medium.id_medio_pago,
+      });
+
+      const historicalAnnual = await apiCall(request, 'cuotas_contextos_pago', {
+        params: {
+          id_socio: savedPerson.id_socio,
+          anio: historicalYear,
+          fecha_pago: todayIso(),
+        },
+      });
+      expect(Object.keys(historicalAnnual.periodos || {})).toHaveLength(12);
+
+      const currentAnnual = historicalYear === currentYear
+        ? historicalAnnual
+        : await apiCall(request, 'cuotas_contextos_pago', {
+            params: {
+              id_socio: savedPerson.id_socio,
+              anio: currentYear,
+              fecha_pago: todayIso(),
+            },
+          });
+      expect(Object.keys(currentAnnual.periodos || {})).toHaveLength(12);
+
+      const historicalPrincipal = historicalAnnual.periodos[String(historicalMonth)]?.principal;
+      const currentPrincipal = currentAnnual.periodos[String(currentMonth)]?.principal;
+      expect(historicalPrincipal).toBeTruthy();
+      expect(currentPrincipal).toBeTruthy();
+      expect(Number(historicalPrincipal.monto_base)).toBeCloseTo(historicalCategory.oldAmount, 2);
+      expect(Number(currentPrincipal.monto_base)).toBeCloseTo(historicalCategory.currentAmount, 2);
+
+      const historicalOptions = (historicalPrincipal.opciones_monto || []).map((item) =>
+        Number(item.monto_base),
+      );
+      expect(historicalOptions).toEqual(
+        expect.arrayContaining([historicalCategory.oldAmount, historicalCategory.currentAmount]),
+      );
+
+      const singleContext = await apiCall(request, 'cuotas_contexto_pago', {
+        params: {
+          id_socio: savedPerson.id_socio,
+          anio: currentYear,
+          mes: currentMonth,
+          fecha_pago: todayIso(),
+        },
+      });
+      expect(Number(singleContext.principal.monto_base)).toBeCloseTo(
+        Number(currentPrincipal.monto_base),
+        2,
+      );
+    } finally {
+      if (savedPerson) {
+        await cleanupSocioByDocument(request, {
+          tipo: 'PERSONA',
+          documento: historicalPricePerson.dni,
+        }).catch(() => undefined);
+      }
+      cleanupCategoriesByPrefix(historicalCategory.prefix);
+    }
+  });
+
+  test('permite pagar varios meses a toda la familia y omite solamente los cruces ya pagados', async ({ request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await ensureTwoMemberDiscount(request);
+    const first = await createPerson(request, familyPersonOne, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    const second = await createPerson(request, familyPersonTwo, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    await createFamily(request, family, [first, second]);
+
+    const secondCurrentContext = await apiCall(request, 'cuotas_contexto_pago', {
+      params: {
+        id_socio: second.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+      },
+    });
+    const prepayment = await apiCall(request, 'cuotas_registrar_pago', {
+      method: 'POST',
+      data: {
+        id_socio: second.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        monto: secondCurrentContext.principal.monto_sugerido,
+        id_medio_pago: medium.id_medio_pago,
+        aplicar_familia: false,
+      },
+    });
+
+    const response = await apiCall(request, 'cuotas_registrar_pagos', {
+      method: 'POST',
+      data: {
+        id_socio: first.id_socio,
+        anio: currentYear,
+        meses: [currentMonth, secondaryMonth],
+        fecha_pago: todayIso(),
+        id_medio_pago: medium.id_medio_pago,
+        aplicar_familia: true,
+      },
+    });
+
+    expect(response.aplico_familia).toBe(true);
+    expect(response.items).toHaveLength(3);
+    expect(response.comprobante.lineas).toHaveLength(3);
+    expect(response.comprobante.modalidad_label).toMatch(/grupo familiar/i);
+    expect(
+      response.items.some(
+        (item) =>
+          Number(item.id_socio) === Number(second.id_socio) &&
+          Number(item.mes) === Number(currentMonth),
+      ),
+    ).toBe(false);
+    expect(
+      response.items.filter((item) => Number(item.mes) === Number(secondaryMonth)),
+    ).toHaveLength(2);
+
+    await removePayments(request, response.items);
+    await removePayments(request, [prepayment.item]);
+  });
+
+  test('muestra años desde el alta más antigua y agrega un año futuro sólo cuando existe un pago', async ({ request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const saved = await createPerson(request, yearRangePerson, {
+      fecha_alta: `${previousYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    let futurePayment = null;
+
+    try {
+      const before = await apiCall(request, 'cuotas_catalogos');
+      const beforeYears = (before.catalogos?.anios || []).map(Number);
+      expect(beforeYears).toEqual(expect.arrayContaining([previousYear, currentYear]));
+
+      const testFutureYear = Array.from(
+        { length: Math.max(0, 2100 - currentYear) },
+        (_, index) => currentYear + index + 1,
+      ).find((year) => !beforeYears.includes(year));
+      expect(testFutureYear, 'Se necesita al menos un año futuro sin pagos para validar su aparición').toBeTruthy();
+      expect(beforeYears).not.toContain(testFutureYear);
+
+      const futureContext = await apiCall(request, 'cuotas_contexto_pago', {
+        params: {
+          id_socio: saved.id_socio,
+          anio: testFutureYear,
+          mes: 1,
+          fecha_pago: todayIso(),
+        },
+      });
+      futurePayment = await apiCall(request, 'cuotas_registrar_pago', {
+        method: 'POST',
+        data: {
+          id_socio: saved.id_socio,
+          anio: testFutureYear,
+          mes: 1,
+          fecha_pago: todayIso(),
+          monto: futureContext.principal.monto_sugerido,
+          id_medio_pago: medium.id_medio_pago,
+          aplicar_familia: false,
+        },
+      });
+
+      const after = await apiCall(request, 'cuotas_catalogos');
+      expect((after.catalogos?.anios || []).map(Number)).toContain(testFutureYear);
+
+      await apiCall(request, 'cuotas_eliminar_pago', {
+        method: 'POST',
+        data: { id_pago: futurePayment.item.id_pago },
+      });
+      futurePayment = null;
+
+      const afterDelete = await apiCall(request, 'cuotas_catalogos');
+      expect((afterDelete.catalogos?.anios || []).map(Number)).not.toContain(testFutureYear);
+    } finally {
+      if (futurePayment?.item?.id_pago) {
+        await apiCall(request, 'cuotas_eliminar_pago', {
+          method: 'POST',
+          data: { id_pago: futurePayment.item.id_pago },
+        }).catch(() => undefined);
+      }
+    }
+  });
+
   test('valida filtros y datos obligatorios del pago', async ({ request }) => {
     await expectApiError(
       request,
@@ -535,6 +796,12 @@ test.describe('Cuotas de socios y empresas', () => {
       'cuotas_listar',
       { params: { estado: 'CONDONADOS' } },
       { status: 422, code: 'FILTRO_INVALIDO' },
+    );
+    await expectApiError(
+      request,
+      'cuotas_contextos_pago',
+      { params: { id_socio: 1, anio: 'NO_VALIDO' } },
+      { status: 422, code: 'VALIDATION_ERROR' },
     );
     await expectApiError(
       request,

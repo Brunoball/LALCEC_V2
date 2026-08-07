@@ -808,7 +808,7 @@
 
 .cuotas-family-expand-btn svg {
   font-size: 0.66rem;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: none;
 }
 
 .cuotas-family-expand-btn.is-open svg {
@@ -852,20 +852,12 @@
 }
 
 .cuotas-family-members-shell {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transform: translateY(-6px);
-  transition:
-    grid-template-rows 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease,
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  display: block;
 }
 
 .cuotas-family-members-shell.is-open {
-  grid-template-rows: 1fr;
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 
 .cuotas-family-members {
