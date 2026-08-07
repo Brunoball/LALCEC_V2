@@ -1122,7 +1122,9 @@ export default function Cuotas() {
                     : "Selección múltiple",
                   icon: faUserGroup,
                   onClick: toggleMultipleMode,
-                  className: multiMode ? "mov-btn--danger" : "mov-btn--ghost",
+                  className: multiMode
+                    ? "mov-btn--danger cuotas-multiple-action"
+                    : "mov-btn--primary cuotas-multiple-action",
                 },
               ]
             : []
@@ -1266,10 +1268,12 @@ export default function Cuotas() {
                 </div>
                 {isPaid ? (
                   <>
-                    <div className="mov-gridCell">
+                    <div className="mov-gridCell is-center">
                       {formatDate(item.fecha_pago)}
                     </div>
-                    <div className="mov-gridCell">{item.medio_pago || "—"}</div>
+                    <div className="mov-gridCell is-center">
+                      {item.medio_pago || "—"}
+                    </div>
                     <div className="mov-gridCell cuotas-money-cell">
                       {money(item.monto)}
                     </div>
@@ -1420,7 +1424,7 @@ export default function Cuotas() {
             {writable && !isPaid ? (
               <button
                 type="button"
-                className={`mov-btn cuotas-lower-action ${multiMode ? "mov-btn--danger" : "mov-btn--ghost"}`}
+                className={`mov-btn cuotas-lower-action cuotas-multiple-action ${multiMode ? "mov-btn--danger" : "mov-btn--primary"}`}
                 onClick={toggleMultipleMode}
               >
                 <FontAwesomeIcon icon={faUserGroup} />

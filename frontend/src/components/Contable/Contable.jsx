@@ -43,6 +43,7 @@ import "./Contable.css";
 const now = new Date();
 const CURRENT_YEAR = now.getFullYear();
 const CURRENT_MONTH = now.getMonth() + 1;
+const PAGE_SIZE = 10;
 const MONTHS = [
   "ENERO",
   "FEBRERO",
@@ -57,6 +58,23 @@ const MONTHS = [
   "NOVIEMBRE",
   "DICIEMBRE",
 ];
+
+function paginationItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items = [1];
+  if (currentPage > 4) items.push("ellipsis-left");
+
+  const from = Math.max(2, currentPage - 1);
+  const to = Math.min(totalPages - 1, currentPage + 1);
+  for (let page = from; page <= to; page += 1) items.push(page);
+
+  if (currentPage < totalPages - 3) items.push("ellipsis-right");
+  items.push(totalPages);
+  return items;
+}
 
 const money = (value) =>
   new Intl.NumberFormat("es-AR", {
@@ -534,6 +552,7 @@ export default function ContableModule({ view = "summary" }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [mean, setMean] = useState("");
+  const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], resumen: {} });
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -572,10 +591,15 @@ export default function ContableModule({ view = "summary" }) {
     setCategory("");
     setMean("");
     setSearch("");
+    setPage(1);
     // Evita mostrar datos de la pestaña anterior mientras se carga la nueva.
     // También garantiza que las filas de Socios siempre se rendericen con su clave propia.
     setData({ items: [], resumen: {} });
   }, [view, incomeTab]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [year, month, search, category, mean]);
 
   const loadData = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -907,7 +931,28 @@ export default function ContableModule({ view = "summary" }) {
     };
   }, [data.items, incomeTab, month, view, year]);
 
-  const summaryCategories = data.resumen?.categorias || [];
+  const totalRecords = data.items?.length || 0;
+  const totalPages = totalRecords
+    ? Math.ceil(totalRecords / PAGE_SIZE)
+    : 0;
+  const pageOptions = useMemo(
+    () => paginationItems(page, totalPages),
+    [page, totalPages],
+  );
+  const paginatedItems = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return (data.items || []).slice(start, start + PAGE_SIZE);
+  }, [data.items, page]);
+  const firstVisibleRecord = totalRecords ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const lastVisibleRecord = totalRecords
+    ? Math.min(page * PAGE_SIZE, totalRecords)
+    : 0;
+
+  useEffect(() => {
+    if (page <= 1 || totalPages === 0 || page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
   const periodFilters = [
     {
       key: "anio",
@@ -1142,7 +1187,7 @@ export default function ContableModule({ view = "summary" }) {
         ) : (
           <div className="contable-table">
             <GlobalDivTable
-              className="contable-table__data"
+              className={`contable-table__data ${totalRecords > 0 || compactActions ? "has-bottom-pagination" : ""}`.trim()}
               bodyClassName="entity-table-wrap"
               gridClassName={tableGridClassName}
               columns={tableColumns}
@@ -1162,7 +1207,7 @@ export default function ContableModule({ view = "summary" }) {
                   {!data.items?.length ? (
                     <EmptyState message="No hubo cobros de socios en el mes seleccionado." />
                   ) : null}
-                  {data.items?.map((item, index) => (
+                  {paginatedItems.map((item, index) => (
                     <div
                       className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row contable-grid contable-grid--partners"
                       role="row"
@@ -1203,7 +1248,7 @@ export default function ContableModule({ view = "summary" }) {
                   {!data.items?.length ? (
                     <EmptyState message="No hay otros ingresos registrados en el mes." />
                   ) : null}
-                  {data.items?.map((item) => (
+                  {paginatedItems.map((item) => (
                     <div
                       className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row contable-grid ${writable ? "contable-grid--income" : "contable-grid--income-readonly"}`}
                       role="row"
@@ -1258,7 +1303,7 @@ export default function ContableModule({ view = "summary" }) {
                   {!data.items?.length ? (
                     <EmptyState message="No hay egresos registrados en el mes." />
                   ) : null}
-                  {data.items?.map((item) => (
+                  {paginatedItems.map((item) => (
                     <div
                       className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row contable-grid contable-grid--expense"
                       role="row"
@@ -1327,53 +1372,109 @@ export default function ContableModule({ view = "summary" }) {
               ) : null}
             </GlobalDivTable>
 
-            <div className="contable-table-footer">
-              {summaryCategories.length ? (
-                <section
-                  className="contable-category-summary"
-                  aria-label="Resumen por categoría"
-                >
-                  <strong>Resumen por categoría</strong>
-                  <div>
-                    {summaryCategories.map((item) => (
-                      <article key={item.nombre}>
-                        <span>{item.nombre}</span>
-                        <small>
-                          {item.registros !== undefined
-                            ? `${item.registros} registros`
-                            : ""}
-                        </small>
-                        <b>{money(item.total)}</b>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              <div
-                className={`contable-lower-actions ${view === "expense" || (view === "income" && incomeTab === "manual") ? "contable-lower-actions--right" : ""}`.trim()}
+            {totalRecords > 0 || compactActions ? (
+              <nav
+                className="global-pagination"
+                aria-label={
+                  view === "income"
+                    ? "Paginación de ingresos"
+                    : "Paginación de egresos"
+                }
               >
-                {compactActions ? (
-                  <BotonExportarGlobal
-                    className="mov-btn--compact"
-                    onClick={() => setExportOpen(true)}
-                    disabled={!data.items?.length}
-                  />
-                ) : null}
-                {canCreateMovement ? (
-                  <button
-                    type="button"
-                    className="mov-btn mov-btn--primary"
-                    onClick={openMovement}
-                  >
-                    <FontAwesomeIcon icon={faPlus} />
-                    {view === "income"
-                      ? "Registrar ingreso"
-                      : "Registrar egreso"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
+                <p className="global-pagination__summary">
+                  {totalRecords > 0 ? (
+                    <>
+                      Mostrando <strong>{firstVisibleRecord}</strong>–
+                      <strong>{lastVisibleRecord}</strong> de{" "}
+                      <strong>{totalRecords}</strong> registros
+                    </>
+                  ) : (
+                    <>
+                      <strong>0</strong> registros
+                    </>
+                  )}
+                </p>
+
+                <div className="global-pagination__right">
+                  {totalRecords > 0 ? (
+                    <div className="global-pagination__controls">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPage((current) => Math.max(1, current - 1))
+                        }
+                        disabled={loading || page <= 1}
+                      >
+                        Anterior
+                      </button>
+
+                      {pageOptions.map((item) =>
+                        typeof item === "number" ? (
+                          <button
+                            type="button"
+                            key={item}
+                            className={item === page ? "is-active" : ""}
+                            aria-current={item === page ? "page" : undefined}
+                            onClick={() => setPage(item)}
+                            disabled={loading}
+                          >
+                            {item}
+                          </button>
+                        ) : (
+                          <span
+                            className="global-pagination__ellipsis"
+                            key={item}
+                            aria-hidden="true"
+                          >
+                            …
+                          </span>
+                        ),
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPage((current) =>
+                            Math.min(totalPages, current + 1),
+                          )
+                        }
+                        disabled={
+                          loading || totalPages === 0 || page >= totalPages
+                        }
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="contable-lower-actions">
+                    {compactActions ? (
+                      <BotonExportarGlobal
+                        className="mov-btn--compact"
+                        onClick={() => setExportOpen(true)}
+                        disabled={!data.items?.length}
+                      />
+                    ) : null}
+                    {canCreateMovement ? (
+                      <button
+                        type="button"
+                        className={
+                          view === "expense"
+                            ? "mov-btn contable-create-lower"
+                            : "mov-btn mov-btn--primary"
+                        }
+                        onClick={openMovement}
+                      >
+                        <FontAwesomeIcon icon={faPlus} />
+                        {view === "income"
+                          ? "Registrar ingreso"
+                          : "Registrar egreso"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </nav>
+            ) : null}
           </div>
         )}
       </ModulePage>

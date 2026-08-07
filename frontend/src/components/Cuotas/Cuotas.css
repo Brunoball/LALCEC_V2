@@ -211,6 +211,8 @@
   > .mov-gridCell--head:nth-child(5),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(2),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(3),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(5),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(7),
 .cuotas-grid--selecting.mov-gridTable--head
   > .mov-gridCell--head:nth-child(3),
@@ -268,9 +270,7 @@
   color: #64748b;
 }
 
-.cuotas-payment-modal.entity-modal--wide {
-  width: min(760px, calc(100vw - 28px));
-}
+
 
 .cuotas-payment-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -305,6 +305,26 @@
 .cuotas-payment-summary > small {
   color: #64748b;
   line-height: 1.45;
+}
+
+.cuotas-multiple-action.mov-btn--primary {
+  border-color: var(--balto-action, var(--primary-color));
+  background: var(--balto-action, var(--primary-color));
+  color: #fff;
+}
+
+.cuotas-multiple-action.mov-btn--primary:hover:not(:disabled) {
+  border-color: color-mix(
+    in srgb,
+    var(--balto-action, var(--primary-color)) 86%,
+    #000
+  );
+  background: color-mix(
+    in srgb,
+    var(--balto-action, var(--primary-color)) 86%,
+    #000
+  );
+  color: #fff;
 }
 
 @media (max-width: 1499px) {
@@ -342,20 +362,54 @@
     transform: none;
   }
 
+  /* Debajo de la tabla, Selección múltiple comparte la estética compacta de Registrar egreso. */
+  .cuotas-lower-actions .cuotas-multiple-action.mov-btn--primary {
+    border-color: transparent;
+    color: var(--balto-action, var(--primary-color));
+    background: transparent;
+    box-shadow: none;
+    font-weight: 600;
+  }
+
+  .cuotas-lower-actions
+    .cuotas-multiple-action.mov-btn--primary:hover:not(:disabled) {
+    border-color: color-mix(
+      in srgb,
+      var(--balto-action, var(--primary-color)) 20%,
+      transparent
+    );
+    color: color-mix(
+      in srgb,
+      var(--balto-action, var(--primary-color)) 88%,
+      #000
+    );
+    background: color-mix(
+      in srgb,
+      var(--balto-action, var(--primary-color)) 8%,
+      transparent
+    );
+    box-shadow: none;
+    transform: none;
+  }
+
+  .cuotas-lower-actions
+    .cuotas-multiple-action.mov-btn--primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px
+      color-mix(
+        in srgb,
+        var(--balto-action, var(--primary-color)) 15%,
+        transparent
+      );
+  }
+
+  .cuotas-lower-actions .cuotas-multiple-action svg {
+    font-size: 12px;
+  }
+
   .cuotas-lower-actions .mov-btn--ghost:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--balto-ink) 12%, transparent);
     background: color-mix(in srgb, var(--balto-ink) 5%, transparent);
-  }
-
-  .cuotas-lower-actions .mov-btn--primary {
-    border-color: color-mix(in srgb, var(--balto-action) 16%, transparent);
-    background: color-mix(in srgb, var(--balto-action) 9%, transparent);
-    color: var(--balto-action);
-  }
-
-  .cuotas-lower-actions .mov-btn--primary:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--balto-action) 24%, transparent);
-    background: color-mix(in srgb, var(--balto-action) 13%, transparent);
   }
 
   .cuotas-lower-actions .mov-btn--danger {
