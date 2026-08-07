@@ -682,7 +682,6 @@ export default function Familias() {
             "Descripción",
             "Titular",
             "Integrantes",
-            "Estado",
             "Acciones",
           ]}
         >
@@ -712,13 +711,6 @@ export default function Familias() {
               </div>
               <div className="mov-gridCell is-strong">
                 {Number(item.cantidad_integrantes || 0)}
-              </div>
-              <div className="mov-gridCell">
-                <span
-                  className={`mov-chip ${item.activo ? "mov-chip--ok" : "mov-chip--danger"}`}
-                >
-                  {item.activo ? "ACTIVA" : "BAJA"}
-                </span>
               </div>
               <div className="mov-gridCell mov-gridCell--actions">
                 <div className="mov-actionsInline">

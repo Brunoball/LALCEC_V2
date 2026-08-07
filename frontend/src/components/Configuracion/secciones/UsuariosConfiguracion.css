@@ -182,9 +182,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 
 .config-usersTable__head,
@@ -215,15 +213,9 @@
   white-space: nowrap;
 }
 
-.config-usersTable__head > :nth-child(3),
-.config-usersTable__head > :nth-child(4),
-.config-usersTable__head > :nth-child(6),
-.config-usersTable__row > :nth-child(3),
-.config-usersTable__row > :nth-child(4),
-.config-usersTable__row > :nth-child(6),
-.config-usersTable__skeletonRow > :nth-child(3),
-.config-usersTable__skeletonRow > :nth-child(4),
-.config-usersTable__skeletonRow > :nth-child(6) {
+.config-usersTable__head > :nth-child(n + 3),
+.config-usersTable__row > :nth-child(n + 3),
+.config-usersTable__skeletonRow > :nth-child(n + 3) {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -243,9 +235,13 @@
 
 .config-usersTable__body {
   min-height: 180px;
+  max-height: calc(100vh - 400px);
   display: flex;
   flex: 1;
   flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .config-usersTable__row {

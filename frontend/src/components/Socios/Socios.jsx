@@ -1062,10 +1062,22 @@ export default function Socios({ tipo = PERSON }) {
                 {isCompany ? item.cuit || "—" : item.dni || "—"}
               </div>
               <div className="mov-gridCell">
-                {isCompany ? item.condicion_iva || "—" : item.categoria || "—"}
+                {isCompany ? (
+                  item.condicion_iva || "—"
+                ) : item.categoria ? (
+                  <span className="mov-categoryChip">{item.categoria}</span>
+                ) : (
+                  "—"
+                )}
               </div>
               {isCompany ? (
-                <div className="mov-gridCell">{item.categoria || "—"}</div>
+                <div className="mov-gridCell">
+                  {item.categoria ? (
+                    <span className="mov-categoryChip">{item.categoria}</span>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               ) : null}
               <div className="mov-gridCell entity-main-cell">
                 <span>{item.telefono || "—"}</span>

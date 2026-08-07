@@ -232,7 +232,10 @@
 .cuotas-money-cell {
   width: 100%;
   justify-self: stretch;
-  justify-content: flex-end !important;
+  flex-direction: column;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  gap: 2px;
   text-align: right !important;
   font-weight: 800;
   color: var(--color-text-strong, #0f172a);
@@ -625,30 +628,71 @@
 }
 
 .cuotas-family-card {
+  position: relative;
   display: grid;
   gap: 13px;
+  overflow: hidden;
   margin-top: 16px;
   padding: 15px;
-  border: 1px solid #fdba74;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, #e2e8f0);
+  border-radius: 15px;
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--primary-color) 11%, transparent) 0,
+      transparent 38%
+    ),
+    linear-gradient(145deg, #fff 0%, color-mix(in srgb, var(--primary-color) 4%, #fff) 100%);
+  box-shadow: 0 14px 34px -30px rgb(15 23 42 / 0.72);
+}
+
+.cuotas-family-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  content: "";
+  background: var(--balto-action, var(--primary-color));
 }
 
 .cuotas-family-card__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
-.cuotas-family-card__head > div {
+.cuotas-family-card__identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.cuotas-family-card__identity > div {
+  min-width: 0;
   display: grid;
   gap: 3px;
 }
 
-.cuotas-family-card__head span,
+.cuotas-family-card__icon {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 38px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent);
+  border-radius: 12px;
+  color: var(--balto-action, var(--primary-color));
+  background: color-mix(in srgb, var(--primary-color) 9%, #fff);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+}
+
+.cuotas-family-card__head span:not(.cuotas-family-card__icon),
 .cuotas-batch-list header span {
-  color: #c2410c;
+  color: var(--balto-action, #c2410c);
   font-size: 0.69rem;
   font-weight: 900;
   letter-spacing: 0.055em;
@@ -656,23 +700,85 @@
 }
 
 .cuotas-family-card__head strong {
-  color: #0f172a;
-  font-size: 1rem;
+  overflow: hidden;
+  color: var(--balto-ink, #0f172a);
+  font-size: 0.98rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cuotas-family-card__head small {
-  color: #64748b;
+  color: var(--balto-text, #64748b);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.cuotas-family-expand-btn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--balto-action, var(--primary-color)) 28%, #e2e8f0);
+  border-radius: 10px;
+  color: var(--balto-action, var(--primary-color));
+  background: color-mix(in srgb, var(--balto-action, var(--primary-color)) 5%, #fff);
+  box-shadow: 0 5px 14px -13px rgb(15 23 42 / 0.85);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 780;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.cuotas-family-expand-btn:hover {
+  border-color: color-mix(in srgb, var(--balto-action, var(--primary-color)) 55%, transparent);
+  background: color-mix(in srgb, var(--balto-action, var(--primary-color)) 10%, #fff);
+  box-shadow: 0 8px 18px -14px rgb(15 23 42 / 0.72);
+  transform: translateY(-1px);
+}
+
+.cuotas-family-expand-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--balto-action, var(--primary-color)) 18%, transparent);
+}
+
+.cuotas-family-expand-btn svg {
+  font-size: 0.66rem;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cuotas-family-expand-btn.is-open svg {
+  transform: rotate(180deg);
 }
 
 .cuotas-family-toggle {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid #fed7aa;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, #e2e8f0);
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.cuotas-family-toggle:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 36%, #e2e8f0);
+  background: #fff;
 }
 
 .cuotas-family-toggle > span {
@@ -681,18 +787,42 @@
 }
 
 .cuotas-family-toggle strong {
-  color: #0f172a;
-  font-size: 0.84rem;
+  color: var(--balto-ink, #0f172a);
+  font-size: 0.82rem;
 }
 
 .cuotas-family-toggle small {
-  color: #64748b;
+  color: var(--balto-text, #64748b);
+  font-size: 0.71rem;
   line-height: 1.4;
 }
 
+.cuotas-family-members-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    grid-template-rows 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cuotas-family-members-shell.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .cuotas-family-members {
+  min-height: 0;
   display: grid;
   gap: 8px;
+  overflow: hidden;
+}
+
+.cuotas-family-members-shell.is-open .cuotas-family-members {
+  overflow: visible;
 }
 
 .cuotas-family-members article {
@@ -701,34 +831,53 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid #fed7aa;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 17%, #e2e8f0);
   border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 5px 14px -15px rgb(15 23 42 / 0.9);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.cuotas-family-members article:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 30%, #e2e8f0);
   background: #fff;
+  transform: translateX(2px);
 }
 
 .cuotas-family-members article.is-unavailable {
   opacity: 0.62;
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--balto-bg, #f8fafc) 88%, #fff);
 }
 
 .cuotas-family-members article > div {
+  min-width: 0;
   display: grid;
   gap: 2px;
 }
 
 .cuotas-family-members article > div:last-child {
+  flex: 0 0 auto;
   text-align: right;
 }
 
 .cuotas-family-members strong {
-  color: #0f172a;
-  font-size: 0.8rem;
+  overflow: hidden;
+  color: var(--balto-ink, #0f172a);
+  font-size: 0.79rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cuotas-family-members span,
 .cuotas-family-members small {
-  color: #64748b;
-  font-size: 0.7rem;
+  overflow: hidden;
+  color: var(--balto-text, #64748b);
+  font-size: 0.69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cuotas-payment-grid--multiple {
@@ -882,10 +1031,23 @@ html[data-theme="oscuro"] .cuotas-family-toggle input:not(:checked) {
   background: color-mix(in srgb, var(--balto-bg) 88%, #fff 12%);
 }
 
+html[data-theme="oscuro"] .cuotas-family-card__icon,
+html[data-theme="oscuro"] .cuotas-family-expand-btn {
+  background: color-mix(in srgb, var(--balto-action, var(--primary-color)) 12%, var(--balto-bg));
+}
+
+html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
+  background: color-mix(in srgb, var(--balto-action, var(--primary-color)) 18%, var(--balto-bg));
+}
+
 @media (max-width: 720px) {
   .cuotas-family-card__head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .cuotas-family-expand-btn {
+    width: 100%;
   }
 
   .cuotas-selection-toast {
@@ -936,3 +1098,13 @@ html[data-theme="oscuro"] .cuotas-family-toggle input:not(:checked) {
     text-align: left;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .cuotas-family-expand-btn,
+  .cuotas-family-expand-btn svg,
+  .cuotas-family-members-shell,
+  .cuotas-family-members article {
+    transition: none;
+  }
+}
+

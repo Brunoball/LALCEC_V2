@@ -15,6 +15,7 @@ const money = (value) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
+    minimumFractionDigits: 2,
   }).format(Number(value || 0));
 
 const date = (value) => {
@@ -25,26 +26,74 @@ const date = (value) => {
     : new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(parsed);
 };
 
+const firstValue = (...values) =>
+  values.find((value) => String(value ?? "").trim() !== "") ?? "";
+
+const uniqueValues = (values) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+const compact = (value, limit = 92) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "—";
+  return text.length > limit ? `${text.slice(0, Math.max(1, limit - 3))}...` : text;
+};
+
 export const normalizePaymentReceipt = (source = {}) => {
   const safeSource = source && typeof source === "object" ? source : {};
   const operation =
     safeSource.operacion && typeof safeSource.operacion === "object"
       ? safeSource.operacion
       : safeSource;
-  const lines = (operation.lineas || safeSource.lineas || []).map((line, index) => ({
-    id: line.id || line.id_linea || `${index}-${line.periodo || line.concepto || "linea"}`,
-    socio: line.socio || operation.socios_label || operation.socio || "—",
-    categoria: line.categoria || operation.categorias_label || "—",
+  const rawLines = operation.lineas || safeSource.lineas || [];
+  const lines = (Array.isArray(rawLines) ? rawLines : []).map((line, index) => ({
+    id:
+      line.id ||
+      line.id_linea ||
+      `${index}-${line.periodo || line.concepto || "linea"}`,
+    socio:
+      line.socio ||
+      line.denominacion ||
+      operation.socios_label ||
+      operation.socio ||
+      "—",
+    categoria:
+      line.categoria || operation.categorias_label || operation.categoria || "—",
     periodo: line.periodo || line.descripcion || line.concepto || "—",
     montoBase: Number(line.monto_base ?? line.monto ?? 0),
     descuento: Number(
       line.porcentaje_descuento_familiar ?? line.porcentaje_descuento ?? 0,
     ),
     monto: Number(line.monto ?? 0),
+    domicilio: firstValue(
+      line.domicilio_2,
+      line.domicilio,
+      line.direccion,
+      operation.domicilio_2,
+      operation.domicilio,
+      operation.direccion,
+    ),
+    cobrador: firstValue(line.cobrador, operation.cobrador),
+    medio: firstValue(line.medio_pago, operation.medio_pago),
   }));
 
+  const socios =
+    operation.socios_label ||
+    operation.socio ||
+    safeSource.socios ||
+    uniqueValues(lines.map((line) => line.socio)).join(" · ") ||
+    "—";
+
   return {
-    organizacion: safeSource.organizacion || operation.organizacion || "",
+    organizacion:
+      safeSource.organizacion ||
+      operation.organizacion ||
+      "LALCEC San Francisco",
     codigo:
       operation.codigo_operacion ||
       safeSource.codigo_operacion ||
@@ -56,8 +105,7 @@ export const normalizePaymentReceipt = (source = {}) => {
         : "Comprobante de pago",
     estado: operation.estado || "PAGADO",
     fecha: operation.fecha_pago || operation.fecha || "",
-    socios:
-      operation.socios_label || operation.socio || safeSource.socios || "—",
+    socios,
     modalidad:
       operation.modalidad_label ||
       operation.modalidad ||
@@ -66,6 +114,16 @@ export const normalizePaymentReceipt = (source = {}) => {
     medio:
       operation.medio_pago ||
       (operation.estado === "CONDONADO" ? "CONDONACIÓN" : "—"),
+    domicilio: firstValue(
+      operation.domicilio_2,
+      operation.domicilio,
+      operation.direccion,
+      lines[0]?.domicilio,
+    ),
+    cobrador: firstValue(operation.cobrador, lines[0]?.cobrador),
+    tipoEntidad: String(
+      operation.tipo_entidad || operation.tipo || safeSource.tipo_entidad || "",
+    ).toUpperCase(),
     montoBase: Number(
       operation.monto_base ??
         lines.reduce((total, line) => total + line.montoBase, 0),
@@ -79,24 +137,83 @@ export const normalizePaymentReceipt = (source = {}) => {
   };
 };
 
+const receiptDisplayData = (source) => {
+  const receipt = normalizePaymentReceipt(source);
+  const categories = uniqueValues(receipt.lineas.map((line) => line.categoria));
+  const periods = uniqueValues(receipt.lineas.map((line) => line.periodo));
+  const amounts = uniqueValues(
+    receipt.lineas.map((line) => Number(line.monto || line.montoBase || 0)),
+  ).map(Number);
+  const isCompany = receipt.tipoEntidad === "EMPRESA";
+  const hasSeveralPeople = uniqueValues(
+    receipt.lineas.map((line) => line.socio),
+  ).length > 1;
+  const unitAmount = amounts.length === 1 ? amounts[0] : 0;
+  const amountDetail =
+    unitAmount > 0 && unitAmount !== receipt.monto
+      ? `${money(unitAmount)} · Total ${money(receipt.monto)}`
+      : money(receipt.monto);
+
+  return {
+    receipt,
+    entityLabel: isCompany
+      ? "Empresa"
+      : hasSeveralPeople
+        ? "Socios"
+        : "Afiliado",
+    copyEntityLabel: isCompany
+      ? "Empresa"
+      : hasSeveralPeople
+        ? "Socios"
+        : "Nombre y Apellido",
+    people: compact(receipt.socios, 116),
+    address: compact(receipt.domicilio || "Domicilio no registrado", 94),
+    category: compact(categories.join(" · ") || "—", 68),
+    periods: compact(periods.join(", ") || receipt.modalidad, 112),
+    amountDetail,
+    paymentLabel: receipt.cobrador ? "Cobrador" : "Medio de pago",
+    paymentValue: compact(receipt.cobrador || receipt.medio || "—", 54),
+    state: receipt.estado || "PAGADO",
+  };
+};
+
+const receiptBodyHtml = (source) => {
+  const data = receiptDisplayData(source);
+  const { receipt } = data;
+
+  return `
+    <div class="receipt-position">
+      <section class="old-receipt" aria-label="${htmlEscape(receipt.titulo)}">
+        <div class="old-receipt__main">
+          <p><strong>${htmlEscape(data.entityLabel)}:</strong> ${htmlEscape(data.people)}</p>
+          <p><strong>Domicilio:</strong> ${htmlEscape(data.address)}</p>
+          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
+          <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
+          <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
+          <p class="old-receipt__notice">Por consultas comunicarse al 03564-15205778</p>
+          <p class="old-receipt__notice">Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
+        </div>
+        <div class="old-receipt__copy">
+          <p><strong>${htmlEscape(data.copyEntityLabel)}:</strong> ${htmlEscape(data.people)}</p>
+          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
+          <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
+          <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
+          <div class="old-receipt__meta">
+            <span>${htmlEscape(date(receipt.fecha))}</span>
+            ${receipt.codigo ? `<span>N.º ${htmlEscape(receipt.codigo)}</span>` : ""}
+          </div>
+        </div>
+      </section>
+    </div>`;
+};
+
 export const paymentReceiptHtml = (source, options = {}) => {
   const receipt = normalizePaymentReceipt(source);
   const outputLabel = options.pdf
     ? "Guardar como PDF"
     : "Imprimir comprobante";
-  const rows = receipt.lineas
-    .map(
-      (line) => `
-        <tr>
-          <td><strong>${htmlEscape(line.socio)}</strong></td>
-          <td>${htmlEscape(line.categoria)}</td>
-          <td>${htmlEscape(line.periodo)}</td>
-          <td class="number">${htmlEscape(money(line.montoBase))}</td>
-          <td class="number">${htmlEscape(`${line.descuento}%`)}</td>
-          <td class="number"><strong>${htmlEscape(money(line.monto))}</strong></td>
-        </tr>`,
-    )
-    .join("");
 
   return `<!doctype html>
   <html lang="es">
@@ -105,59 +222,99 @@ export const paymentReceiptHtml = (source, options = {}) => {
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>${htmlEscape(receipt.titulo)}</title>
       <style>
-        @page { size: A4; margin: 14mm; }
+        @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: Arial, sans-serif; color: #2f2724; background: #fff; }
-        .receipt { max-width: 900px; margin: 0 auto; }
-        .head { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 2px solid #3a2e2b; }
-        h1 { margin: 0 0 5px; font-size: 23px; }
-        p { margin: 3px 0; color: #6f625e; }
-        .meta { text-align: right; }
-        .status { display: inline-block; margin-top: 6px; padding: 5px 9px; border-radius: 999px; color: #6d4613; background: #f4e4ca; font-size: 11px; font-weight: 700; }
-        .summary { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 12px; margin: 18px 0; }
-        .summary div { min-width: 0; padding: 12px; border: 1px solid #eadfd4; border-radius: 10px; background: #fbf8f4; }
-        .summary span { display: block; margin-bottom: 4px; color: #806f68; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
-        .summary strong { display: block; overflow-wrap: anywhere; font-size: 14px; }
-        table { width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 11px; }
-        th { padding: 9px 8px; color: #fff; background: #3a2e2b; text-align: left; }
-        td { padding: 9px 8px; border-bottom: 1px solid #e5ddd7; vertical-align: top; }
-        .number { text-align: right; white-space: nowrap; }
-        .note { margin-top: 18px; padding: 11px 12px; border: 1px solid #eadfd4; border-radius: 9px; color: #5d514c; font-size: 11px; }
-        .total { display: flex; justify-content: flex-end; align-items: baseline; gap: 12px; margin-top: 18px; font-size: 12px; }
-        .total strong { font-size: 22px; }
-        .print-actions { display: flex; gap: 8px; margin: 0 auto 16px; max-width: 900px; }
-        .print-actions button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 8px; color: #fff; background: #3a2e2b; font-weight: 700; cursor: pointer; }
-        @media print { .print-actions { display: none; } }
+        html, body { width: 100%; min-height: 100%; }
+        body {
+          margin: 0;
+          color: #111827;
+          background: #eef1f4;
+          font-family: Arial, sans-serif;
+        }
+        .print-actions {
+          position: fixed;
+          top: 18px;
+          left: 18px;
+          z-index: 5;
+        }
+        .print-actions button {
+          min-height: 40px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 8px;
+          color: #fff;
+          background: #f97316;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 8px 20px -12px rgba(15, 23, 42, .7);
+        }
+        .sheet {
+          width: 210mm;
+          height: 297mm;
+          margin: 18px auto;
+          position: relative;
+          overflow: hidden;
+          background: #fff;
+          box-shadow: 0 16px 40px -24px rgba(15, 23, 42, .55);
+        }
+        .receipt-position {
+          width: 210mm;
+          height: 70mm;
+          position: absolute;
+          top: 33%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(90deg);
+          transform-origin: center center;
+        }
+        .old-receipt {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 65mm;
+          border: 1px solid #d1d5db;
+          background: #fff;
+        }
+        .old-receipt p {
+          margin: 0 0 5px;
+          font-size: 13px;
+          line-height: 1.28;
+        }
+        .old-receipt__main {
+          min-width: 0;
+          padding: 13mm 8mm 7mm 20mm;
+        }
+        .old-receipt__copy {
+          min-width: 0;
+          padding: 16mm 6mm 7mm 10mm;
+          border-left: 1px dashed #9ca3af;
+          position: relative;
+        }
+        .old-receipt__notice {
+          font-size: 11.5px !important;
+        }
+        .old-receipt__meta {
+          position: absolute;
+          right: 6mm;
+          bottom: 5mm;
+          left: 10mm;
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          color: #6b7280;
+          font-size: 9px;
+        }
+        @media print {
+          body { background: #fff; }
+          .print-actions { display: none; }
+          .sheet { margin: 0; box-shadow: none; }
+        }
       </style>
     </head>
     <body>
-      <div class="print-actions"><button type="button" onclick="window.print()">${outputLabel}</button></div>
-      <main class="receipt">
-        <header class="head">
-          <div>
-            <h1>${htmlEscape(receipt.organizacion || receipt.titulo)}</h1>
-            <p>${htmlEscape(receipt.titulo)}</p>
-          </div>
-          <div class="meta">
-            <p>${htmlEscape(date(receipt.fecha))}</p>
-            ${receipt.codigo ? `<p>N.º ${htmlEscape(receipt.codigo)}</p>` : ""}
-            <span class="status">${htmlEscape(receipt.estado)}</span>
-          </div>
-        </header>
-        <section class="summary">
-          <div><span>Socio/s</span><strong>${htmlEscape(receipt.socios)}</strong></div>
-          <div><span>Modalidad</span><strong>${htmlEscape(receipt.modalidad)}</strong></div>
-          <div><span>Medio</span><strong>${htmlEscape(receipt.medio)}</strong></div>
-          <div><span>Total</span><strong>${htmlEscape(money(receipt.monto))}</strong></div>
-        </section>
-        <table>
-          <thead><tr><th>Socio</th><th>Categoría</th><th>Período</th><th class="number">Base</th><th class="number">Desc.</th><th class="number">Pagado</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="6">No hay líneas de detalle disponibles.</td></tr>'}</tbody>
-        </table>
-        ${receipt.motivoCondonacion ? `<p class="note"><strong>Motivo:</strong> ${htmlEscape(receipt.motivoCondonacion)}</p>` : ""}
-        ${receipt.observaciones ? `<p class="note"><strong>Observaciones:</strong> ${htmlEscape(receipt.observaciones)}</p>` : ""}
-        <div class="total"><span>Total registrado</span><strong>${htmlEscape(money(receipt.monto))}</strong></div>
-      </main>
+      <div class="print-actions">
+        <button type="button" onclick="window.print()">${outputLabel}</button>
+      </div>
+      <main class="sheet">${receiptBodyHtml(source)}</main>
     </body>
   </html>`;
 };
@@ -224,128 +381,80 @@ const pdfBinary = (objects) => {
   );
 };
 
-const pdfTextCommand = (
-  x,
-  y,
-  size,
-  value,
-  { bold = false, color = "0.19 0.15 0.14" } = {},
-) =>
-  `BT /${bold ? "F2" : "F1"} ${size} Tf ${color} rg ${x} ${y} Td (${pdfSafeText(value)}) Tj ET`;
+const pdfText = (x, y, size, value, { bold = false } = {}) =>
+  `BT /${bold ? "F2" : "F1"} ${size} Tf 0.07 0.09 0.12 rg ${x} ${y} Td (${pdfSafeText(value)}) Tj ET`;
 
-const compactPdfText = (value, limit) => {
-  const text = String(value ?? "—").trim() || "—";
-  return text.length > limit ? `${text.slice(0, Math.max(1, limit - 3))}...` : text;
+const pdfLabelValue = (commands, x, y, label, value, maxLength) => {
+  commands.push(pdfText(x, y, 9.5, `${label}:`, { bold: true }));
+  commands.push(
+    pdfText(
+      x + Math.min(112, label.length * 5.4 + 12),
+      y,
+      9.5,
+      compact(value, maxLength),
+    ),
+  );
 };
 
-const paymentReceiptPdfContent = (receipt, pageLines, page, totalPages) => {
+const paymentReceiptPdfContent = (source) => {
+  const data = receiptDisplayData(source);
+  const { receipt } = data;
   const commands = [];
-  const dark = "0.23 0.18 0.17";
-  const accent = "0.73 0.16 0.20";
-  const muted = "0.46 0.40 0.38";
 
-  commands.push(`q ${dark} rg 40 760 515 52 re f Q`);
+  commands.push("q 0.82 0.84 0.87 RG 0.8 w 32 205 778 190 re S Q");
+  commands.push("q 0.62 0.65 0.69 RG [5 4] 0 d 600 205 m 600 395 l S Q");
+
+  let y = 360;
+  pdfLabelValue(commands, 58, y, data.entityLabel, data.people, 75);
+  y -= 23;
+  pdfLabelValue(commands, 58, y, "Domicilio", data.address, 72);
+  y -= 23;
+  pdfLabelValue(
+    commands,
+    58,
+    y,
+    "Categoría / Monto",
+    `${data.category} / ${data.amountDetail}`,
+    70,
+  );
+  y -= 23;
+  pdfLabelValue(commands, 58, y, "Período", data.periods, 78);
+  y -= 23;
+  pdfLabelValue(commands, 58, y, data.paymentLabel, data.paymentValue, 55);
+  y -= 23;
+  pdfLabelValue(commands, 58, y, "Estado", data.state, 24);
+  commands.push(pdfText(58, 224, 8.5, "Por consultas comunicarse al 03564-15205778"));
   commands.push(
-    pdfTextCommand(
-      55,
-      792,
-      17,
-      compactPdfText(receipt.organizacion || receipt.titulo, 42),
-      { bold: true, color: "1 1 1" },
+    pdfText(
+      58,
+      211,
+      8.1,
+      "Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.",
     ),
   );
-  commands.push(
-    pdfTextCommand(55, 774, 9, receipt.titulo, { color: "0.94 0.90 0.87" }),
+
+  let copyY = 360;
+  pdfLabelValue(commands, 620, copyY, data.copyEntityLabel, data.people, 28);
+  copyY -= 27;
+  pdfLabelValue(
+    commands,
+    620,
+    copyY,
+    "Categoría / Monto",
+    `${data.category} / ${data.amountDetail}`,
+    28,
   );
-  commands.push(
-    pdfTextCommand(430, 791, 9, date(receipt.fecha), {
-      bold: true,
-      color: "1 1 1",
-    }),
-  );
-  commands.push(
-    pdfTextCommand(
-      430,
-      775,
-      8,
-      `Página ${page} de ${totalPages}`,
-      { color: "0.94 0.90 0.87" },
-    ),
-  );
+  copyY -= 27;
+  pdfLabelValue(commands, 620, copyY, "Período", data.periods, 31);
+  copyY -= 27;
+  pdfLabelValue(commands, 620, copyY, data.paymentLabel, data.paymentValue, 24);
+  copyY -= 27;
+  pdfLabelValue(commands, 620, copyY, "Estado", data.state, 18);
 
-  commands.push("q 0.98 0.96 0.94 rg 40 690 515 54 re f Q");
-  const summaries = [
-    [55, "SOCIO/S", compactPdfText(receipt.socios, 27)],
-    [220, "MODALIDAD", compactPdfText(receipt.modalidad, 20)],
-    [350, "MEDIO", compactPdfText(receipt.medio, 16)],
-    [455, "TOTAL", money(receipt.monto)],
-  ];
-  summaries.forEach(([x, label, value]) => {
-    commands.push(pdfTextCommand(x, 725, 7, label, { bold: true, color: muted }));
-    commands.push(pdfTextCommand(x, 706, 10, value, { bold: true }));
-  });
-
-  commands.push(`q ${dark} rg 40 648 515 24 re f Q`);
-  [
-    [48, "SOCIO"],
-    [160, "CATEGORÍA"],
-    [275, "PERÍODO"],
-    [390, "BASE"],
-    [455, "DESC."],
-    [505, "PAGADO"],
-  ].forEach(([x, label]) => {
-    commands.push(
-      pdfTextCommand(x, 656, 7.5, label, { bold: true, color: "1 1 1" }),
-    );
-  });
-
-  let rowY = 628;
-  pageLines.forEach((line, index) => {
-    if (index % 2 === 1) {
-      commands.push(`q 0.985 0.975 0.965 rg 40 ${rowY - 6} 515 20 re f Q`);
-    }
-    commands.push(pdfTextCommand(48, rowY, 7.5, compactPdfText(line.socio, 19), { bold: true }));
-    commands.push(pdfTextCommand(160, rowY, 7.5, compactPdfText(line.categoria, 19)));
-    commands.push(pdfTextCommand(275, rowY, 7.5, compactPdfText(line.periodo, 19)));
-    commands.push(pdfTextCommand(390, rowY, 7.5, money(line.montoBase)));
-    commands.push(pdfTextCommand(455, rowY, 7.5, `${line.descuento}%`));
-    commands.push(
-      pdfTextCommand(505, rowY, 7.5, money(line.monto), {
-        bold: true,
-        color: accent,
-      }),
-    );
-    commands.push(`q 0.90 0.87 0.85 RG 40 ${rowY - 9} m 555 ${rowY - 9} l S Q`);
-    rowY -= 22;
-  });
-
-  if (page === totalPages) {
-    const totalY = Math.max(62, rowY - 18);
-    commands.push(`q ${accent} rg 365 ${totalY - 10} 190 38 re f Q`);
-    commands.push(
-      pdfTextCommand(380, totalY + 4, 8, "TOTAL REGISTRADO", {
-        bold: true,
-        color: "1 1 1",
-      }),
-    );
-    commands.push(
-      pdfTextCommand(475, totalY + 2, 13, money(receipt.monto), {
-        bold: true,
-        color: "1 1 1",
-      }),
-    );
-  }
-
+  commands.push(pdfText(620, 220, 7.5, date(receipt.fecha)));
   if (receipt.codigo) {
-    commands.push(
-      pdfTextCommand(40, 32, 7.5, `Operación: ${receipt.codigo}`, {
-        color: muted,
-      }),
-    );
+    commands.push(pdfText(720, 220, 7.5, `N.º ${compact(receipt.codigo, 18)}`));
   }
-  commands.push(
-    pdfTextCommand(445, 32, 7.5, receipt.estado, { bold: true, color: accent }),
-  );
 
   return commands.join("\n");
 };
@@ -353,51 +462,16 @@ const paymentReceiptPdfContent = (receipt, pageLines, page, totalPages) => {
 export const downloadPaymentReceiptPdf = (source) => {
   try {
     const receipt = normalizePaymentReceipt(source);
-    const detailLines = receipt.lineas.length
-      ? receipt.lineas
-      : [
-          {
-            socio: receipt.socios,
-            categoria: "—",
-            periodo: receipt.modalidad,
-            montoBase: receipt.montoBase,
-            descuento: 0,
-            monto: receipt.monto,
-          },
-        ];
-    const linesPerPage = 22;
-    const pages = [];
-    for (let index = 0; index < detailLines.length; index += linesPerPage) {
-      pages.push(detailLines.slice(index, index + linesPerPage));
-    }
-
-    const objects = [null];
-    objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-    objects[3] =
-      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
-    objects[4] =
-      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-
-    const pageReferences = [];
-    pages.forEach((pageLines, index) => {
-      const pageObject = 5 + index * 2;
-      const contentObject = pageObject + 1;
-      const content = paymentReceiptPdfContent(
-        receipt,
-        pageLines,
-        index + 1,
-        pages.length,
-      );
-      pageReferences.push(`${pageObject} 0 R`);
-      objects[pageObject] =
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ` +
-        `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> ` +
-        `/Contents ${contentObject} 0 R >>`;
-      objects[contentObject] =
-        `<< /Length ${pdfByteLength(content)} >>\nstream\n${content}\nendstream`;
-    });
-    objects[2] =
-      `<< /Type /Pages /Kids [${pageReferences.join(" ")}] /Count ${pages.length} >>`;
+    const content = paymentReceiptPdfContent(source);
+    const objects = [
+      null,
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [5 0 R] /Count 1 >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>",
+      `<< /Length ${pdfByteLength(content)} >>\nstream\n${content}\nendstream`,
+    ];
 
     const blob = new Blob([pdfBinary(objects)], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);

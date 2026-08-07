@@ -182,6 +182,11 @@
   background: linear-gradient(180deg, #fff 0%, var(--entity-modal-bg) 100%);
 }
 
+.entity-modal__body.is-loading {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
 .entity-modal__footer {
   flex: 0 0 auto;
   display: flex;

@@ -102,18 +102,17 @@ function LogoutModal({ open, onClose, onConfirm }) {
       className="pp-modal-overlay"
       role="dialog"
       aria-modal="true"
-      onMouseDown={onClose}
+      aria-labelledby="pp-logout-modal-title"
     >
-      <div
-        className="pp-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="pp-modal__icon">
+      <div className="pp-modal pp-modal--danger">
+        <div className="pp-modal__icon" aria-hidden="true">
           <FontAwesomeIcon icon={faRightFromBracket} />
         </div>
-        <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
+        <h3 id="pp-logout-modal-title" className="pp-modal__title">
+          Confirmar cierre de sesión
+        </h3>
         <p className="pp-modal__text">
-          ¿Estás seguro de que deseas salir del sistema?
+          ¿Estás seguro de que deseas cerrar la sesión?
         </p>
         <div className="pp-modal__actions">
           <button
@@ -128,7 +127,7 @@ function LogoutModal({ open, onClose, onConfirm }) {
             type="button"
             onClick={onConfirm}
           >
-            Cerrar sesión
+            Confirmar
           </button>
         </div>
       </div>

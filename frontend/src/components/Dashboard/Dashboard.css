@@ -460,6 +460,54 @@
 
 
 
+
+
+/* Escritorio amplio: sólo el gráfico ocupa todo el alto disponible. */
+@media (min-width: 1041px) {
+  .admin-dashboard {
+    height: calc(100vh - 90px);
+    height: calc(100dvh - 90px);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .admin-dashboard__header,
+  .admin-dashboard__error {
+    flex: 0 0 auto;
+  }
+
+  .admin-dashboard__body {
+    min-height: 0;
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .admin-dashboard__mainGrid {
+    min-height: 0;
+    height: 100%;
+    align-items: stretch;
+  }
+
+  .admin-dashboard__panel--chart {
+    min-height: 0;
+    height: 100%;
+    max-height: none;
+  }
+
+  .admin-dashboard__panel--status {
+    height: auto;
+    max-height: 288px;
+    align-self: start;
+  }
+
+  .admin-dashboard__chart {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 1040px) {
   .admin-dashboard__mainGrid {
     grid-template-columns: 1fr;

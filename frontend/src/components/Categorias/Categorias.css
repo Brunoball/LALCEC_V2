@@ -1,13 +1,12 @@
 /* Medidas y alineaciones exclusivas de las tablas de Categorías. */
 .categorias-grid {
   grid-template-columns:
-    minmax(0, .5fr)
-    minmax(0, 1.5fr)
-    minmax(0, 0.8fr)
-    minmax(0, 0.5fr)
-    minmax(0, 0.6fr)
-    minmax(0, 0.7fr)
-    minmax(0, 0.78fr);
+    minmax(0, 0.62fr)
+    minmax(0, 1.8fr)
+    minmax(0, 0.82fr)
+    minmax(0, 0.52fr)
+    minmax(0, 0.78fr)
+    minmax(0, 0.82fr);
   width: 100%;
   min-width: 0;
 }

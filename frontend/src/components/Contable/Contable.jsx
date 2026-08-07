@@ -13,6 +13,7 @@ import {
   faCircleInfo,
   faEye,
   faFileInvoiceDollar,
+  faList,
   faMoneyBillTransfer,
   faPaperclip,
   faPen,
@@ -163,6 +164,114 @@ function EmptyState({ message = "No hay registros para mostrar." }) {
   );
 }
 
+function MonthlyBarChart({ months = [] }) {
+  const values = months.flatMap((item) => [
+    Number(item.ingresos || 0),
+    Number(item.egresos || 0),
+  ]);
+  const maxValue = Math.max(1, ...values);
+  const scaleSteps = [1, 0.75, 0.5, 0.25, 0];
+  const compactMoney = (value) =>
+    new Intl.NumberFormat("es-AR", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(Number(value || 0));
+  const barHeight = (value) => {
+    const numericValue = Number(value || 0);
+    if (numericValue <= 0) return "0%";
+    return `${Math.max(3, (numericValue / maxValue) * 100)}%`;
+  };
+
+  return (
+    <article className="ct-panel ct-month-chart-panel">
+      <header>
+        <FontAwesomeIcon icon={faFileInvoiceDollar} /> Movimientos por mes
+      </header>
+
+      <div className="ct-month-chart">
+        <div
+          className="ct-month-chart__legend"
+          aria-label="Referencias del gráfico"
+        >
+          <span>
+            <i className="is-income" /> Ingresos
+          </span>
+          <span>
+            <i className="is-expense" /> Egresos
+          </span>
+        </div>
+
+        <div
+          className="ct-month-chart__plot"
+          role="group"
+          aria-label="Gráfico de barras de ingresos y egresos por mes"
+        >
+          <div className="ct-month-chart__scale" aria-hidden="true">
+            {scaleSteps.map((step) => (
+              <span key={step}>{compactMoney(maxValue * step)}</span>
+            ))}
+          </div>
+
+          <div className="ct-month-chart__canvas">
+            <div className="ct-month-chart__grid" aria-hidden="true">
+              {scaleSteps.map((step) => (
+                <i key={step} />
+              ))}
+            </div>
+
+            <div className="ct-month-chart__months">
+              {months.map((item) => {
+                const result = Number(
+                  item.resultado ??
+                    Number(item.ingresos || 0) - Number(item.egresos || 0),
+                );
+                const monthLabel = String(
+                  item.nombre || MONTHS[item.mes - 1] || item.mes,
+                );
+
+                return (
+                  <div
+                    className="ct-month-chart__month"
+                    key={item.mes}
+                    tabIndex={0}
+                    aria-label={`${monthLabel}: ingresos ${money(item.ingresos)}, egresos ${money(item.egresos)}, resultado ${money(result)}`}
+                  >
+                    <div className="ct-month-chart__bars" aria-hidden="true">
+                      <span
+                        className="ct-month-chart__bar is-income"
+                        style={{ height: barHeight(item.ingresos) }}
+                      />
+                      <span
+                        className="ct-month-chart__bar is-expense"
+                        style={{ height: barHeight(item.egresos) }}
+                      />
+                    </div>
+                    <strong>{monthLabel.slice(0, 3)}</strong>
+                    <div className="ct-month-chart__tooltip" aria-hidden="true">
+                      <b>{monthLabel}</b>
+                      <span>
+                        Ingresos <strong>{money(item.ingresos)}</strong>
+                      </span>
+                      <span>
+                        Egresos <strong>{money(item.egresos)}</strong>
+                      </span>
+                      <span
+                        className={result >= 0 ? "ct-positive" : "ct-negative"}
+                      >
+                        Resultado <strong>{money(result)}</strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function SummaryView({ summary, loading, mode }) {
   const totals = summary?.totales || {};
   const selectedMonth = (summary?.meses || []).find(
@@ -217,56 +326,7 @@ function SummaryView({ summary, loading, mode }) {
             </div>
           </article>
 
-          <article className="ct-panel ct-month-table-panel">
-            <header>
-              <FontAwesomeIcon icon={faFileInvoiceDollar} /> Resumen anual
-            </header>
-            <div
-              className="ct-annual-table"
-              role="table"
-              aria-label="Resumen anual por mes"
-            >
-              <div
-                className="mov-gridTable mov-gridTable--head ct-annual-table__head ct-annual-grid"
-                role="row"
-              >
-                {["Mes", "Ingresos", "Egresos", "Resultado"].map((column) => (
-                  <div
-                    className="mov-gridCell--head"
-                    role="columnheader"
-                    key={column}
-                  >
-                    {column}
-                  </div>
-                ))}
-              </div>
-              <div className="ct-annual-table__body" role="rowgroup">
-                {(summary?.meses || []).map((item) => (
-                  <div
-                    className="mov-gridTable mov-gridTable--row ct-annual-grid"
-                    role="row"
-                    key={item.mes}
-                  >
-                    <div className="mov-gridCell is-strong" role="cell">
-                      {item.nombre}
-                    </div>
-                    <div className="mov-gridCell is-right" role="cell">
-                      {money(item.ingresos)}
-                    </div>
-                    <div className="mov-gridCell is-right" role="cell">
-                      {money(item.egresos)}
-                    </div>
-                    <div
-                      className={`mov-gridCell is-right ${Number(item.resultado) >= 0 ? "ct-positive" : "ct-negative"}`}
-                      role="cell"
-                    >
-                      {money(item.resultado)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </article>
+          <MonthlyBarChart months={summary?.meses || []} />
         </div>
       ) : null}
 
@@ -341,6 +401,127 @@ function Breakdown({ title, items = [] }) {
   );
 }
 
+function SummaryDetailModal({ open, onClose, summary, year }) {
+  const monthlyRows = MONTHS.map((name, index) => {
+    const monthNumber = index + 1;
+    const source = (summary?.meses || []).find(
+      (item) => Number(item.mes) === monthNumber,
+    );
+    const income = Number(source?.ingresos || 0);
+    const expenses = Number(source?.egresos || 0);
+
+    return {
+      mes: monthNumber,
+      nombre: source?.nombre || name,
+      ingresos: income,
+      egresos: expenses,
+      resultado: Number(source?.resultado ?? income - expenses),
+    };
+  });
+  const calculatedTotals = monthlyRows.reduce(
+    (totals, item) => ({
+      ingresos: totals.ingresos + item.ingresos,
+      egresos: totals.egresos + item.egresos,
+      resultado: totals.resultado + item.resultado,
+    }),
+    { ingresos: 0, egresos: 0, resultado: 0 },
+  );
+  const totals = {
+    ingresos: Number(summary?.totales?.ingresos ?? calculatedTotals.ingresos),
+    egresos: Number(summary?.totales?.egresos ?? calculatedTotals.egresos),
+    resultado: Number(
+      summary?.totales?.resultado ?? calculatedTotals.resultado,
+    ),
+  };
+
+  return (
+    <CrudModal
+      open={open}
+      title="Detalle mensual contable"
+      subtitle={`Ingresos, egresos y resultado de cada mes del año ${year}.`}
+      onClose={onClose}
+      hideSubmit
+      hideCancel
+      modalClassName="contable-summary-detail-modal"
+      closeOnBackdrop={false}
+      wide
+    >
+      <SummaryCards
+        title=""
+        ariaLabel={`Totales contables del año ${year}`}
+        variant="dashboard"
+        className="contable-summary-detail-cards"
+        items={[
+          {
+            key: "detail-income",
+            icon: faArrowTrendUp,
+            label: "Ingresos",
+            value: money(totals.ingresos),
+            detail: `Acumulado del año ${year}`,
+            tone: "success",
+          },
+          {
+            key: "detail-expenses",
+            icon: faArrowTrendDown,
+            label: "Egresos",
+            value: money(totals.egresos),
+            detail: `Acumulado del año ${year}`,
+            tone: "danger",
+          },
+          {
+            key: "detail-result",
+            icon: faMoneyBillTransfer,
+            label: "Resultado",
+            value: money(totals.resultado),
+            detail:
+              totals.resultado >= 0 ? "Balance positivo" : "Balance negativo",
+            tone: totals.resultado >= 0 ? "balance" : "danger",
+          },
+        ]}
+      />
+
+      <GlobalDivTable
+        className="contable-summary-detail-table"
+        bodyClassName="contable-summary-detail-table__body"
+        gridClassName="contable-summary-detail-grid"
+        columns={[
+          "Mes",
+          { label: "Ingresos", align: "right" },
+          { label: "Egresos", align: "right" },
+          { label: "Resultado", align: "right" },
+        ]}
+        skeletonActionColumn={false}
+        ariaLabel={`Detalle mensual contable del año ${year}`}
+      >
+        {monthlyRows.map((item) => (
+          <div
+            className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row contable-summary-detail-grid ${Number(summary?.mes_seleccionado) === item.mes ? "is-selected-month" : ""}`.trim()}
+            role="row"
+            key={item.mes}
+          >
+            <div className="mov-gridCell entity-main-cell">
+              <strong>{item.nombre}</strong>
+              <small>{year}</small>
+            </div>
+            <div className="mov-gridCell is-right contable-money-cell contable-money-cell--income">
+              {money(item.ingresos)}
+            </div>
+            <div className="mov-gridCell is-right contable-money-cell contable-money-cell--expense">
+              {money(item.egresos)}
+            </div>
+            <div
+              className={`mov-gridCell is-right is-strong contable-money-cell ${item.resultado >= 0 ? "ct-positive" : "ct-negative"}`}
+            >
+              {money(item.resultado)}
+            </div>
+          </div>
+        ))}
+
+      </GlobalDivTable>
+    </CrudModal>
+  );
+}
+
 export default function ContableModule({ view = "summary" }) {
   const compactActions = useCompactModuleActions();
   const writable = canWrite();
@@ -367,6 +548,7 @@ export default function ContableModule({ view = "summary" }) {
   const [optionName, setOptionName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [summaryDetailOpen, setSummaryDetailOpen] = useState(false);
   const requestId = useRef(0);
   const expenseFileInputRef = useRef(null);
 
@@ -925,7 +1107,17 @@ export default function ContableModule({ view = "summary" }) {
         canCreate={canCreateMovement}
         primaryActionClassName={canCreateMovement ? "contable-create-top" : ""}
         headerActions={
-          view !== "summary" && !compactActions ? (
+          view === "summary" ? (
+            <button
+              className="mov-btn mov-btn--primary contable-summary-detail-btn"
+              type="button"
+              onClick={() => setSummaryDetailOpen(true)}
+              disabled={loading || !summary}
+            >
+              <FontAwesomeIcon icon={faList} />
+              Detalle
+            </button>
+          ) : !compactActions ? (
             <BotonExportarGlobal
               className="contable-export-top"
               onClick={() => setExportOpen(true)}
@@ -1185,6 +1377,13 @@ export default function ContableModule({ view = "summary" }) {
           </div>
         )}
       </ModulePage>
+
+      <SummaryDetailModal
+        open={summaryDetailOpen}
+        onClose={() => setSummaryDetailOpen(false)}
+        summary={summary}
+        year={year}
+      />
 
       <CrudModal
         open={incomeOpen}

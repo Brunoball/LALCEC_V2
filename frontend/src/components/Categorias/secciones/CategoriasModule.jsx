@@ -597,7 +597,6 @@ export default function CategoriasModule({ section = "categorias" }) {
               "Descripción",
               { label: "Monto mensual", align: "right" },
               "Socios",
-              "Estado",
               "Actualización",
               "Acciones",
             ]}
@@ -615,7 +614,9 @@ export default function CategoriasModule({ section = "categorias" }) {
                 role="row"
                 key={item.id_categoria}
               >
-                <div className="mov-gridCell is-strong">{item.nombre}</div>
+                <div className="mov-gridCell is-strong">
+                  <span className="mov-categoryChip">{item.nombre}</span>
+                </div>
                 <div className="mov-gridCell">
                   <span className="entity-wrap-text">{item.descripcion || "—"}</span>
                 </div>
@@ -624,11 +625,6 @@ export default function CategoriasModule({ section = "categorias" }) {
                 </div>
                 <div className="mov-gridCell is-center">
                   <span className="mov-chip">{item.cantidad_socios}</span>
-                </div>
-                <div className="mov-gridCell">
-                  <span className={`mov-chip ${item.activo ? "mov-chip--ok" : "mov-chip--danger"}`}>
-                    {item.activo ? "ACTIVA" : "BAJA"}
-                  </span>
                 </div>
                 <div className="mov-gridCell">{formatDate(item.updated_at?.slice(0, 10))}</div>
                 <div className="mov-gridCell mov-gridCell--actions">

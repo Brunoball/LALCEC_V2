@@ -105,13 +105,13 @@ function OptionList({ items, meta, writable, onEdit, onDelete }) {
             <FontAwesomeIcon icon={faCircleCheck} /> Disponible
           </span>
           <span className="config-contableUsage">Selectores de Contabilidad</span>
-          <div className="config-contableActions">
+          <div className="config-contableActions mov-actionsInline">
             {writable ? (
               <>
-                <button type="button" className="config-iconButton" onClick={() => onEdit(item)} title={`Editar ${meta.label}`} aria-label={`Editar ${item.nombre}`}>
+                <button type="button" className="mov-iconBtn" onClick={() => onEdit(item)} title={`Editar ${meta.label}`} aria-label={`Editar ${item.nombre}`}>
                   <FontAwesomeIcon icon={faPen} />
                 </button>
-                <button type="button" className="config-iconButton is-danger" onClick={() => onDelete(item)} title={`Eliminar ${meta.label}`} aria-label={`Eliminar ${item.nombre}`}>
+                <button type="button" className="mov-iconBtn mov-iconBtn--danger" onClick={() => onDelete(item)} title={`Eliminar ${meta.label}`} aria-label={`Eliminar ${item.nombre}`}>
                   <FontAwesomeIcon icon={faTrashCan} />
                 </button>
               </>
@@ -138,6 +138,21 @@ function ContableSkeleton() {
   );
 }
 
+function ContableStat({ icon, label, value, detail, tone }) {
+  return (
+    <article className={`config-contableStat config-contableStat--${tone}`}>
+      <span className="config-contableStat__icon" aria-hidden="true">
+        <FontAwesomeIcon icon={icon} />
+      </span>
+      <div>
+        <small>{label}</small>
+        <strong>{value}</strong>
+        <p>{detail}</p>
+      </div>
+    </article>
+  );
+}
+
 export default function ContableConfiguracion() {
   const navigate = useNavigate();
   const writable = canWrite();
@@ -161,6 +176,45 @@ export default function ContableConfiguracion() {
       String(item.nombre || "").toLocaleLowerCase("es-AR").includes(term),
     );
   }, [items, search]);
+
+  const totalOptions = useMemo(
+    () => Object.values(lists).reduce(
+      (total, list) => total + (Array.isArray(list) ? list.length : 0),
+      0,
+    ),
+    [lists],
+  );
+
+  const stats = [
+    {
+      icon: faCalculator,
+      label: "TOTAL GENERAL",
+      value: totalOptions,
+      detail: "Opciones contables configuradas",
+      tone: "total",
+    },
+    {
+      icon: meta.icon,
+      label: upper(meta.title),
+      value: items.length,
+      detail: "Opciones en la lista seleccionada",
+      tone: "active",
+    },
+    {
+      icon: faCircleCheck,
+      label: "MOSTRANDO",
+      value: filteredItems.length,
+      detail: search.trim() ? "Coincidencias de la búsqueda" : "Opciones disponibles",
+      tone: "visible",
+    },
+    {
+      icon: faList,
+      label: "LISTAS",
+      value: Object.keys(LIST_META).length,
+      detail: "Catálogos de Contabilidad",
+      tone: "lists",
+    },
+  ];
 
   const loadOptions = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -251,14 +305,14 @@ export default function ContableConfiguracion() {
       <ModulePage
         className="config-sectionPage"
         title="Configuración contable"
-        description="Administrá las opciones que aparecen en los selectores de otros ingresos y egresos."
+        description=""
         filters={[{
           key: "contable-search",
           type: "search",
-          label: "Búsqueda",
+          label: "Buscar",
+          placeholder: "",
           value: search,
           onChange: setSearch,
-          placeholder: `Buscar ${meta.label}`,
         }]}
         primaryActionLabel={meta.createLabel}
         onPrimaryAction={writable ? openCreate : undefined}
@@ -277,12 +331,17 @@ export default function ContableConfiguracion() {
           onClose={() => setFeedback(null)}
         />
 
+        <section
+          className="config-contableStats"
+          aria-label={`Resumen de ${meta.title}`}
+        >
+          {stats.map((stat) => (
+            <ContableStat key={stat.label} {...stat} />
+          ))}
+        </section>
+
         <section className="config-detailPanel config-detailPanel--list config-contablePanel">
           <div className="config-contableToolbar">
-            <div className="config-contableIntro">
-              <span className="config-contableIntro__icon"><FontAwesomeIcon icon={faCalculator} /></span>
-              <div><small>LISTAS DE CONTABILIDAD</small><strong>{meta.title}</strong><p>{meta.description}</p></div>
-            </div>
             <div className="config-contableTabs" role="tablist" aria-label="Listas contables">
               {Object.entries(LIST_META).map(([type, option]) => (
                 <button

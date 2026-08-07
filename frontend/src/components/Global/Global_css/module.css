@@ -545,6 +545,24 @@
   border-color: color-mix(in srgb, var(--success-500) 26%, transparent);
 }
 
+/* Categorías en tablas: mismo tratamiento visual que la columna Categoría de Cuotas. */
+.mov-categoryChip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+
 /* =========================================================
    Floating fields usados por el header tipo Ventas.
    ========================================================= */
@@ -979,6 +997,118 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+/* Tarjetas métricas compactas para resúmenes dentro de modales y paneles. */
+.global-summaryCards--dashboard {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__list {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__item {
+  --summary-card-tone: var(--balto-action);
+  position: relative;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+  padding: 13px 14px 13px 16px;
+  border-color: color-mix(
+    in srgb,
+    var(--summary-card-tone) 22%,
+    var(--mov-border)
+  );
+  border-radius: var(--blue-inst-radius-lg, 18px);
+  color: var(--summary-card-tone);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--summary-card-tone) 11%, #fff) 0%,
+    #fff 74%
+  );
+}
+
+.global-summaryCards--dashboard .global-summaryCards__item::before {
+  position: absolute;
+  inset: 13px auto 13px 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--summary-card-tone);
+  content: "";
+}
+
+.global-summaryCards--dashboard .global-summaryCards__item.is-success,
+.global-summaryCards--dashboard .global-summaryCards__item.is-balance {
+  --summary-card-tone: var(--balto-success, #16a34a);
+}
+
+.global-summaryCards--dashboard .global-summaryCards__item.is-danger {
+  --summary-card-tone: var(--balto-danger, #ef4444);
+}
+
+.global-summaryCards--dashboard .global-summaryCards__item.is-warning {
+  --summary-card-tone: #c68122;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: var(--blue-inst-radius, 12px);
+  background: color-mix(in srgb, currentColor 13%, #fff);
+  font-size: 15px;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__label {
+  grid-column: auto;
+  color: color-mix(
+    in srgb,
+    var(--summary-card-tone) 76%,
+    var(--balto-text)
+  );
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__value {
+  color: var(--balto-ink);
+  font-size: clamp(17px, 2vw, 22px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.global-summaryCards--dashboard .global-summaryCards__detail {
+  color: color-mix(in srgb, var(--balto-text) 72%, transparent);
+  font-size: 9px;
 }
 
 .module-stat {

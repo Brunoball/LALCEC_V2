@@ -1,4 +1,5 @@
 import React from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 export default function SummaryCards({
   title = "Resumen",
@@ -11,23 +12,57 @@ export default function SummaryCards({
   if (!items.length) return null;
 
   const variantClass =
-    variant === "footer" ? "global-summaryCards--footer" : "";
+    variant === "footer"
+      ? "global-summaryCards--footer"
+      : variant === "dashboard"
+        ? "global-summaryCards--dashboard"
+        : "";
+  const dashboardVariant = variant === "dashboard";
 
   return (
     <section
       className={`global-summaryCards ${variantClass} ${className}`.trim()}
-      aria-label={ariaLabel || title}
+      aria-label={ariaLabel || title || "Resumen"}
     >
-      <strong className="global-summaryCards__title">{title}</strong>
+      {title ? (
+        <strong className="global-summaryCards__title">{title}</strong>
+      ) : null}
       <div className="global-summaryCards__list">
         {items.map((item) => {
           const hasDetail = item.detail !== undefined && item.detail !== null;
+          const toneClass = item.tone ? `is-${item.tone}` : "";
+
+          if (dashboardVariant) {
+            return (
+              <article
+                className={`global-summaryCards__item ${toneClass}`.trim()}
+                key={item.key || item.label}
+              >
+                {item.icon ? (
+                  <div className="global-summaryCards__icon" aria-hidden="true">
+                    <FontAwesomeIcon icon={item.icon} />
+                  </div>
+                ) : null}
+                <div className="global-summaryCards__body">
+                  <span className="global-summaryCards__label">
+                    {item.label}
+                  </span>
+                  <b className="global-summaryCards__value">{item.value}</b>
+                  {hasDetail ? (
+                    <small className="global-summaryCards__detail">
+                      {item.detail}
+                    </small>
+                  ) : null}
+                </div>
+              </article>
+            );
+          }
 
           return (
             <article
               className={`global-summaryCards__item ${
                 hasDetail ? "" : "global-summaryCards__item--simple"
-              }`.trim()}
+              } ${toneClass}`.trim()}
               key={item.key || item.label}
             >
               <span className="global-summaryCards__label">{item.label}</span>

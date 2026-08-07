@@ -1,10 +1,6 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faCheck,
-  faFilePdf,
-  faPrint,
-} from "@fortawesome/free-solid-svg-icons";
+import { faFilePdf, faPrint } from "@fortawesome/free-solid-svg-icons";
 import CrudModal from "../CrudModal";
 import { normalizePaymentReceipt } from "../../../_shared/utils/comprobantePago";
 import "./ModalComprobantePago.css";
@@ -38,94 +34,75 @@ export default function ModalComprobantePago({
   return (
     <CrudModal
       open={open}
-      title={isWaiver ? "Condonación realizada" : "Pago realizado"}
-      subtitle={`${isWaiver ? "La condonación" : "El cobro"} se registró correctamente. Podés generar el comprobante ahora o hacerlo más tarde desde el listado.`}
+      title={isWaiver ? "Registro de condonación" : "Registro de pagos"}
+      subtitle={
+        receipt.codigo
+          ? `Operación ${receipt.codigo}`
+          : "La operación fue registrada correctamente."
+      }
       onClose={onClose}
       hideCancel
       hideSubmit
+      closeOnBackdrop={false}
       modalClassName="payment-receipt-modal"
     >
-      <div className="payment-receipt-success" role="status">
-        <span className="payment-receipt-success__icon">
-          <FontAwesomeIcon icon={faCheck} />
-        </span>
-        <div>
-          <strong>
-            ¡Listo! {isWaiver ? "La condonación" : "El pago"} fue registrado.
-          </strong>
-          <span>
-            {loading
-              ? "Estamos completando los datos oficiales del comprobante."
-              : receipt.codigo
-                ? `Operación ${receipt.codigo}`
-                : "Comprobante disponible"}
-          </span>
-        </div>
-      </div>
-
-      <section className="payment-receipt-summary" aria-label="Resumen del pago">
+      <section
+        className="payment-receipt-info-summary"
+        aria-label="Información del comprobante"
+      >
         <article>
-          <span>Socio/s</span>
+          <span>{receipt.tipoEntidad === "EMPRESA" ? "Empresa" : "Socio"}</span>
           <strong>{receipt.socios}</strong>
         </article>
         <article>
-          <span>Fecha</span>
+          <span>Fecha de pago</span>
           <strong>{date(receipt.fecha)}</strong>
-        </article>
-        <article>
-          <span>Medio de pago</span>
-          <strong>{receipt.medio}</strong>
-        </article>
-        <article className="payment-receipt-summary__total">
-          <span>{isWaiver ? "Total cobrado" : "Total pagado"}</span>
-          <strong>{money(receipt.monto)}</strong>
         </article>
       </section>
 
-      <div className="payment-receipt-detail">
-        <div>
-          <span>Concepto</span>
-          <strong>{receipt.modalidad}</strong>
+      <section className="payment-receipt-success" role="status">
+        <h2>
+          ¡{isWaiver ? "Condonación realizada" : "Pago realizado"} con éxito!
+        </h2>
+        <p>
+          {loading
+            ? "Estamos completando los datos del comprobante."
+            : "Podés generar el comprobante ahora mismo."}
+        </p>
+      </section>
+
+      <div className="payment-receipt-footer">
+        <div className="payment-receipt-total-pill">
+          <span>Total:</span>
+          <strong>{money(receipt.monto)}</strong>
         </div>
-        <div>
-          <span>Detalle</span>
-          <strong>
-            {receipt.lineas.length} concepto
-            {receipt.lineas.length === 1 ? "" : "s"} incluido
-            {receipt.lineas.length === 1 ? "" : "s"}
-          </strong>
+
+        <div className="payment-receipt-actions">
+          <button
+            className="mov-btn mov-btn--ghost payment-receipt-actions__close"
+            type="button"
+            onClick={onClose}
+          >
+            Cerrar
+          </button>
+          <button
+            className="mov-btn payment-receipt-actions__print"
+            type="button"
+            onClick={onPrint}
+          >
+            <FontAwesomeIcon icon={faPrint} />
+            Comprobante
+          </button>
+          <button
+            className="mov-btn payment-receipt-actions__pdf"
+            type="button"
+            onClick={onExportPdf}
+          >
+            <FontAwesomeIcon icon={faFilePdf} />
+            PDF
+          </button>
         </div>
       </div>
-
-      <div className="payment-receipt-actions">
-        <button
-          className="mov-btn payment-receipt-actions__print"
-          type="button"
-          onClick={onPrint}
-        >
-          <FontAwesomeIcon icon={faPrint} />
-          Imprimir
-        </button>
-        <button
-          className="mov-btn payment-receipt-actions__pdf"
-          type="button"
-          onClick={onExportPdf}
-        >
-          <FontAwesomeIcon icon={faFilePdf} />
-          Exportar PDF
-        </button>
-        <button
-          className="mov-btn mov-btn--ghost payment-receipt-actions__close"
-          type="button"
-          onClick={onClose}
-        >
-          Cerrar
-        </button>
-      </div>
-
-      <p className="payment-receipt-help">
-        “Exportar PDF” descarga directamente el comprobante en formato PDF.
-      </p>
     </CrudModal>
   );
 }

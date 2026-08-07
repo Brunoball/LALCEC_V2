@@ -184,9 +184,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 
 .config-catalogTable__head,
@@ -243,9 +241,13 @@
 
 .config-catalogTable__body {
   min-height: 180px;
+  max-height: calc(100vh - 400px);
   display: flex;
   flex: 1;
   flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .config-catalogTable__row {

@@ -1,11 +1,10 @@
 /* Medidas y alineaciones exclusivas de la tabla de Familias. */
 .familias-grid {
   grid-template-columns:
-    minmax(0, 1.1fr)
-    minmax(0, 1.4fr)
-    minmax(0, 1.7fr)
+    minmax(0, 1.15fr)
+    minmax(0, 1.55fr)
+    minmax(0, 1.8fr)
     minmax(0, 0.55fr)
-    minmax(0, 0.6fr)
     minmax(0, 0.65fr);
   width: 100%;
   min-width: 0;
@@ -35,8 +34,7 @@
 }
 
 .familias-grid > :nth-child(4),
-.familias-grid > :nth-child(5),
-.familias-grid > :nth-child(6) {
+.familias-grid > :nth-child(5) {
   justify-content: center;
   text-align: center;
 }
@@ -47,6 +45,6 @@
   }
 
   .familias-grid {
-    min-width: 900px;
+    min-width: 820px;
   }
 }
