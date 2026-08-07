@@ -23,6 +23,7 @@ import {
 import { apiPost } from "../_shared/api/apiClient";
 import { BOT_PANEL_ROUTE } from "../../config/config";
 import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
+import ModalPerfil from "../Perfil/ModalPerfil";
 import "./principal.css";
 
 const APP_NAME = "Gestión de Socios";
@@ -141,6 +142,7 @@ export default function Principal() {
   const navigate = useNavigate();
   const session = getSession();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [perfilOpen, setPerfilOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [openGroupKey, setOpenGroupKey] = useState(() =>
     getGroupKeyForPath(location.pathname),
@@ -279,7 +281,9 @@ export default function Principal() {
           <button
             className="mov-topbar__usericon"
             type="button"
-            title={`${session?.usuario?.nombre || "Usuario"} · ${session?.usuario?.rol || ""}`}
+            onClick={() => setPerfilOpen(true)}
+            title="Perfil"
+            aria-label="Abrir perfil"
           >
             <FontAwesomeIcon icon={faUserCircle} />
           </button>
@@ -425,6 +429,16 @@ export default function Principal() {
           <Outlet />
         </div>
       </main>
+      <ModalPerfil
+        open={perfilOpen}
+        onClose={() => setPerfilOpen(false)}
+        usuario={session?.usuario}
+        logoSrc={logoLalcec}
+        onConfigRequest={() => {
+          setPerfilOpen(false);
+          navigate("/configuracion");
+        }}
+      />
       <LogoutModal
         open={logoutOpen}
         onClose={() => setLogoutOpen(false)}

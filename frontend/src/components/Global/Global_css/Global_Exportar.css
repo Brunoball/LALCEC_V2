@@ -585,3 +585,8 @@
     transition: none;
   }
 }
+
+.global-exportHistorial-modal.is-size-transitioning {
+  overflow: hidden !important;
+  will-change: height;
+}

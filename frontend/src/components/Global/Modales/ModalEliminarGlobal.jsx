@@ -15,6 +15,7 @@ import {
   faUserSlash,
 } from "@fortawesome/free-solid-svg-icons";
 import Toast from "../Toast";
+import useAnimatedModalSize from "./useAnimatedModalSize";
 import "../Global_css/Global_ModalEliminar.css";
 
 const OPERATION_CONFIG = {
@@ -133,7 +134,9 @@ export default function ModalEliminarGlobal({
   confirmDisabled = false,
   modalClassName = "",
 }) {
+  const modalRef = useRef(null);
   const cancelRef = useRef(null);
+  useAnimatedModalSize(modalRef, open);
   const reasonRef = useRef(null);
   const [processing, setProcessing] = useState(false);
   const [reason, setReason] = useState(upper(initialReason));
@@ -309,6 +312,7 @@ export default function ModalEliminarGlobal({
         }}
       >
         <div
+          ref={modalRef}
           className={`gdel-modal gdel-modal--${resolvedTone} ${modalClassName}`.trim()}
         >
           <button

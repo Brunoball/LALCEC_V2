@@ -1,8 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import GlobalLoader from "../GlobalLoader";
+import useAnimatedModalSize from "./useAnimatedModalSize";
 import "../Global_css/Global_Modals.css";
 
 function openDatePickerFromInput(event) {
@@ -46,6 +47,9 @@ export default function CrudModal({
   modalClassName = "",
   closeOnBackdrop = true,
 }) {
+  const modalRef = useRef(null);
+  useAnimatedModalSize(modalRef, open);
+
   useEffect(() => {
     if (!open) return undefined;
     const previous = document.body.style.overflow;
@@ -66,6 +70,7 @@ export default function CrudModal({
       onMouseDown={() => closeOnBackdrop && !saving && onClose?.()}
     >
       <div
+        ref={modalRef}
         className={`entity-modal ${wide ? "entity-modal--wide" : ""} ${modalClassName}`.trim()}
         role="dialog"
         aria-modal="true"

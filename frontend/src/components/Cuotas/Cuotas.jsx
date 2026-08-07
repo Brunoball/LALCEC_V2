@@ -1066,7 +1066,7 @@ export default function Cuotas() {
     tipo === "EMPRESA" ? "Empresa" : "Socio",
     "Categoría",
     "Período",
-    "Importe sugerido",
+    "Importe",
     "Acciones",
   ];
   const columns = isPaid

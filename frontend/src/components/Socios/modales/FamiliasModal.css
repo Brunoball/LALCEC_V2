@@ -295,17 +295,86 @@
 }
 
 .familias-holder-toggle {
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--entity-modal-border);
+  border-radius: 9px;
   color: var(--entity-modal-text);
+  background: #fff;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
   cursor: pointer;
+  user-select: none;
+  transition:
+    color var(--entity-modal-transition),
+    border-color var(--entity-modal-transition),
+    background var(--entity-modal-transition),
+    box-shadow var(--entity-modal-transition),
+    transform var(--entity-modal-transition);
+}
+
+.familias-holder-toggle:hover {
+  color: var(--entity-modal-action);
+  border-color: color-mix(in srgb, var(--entity-modal-action) 42%, #fff);
+  background: color-mix(in srgb, var(--entity-modal-action) 4%, #fff);
+}
+
+.familias-holder-toggle:has(input:checked) {
+  color: var(--entity-modal-action);
+  border-color: color-mix(in srgb, var(--entity-modal-action) 42%, #fff);
+  background: color-mix(in srgb, var(--entity-modal-action) 8%, #fff);
+  box-shadow: 0 4px 12px -10px color-mix(in srgb, var(--entity-modal-action) 55%, transparent);
 }
 
 .familias-holder-toggle input {
-  accent-color: var(--entity-modal-action);
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  appearance: none;
+  display: grid;
+  place-content: center;
+  flex: 0 0 17px;
+  border: 1.5px solid var(--gray-400);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color var(--entity-modal-transition),
+    background var(--entity-modal-transition),
+    box-shadow var(--entity-modal-transition);
+}
+
+.familias-holder-toggle input::before {
+  content: "";
+  width: 7px;
+  height: 4px;
+  margin-top: -2px;
+  border-bottom: 2px solid #fff;
+  border-left: 2px solid #fff;
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.7);
+  transition:
+    opacity var(--entity-modal-transition),
+    transform var(--entity-modal-transition);
+}
+
+.familias-holder-toggle input:checked {
+  border-color: var(--entity-modal-action);
+  background: var(--entity-modal-action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 12%, transparent);
+}
+
+.familias-holder-toggle input:checked::before {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+
+.familias-holder-toggle input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--entity-modal-action) 45%, #fff);
+  outline-offset: 2px;
 }
 
 .familias-member-input {
@@ -605,4 +674,41 @@
 .familias-modal__member-list--available > .familias-modal__member .familias-modal__member-copy {
   min-width: 0;
   align-self: center;
+}
+
+/* Socios ya vinculados a otra familia: visibles, pero claramente no seleccionables. */
+.familias-modal__member-list--available > .familias-modal__member.is-disabled {
+  cursor: not-allowed;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--gray-300) 78%, #fff);
+  background: color-mix(in srgb, var(--gray-100) 82%, #fff);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.familias-modal__member-list--available > .familias-modal__member.is-disabled:hover {
+  transform: none;
+  border-color: color-mix(in srgb, var(--gray-300) 78%, #fff);
+  background: color-mix(in srgb, var(--gray-100) 82%, #fff);
+}
+
+.familias-modal__member.is-disabled input[type="checkbox"] {
+  border-color: var(--gray-300);
+  background: var(--gray-100);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.familias-modal__member.is-disabled .familias-member-avatar {
+  color: var(--gray-500);
+  border-color: var(--gray-200);
+  background: var(--gray-100);
+}
+
+.familias-modal__member.is-disabled .familias-modal__member-copy strong {
+  color: var(--gray-600);
+}
+
+.familias-modal__member.is-disabled .familias-modal__member-copy small {
+  color: var(--gray-500);
 }

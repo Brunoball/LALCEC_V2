@@ -103,6 +103,54 @@ function emptyForm() {
   };
 }
 
+function getCatalogFamilyId(person) {
+  return Number(
+    person?.id_familia_activa ??
+      person?.id_familia ??
+      person?.familia_id ??
+      person?.idFamilia ??
+      0,
+  );
+}
+
+function getCatalogFamilyName(person) {
+  return String(
+    person?.familia ?? person?.nombre_familia ?? person?.familia_nombre ?? "",
+  ).trim();
+}
+
+function hasCatalogFamily(person) {
+  const familyId = getCatalogFamilyId(person);
+  const familyName = upper(getCatalogFamilyName(person));
+  const familyFlag = String(person?.familia_activa ?? person?.tiene_familia ?? "")
+    .trim()
+    .toLocaleUpperCase("es-AR");
+
+  return (
+    familyId > 0 ||
+    ["1", "TRUE", "SI", "SÍ", "ACTIVO", "ACTIVA"].includes(familyFlag) ||
+    Boolean(familyName && !["-", "—", "SIN FAMILIA"].includes(familyName))
+  );
+}
+
+function belongsToAnotherFamily(person, form) {
+  if (!hasCatalogFamily(person)) return false;
+
+  const personFamilyId = getCatalogFamilyId(person);
+  const currentFamilyId = Number(form?.id_familia || 0);
+  if (currentFamilyId && personFamilyId) {
+    return personFamilyId !== currentFamilyId;
+  }
+
+  const personFamilyName = upper(getCatalogFamilyName(person));
+  const currentFamilyName = upper(form?.nombre || "").trim();
+  if (currentFamilyId && personFamilyName && currentFamilyName) {
+    return personFamilyName !== currentFamilyName;
+  }
+
+  return true;
+}
+
 function memberFromCatalog(person) {
   return {
     id_socio: Number(person.id_socio),
@@ -249,8 +297,8 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
             <section className="familias-members-column familias-members-column--available">
               <div className="familias-members-column__header">
                 <div>
-                  <strong>Socios disponibles</strong>
-                  <span>Seleccioná quienes querés incorporar.</span>
+                  <strong>Socios</strong>
+                  <span>Los que ya tienen familia aparecen deshabilitados.</span>
                 </div>
                 <span className="familias-members-count">{visible.length}</span>
               </div>
@@ -272,18 +320,18 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                 {visible.map((person) => {
                   const id = Number(person.id_socio);
                   const checked = pendingMemberIds.has(id);
-                  const belongsElsewhere =
-                    person.familia_activa &&
-                    person.id_familia &&
-                    Number(person.id_familia) !== Number(form.id_familia || 0);
+                  const belongsElsewhere = belongsToAnotherFamily(person, form);
                   const disabled = Boolean(belongsElsewhere || !person.activo);
+                  const familyName = getCatalogFamilyName(person);
                   return (
                     <label
-                      className={`entity-check-option familias-modal__member ${checked ? "is-selected" : ""}`.trim()}
+                      className={`entity-check-option familias-modal__member ${checked ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`.trim()}
                       key={person.id_socio}
                       title={
                         belongsElsewhere
-                          ? `Pertenece a ${person.familia}`
+                          ? familyName
+                            ? `Ya pertenece a ${familyName}`
+                            : "Ya pertenece a otra familia"
                           : !person.activo
                             ? "Socio dado de baja"
                             : ""
@@ -303,7 +351,9 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                         <small>
                           DNI {person.dni || "—"}
                           {person.categoria ? ` · ${person.categoria}` : ""}
-                          {belongsElsewhere ? ` · ${person.familia}` : ""}
+                          {belongsElsewhere
+                            ? ` · ${familyName ? `Familia: ${familyName}` : "Ya tiene familia"}`
+                            : ""}
                         </small>
                       </span>
                     </label>
@@ -516,8 +566,11 @@ export default function Familias() {
   };
   const addPendingMembers = () => {
     if (!pendingMemberIds.size) return;
-    const peopleToAdd = (catalogos.socios || []).filter((person) =>
-      pendingMemberIds.has(Number(person.id_socio)),
+    const peopleToAdd = (catalogos.socios || []).filter(
+      (person) =>
+        pendingMemberIds.has(Number(person.id_socio)) &&
+        person.activo !== false &&
+        !belongsToAnotherFamily(person, form),
     );
     setForm((current) => ({
       ...current,

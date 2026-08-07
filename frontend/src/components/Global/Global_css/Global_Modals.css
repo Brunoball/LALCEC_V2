@@ -516,3 +516,22 @@
     animation: none;
   }
 }
+
+/* =========================================================
+   TRANSICIÓN GLOBAL DE TAMAÑO
+   useAnimatedModalSize agrega esta clase sólo durante el cambio de alto.
+   ========================================================= */
+.entity-modal.is-size-transitioning,
+.gdel-modal.is-size-transitioning,
+.global-exportHistorial-modal.is-size-transitioning {
+  overflow: hidden !important;
+  will-change: height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entity-modal,
+  .gdel-modal,
+  .global-exportHistorial-modal {
+    animation-duration: 0.01ms !important;
+  }
+}

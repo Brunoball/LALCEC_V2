@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileExcel, faFileImport, faFilePdf, faLayerGroup, faList, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
 import "../Global_css/Global_Modals.css";
+import useAnimatedModalSize from "./useAnimatedModalSize";
 import "../Global_css/Global_Exportar.css";
 
 const FORMATOS_EXPORTAR = [
@@ -1285,6 +1286,8 @@ const ModalExportarGlobal = ({
   onError,
 }) => {
   const isOpen = Boolean(open ?? abierto);
+  const modalRef = useRef(null);
+  useAnimatedModalSize(modalRef, isOpen);
   const [formato, setFormato] = useState(defaultFormato);
   const [alcance, setAlcance] = useState(defaultAlcance);
   const [exportando, setExportando] = useState(false);
@@ -1438,7 +1441,7 @@ const ModalExportarGlobal = ({
 
   return createPortal((
     <div className="global-exportHistorial-overlay" role="dialog" aria-modal="true" aria-labelledby="global-exportHistorial-title">
-      <form className="global-exportHistorial-modal" onSubmit={handleSubmit}>
+      <form ref={modalRef} className="global-exportHistorial-modal" onSubmit={handleSubmit}>
         <header className="global-exportHistorial-header">
           <div>
             <h2 id="global-exportHistorial-title">{title}</h2>

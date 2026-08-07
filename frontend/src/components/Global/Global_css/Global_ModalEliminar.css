@@ -436,3 +436,8 @@
     font-size: 12.5px;
   }
 }
+
+.gdel-modal.is-size-transitioning {
+  overflow: hidden !important;
+  will-change: height;
+}
