@@ -1,16 +1,17 @@
 const { test, expect } = require('./fixtures/auth.fixture');
-const { familyData, personData } = require('./fixtures/socios.fixture');
+const { companyData, familyData, personData } = require('./fixtures/socios.fixture');
 const {
   apiCall,
   cleanupCategoriesByPrefix,
   cleanupFamilyByPrefix,
   cleanupSocioByDocument,
 } = require('./helpers/api.helper');
-const { createFamily, createPerson } = require('./helpers/entities.helper');
-const { captureDownload } = require('./helpers/download.helper');
+const { createCompany, createFamily, createPerson } = require('./helpers/entities.helper');
+const { captureDownload, exportFromGlobalModal } = require('./helpers/download.helper');
 const { todayIso } = require('./helpers/data.helper');
 
 const singlePerson = personData();
+const singleCompany = companyData();
 const batchPersonOne = personData();
 const batchPersonTwo = personData();
 const multiMonthPerson = personData();
@@ -94,7 +95,7 @@ async function activeCategoryAndMedium(request) {
   return { category, medium };
 }
 
-async function removePaymentsForDocument(request, data) {
+async function removePaymentsForDocument(request, data, tipo = 'PERSONA') {
   const catalogs = await apiCall(request, 'cuotas_catalogos').catch(() => ({ catalogos: {} }));
   const years = new Set(
     [
@@ -110,11 +111,11 @@ async function removePaymentsForDocument(request, data) {
     for (let month = 1; month <= 12; month += 1) {
       const response = await apiCall(request, 'cuotas_listar', {
         params: {
-          tipo: 'PERSONA',
+          tipo,
           estado: 'PAGADOS',
           anio: year,
           mes: month,
-          buscar: data.dni,
+          buscar: tipo === 'EMPRESA' ? data.cuit : data.dni,
         },
       }).catch(() => ({ items: [] }));
 
@@ -129,10 +130,18 @@ async function removePaymentsForDocument(request, data) {
 }
 
 async function cleanupPerson(request, data) {
-  await removePaymentsForDocument(request, data);
+  await removePaymentsForDocument(request, data, 'PERSONA');
   await cleanupSocioByDocument(request, {
     tipo: 'PERSONA',
     documento: data.dni,
+  }).catch(() => undefined);
+}
+
+async function cleanupCompany(request, data) {
+  await removePaymentsForDocument(request, data, 'EMPRESA');
+  await cleanupSocioByDocument(request, {
+    tipo: 'EMPRESA',
+    documento: data.cuit,
   }).catch(() => undefined);
 }
 
@@ -184,6 +193,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
     } catch (_error) {
       // La familia puede no haberse creado en el caso ejecutado.
     }
+
+    await cleanupCompany(request, singleCompany);
 
     for (const person of [
       singlePerson,
@@ -269,6 +280,55 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await deleteDialog.getByRole('button', { name: 'Eliminar pago', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Deudores' })).toHaveAttribute('aria-selected', 'true');
     await expect(debtRow(page, singlePerson)).toBeVisible();
+  });
+
+  test('registra y elimina un pago de empresa desde la interfaz completa de Cuotas', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await cleanupCompany(request, singleCompany);
+    await createCompany(request, singleCompany, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    await page.goto('/cuotas');
+    await page.getByRole('tab', { name: 'Empresas' }).click();
+    const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(singleCompany.cuit);
+
+    let row = page
+      .getByRole('table', { name: /Cuotas de empresas adeudadas/i })
+      .getByRole('row')
+      .filter({ hasText: singleCompany.cuit });
+    await expect(row).toContainText(singleCompany.razonSocial);
+    await row.getByRole('button', { name: /Registrar pago de/i }).click();
+
+    const paymentDialog = page.getByRole('dialog', { name: 'Pago de empresa' });
+    await expect(paymentDialog).toBeVisible();
+    await expect(paymentDialog).toContainText(singleCompany.razonSocial);
+    await expect(paymentDialog).toContainText(singleCompany.cuit);
+    await selectPreferredMedium(paymentDialog);
+    await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
+
+    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
+    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    await receipt.getByText('Cerrar', { exact: true }).click();
+
+    await page.getByRole('tab', { name: 'Pagados' }).click();
+    row = page
+      .getByRole('table', { name: /Cuotas de empresas pagadas/i })
+      .getByRole('row')
+      .filter({ hasText: singleCompany.cuit });
+    await expect(row).toContainText(singleCompany.razonSocial);
+    await row.getByRole('button', { name: /Eliminar pago de/i }).click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Eliminar pago registrado' });
+    await deleteDialog.getByRole('button', { name: 'Eliminar pago', exact: true }).click();
+
+    await expect(page.getByRole('tab', { name: 'Deudores' })).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.getByRole('table', { name: /Cuotas de empresas adeudadas/i })
+        .getByRole('row')
+        .filter({ hasText: singleCompany.cuit }),
+    ).toBeVisible();
   });
 
   test('selecciona filas con mouse, teclado y checkbox, limpia, cancela y confirma un pago múltiple', async ({ page, request }) => {
@@ -677,5 +737,45 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(pagination).toContainText('1–100 de 101');
     await pagination.getByRole('button', { name: 'Siguiente' }).click();
     await expect(pagination).toContainText('101–101 de 101');
+
+    const exportButton = page.getByRole('button', { name: 'Exportar', exact: true }).first();
+    await exportButton.click();
+    let exportDialog = page.getByRole('dialog', { name: 'Exportar cuotas' });
+    await expect(exportDialog).toBeVisible();
+    await expect(exportDialog.getByRole('radio', { name: /Exportar esta página/i })).toBeVisible();
+    await expect(exportDialog.getByRole('radio', { name: /Exportar todas las cuotas filtradas/i })).toBeVisible();
+    await exportDialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(exportDialog).toBeHidden();
+
+    await exportButton.click();
+    exportDialog = page.getByRole('dialog', { name: 'Exportar cuotas' });
+    await exportDialog.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(exportDialog).toBeHidden();
+
+    await exportButton.click();
+    exportDialog = page.getByRole('dialog', { name: 'Exportar cuotas' });
+    await page.keyboard.press('Escape');
+    await expect(exportDialog).toBeHidden();
+
+    await page.route(/api\.php\?action=perfil_logo_institucional(?:&|$)/, async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ exito: false, mensaje: 'Sin logo E2E' }),
+      });
+    });
+
+    await exportFromGlobalModal(page, {
+      openButton: exportButton,
+      format: 'Excel',
+      scope: 'Exportar esta página',
+      expectedExtension: '.xlsx',
+    });
+    await exportFromGlobalModal(page, {
+      openButton: exportButton,
+      format: 'PDF',
+      scope: 'Exportar todas las cuotas filtradas',
+      expectedExtension: '.pdf',
+    });
   });
 });

@@ -133,13 +133,62 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await expect(dialog).toBeHidden();
   });
 
+  test('exporta ingresos de socios en Excel y PDF y mantiene esa vista sin acciones de mutación', async ({ page }) => {
+    await page.route(/api\.php\?action=contable_ingresos_socios(?:&|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          exito: true,
+          items: [{
+            id_pago: 930001,
+            fecha: date,
+            socio: 'PW E2E SOCIO CONTABLE',
+            dni: '99999991',
+            categoria: 'PW E2E CATEGORÍA SOCIO',
+            periodo: `${String(month).padStart(2, '0')}/${year}`,
+            medio: 'EFECTIVO',
+            monto: '1234.56',
+            monto_estimado: false,
+          }],
+          resumen: { registros: 1, importe: '1234.56', estimados: 0, categorias: [] },
+        }),
+      });
+    });
+
+    await page.goto('/contable/ingresos');
+    await expect(page.getByRole('tab', { name: 'Socios' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Registrar ingreso' })).toHaveCount(0);
+    const table = page.getByRole('table', { name: 'Listado de ingresos' });
+    await expect(table).toContainText('PW E2E SOCIO CONTABLE');
+    await expect(table).toContainText('PW E2E CATEGORÍA SOCIO');
+    await expect(table).toContainText('EFECTIVO');
+    await expect(table).toContainText('1.234,56');
+
+    const exportButton = page.getByRole('button', { name: 'Exportar', exact: true }).first();
+    await exportFromGlobalModal(page, {
+      openButton: exportButton,
+      format: 'Excel',
+      expectedExtension: '.xlsx',
+    });
+    await exportFromGlobalModal(page, {
+      openButton: exportButton,
+      format: 'PDF',
+      expectedExtension: '.pdf',
+    });
+  });
+
   test('crea opciones dentro del formulario y completa alta, edición, Excel y eliminación de ingreso', async ({ page }) => {
     await page.goto('/contable/ingresos');
     await page.getByRole('tab', { name: 'Otros ingresos' }).click();
     await page.getByRole('button', { name: 'Registrar ingreso' }).first().click();
 
     let dialog = page.getByRole('dialog', { name: 'Registrar ingreso' });
-    await dialog.getByLabel('Medio de pago *').selectOption({ index: 1 });
+    const incomeMediumSelect = dialog.getByLabel('Medio de pago *');
+    await incomeMediumSelect.selectOption({ index: 1 });
+    const incomeMediumLabel = String(
+      await incomeMediumSelect.locator('option:checked').textContent(),
+    ).trim();
     await addInlineOption(page, dialog, 'Persona / proveedor *', names.incomeProvider);
     await addInlineOption(page, dialog, 'Categoría *', names.incomeCategory);
     await addInlineOption(page, dialog, 'Descripción / concepto *', names.incomeConcept);
@@ -155,6 +204,14 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await expect(row).toContainText(incomeDetail);
     await expect(row).toContainText(names.incomeProvider);
 
+    const incomeCategoryFilter = page.getByLabel('Categoría');
+    const incomeMediumFilter = page.getByLabel('Medio de pago');
+    await incomeCategoryFilter.selectOption({ label: names.incomeCategory });
+    await incomeMediumFilter.selectOption({ label: incomeMediumLabel });
+    await expect(rowByText(page, 'Listado de ingresos', suffix)).toBeVisible();
+    await incomeCategoryFilter.selectOption('');
+    await incomeMediumFilter.selectOption('');
+
     await row.getByTitle('Editar').click();
     dialog = page.getByRole('dialog', { name: 'Editar ingreso' });
     await dialog.getByLabel('Importe (ARS) *').fill('1500.75');
@@ -169,6 +226,11 @@ test.describe('Contabilidad completa desde la interfaz', () => {
       openButton: page.getByRole('button', { name: 'Exportar', exact: true }).first(),
       format: 'Excel',
       expectedExtension: '.xlsx',
+    });
+    await exportFromGlobalModal(page, {
+      openButton: page.getByRole('button', { name: 'Exportar', exact: true }).first(),
+      format: 'PDF',
+      expectedExtension: '.pdf',
     });
 
     await page.getByRole('button', { name: 'Limpiar búsqueda' }).click();
@@ -196,6 +258,9 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await addInlineOption(page, dialog, 'Descripción / concepto *', names.expenseConcept);
     const medium = dialog.getByLabel('Medio de pago *');
     await medium.selectOption({ index: 1 });
+    const expenseMediumLabel = String(
+      await medium.locator('option:checked').textContent(),
+    ).trim();
     await dialog.getByLabel('N.º de comprobante').fill(`e2e-${suffix}`);
     await dialog.getByLabel('Importe (ARS) *').fill('432.10');
     await dialog.getByLabel('Detalle opcional').fill(expenseDetail.toLowerCase());
@@ -244,6 +309,14 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     let row = rowByText(page, 'Listado de egresos', suffix);
     await expect(row).toContainText(expenseDetail);
     await expect(row.getByTitle('Ver comprobante')).toBeEnabled();
+
+    const expenseCategoryFilter = page.getByLabel('Categoría');
+    const expenseMediumFilter = page.getByLabel('Medio de pago');
+    await expenseCategoryFilter.selectOption({ label: names.expenseCategory });
+    await expenseMediumFilter.selectOption({ label: expenseMediumLabel });
+    await expect(rowByText(page, 'Listado de egresos', suffix)).toBeVisible();
+    await expenseCategoryFilter.selectOption('');
+    await expenseMediumFilter.selectOption('');
 
     const listed = await apiCall(request, 'contable_egresos_listar', {
       params: { anio: year, mes: month, buscar: suffix },
@@ -333,11 +406,95 @@ test.describe('Contabilidad completa desde la interfaz', () => {
       format: 'Excel',
       expectedExtension: '.xlsx',
     });
+    await exportFromGlobalModal(page, {
+      openButton: page.getByRole('button', { name: 'Exportar', exact: true }).first(),
+      format: 'PDF',
+      expectedExtension: '.pdf',
+    });
 
     await row.getByTitle('Anular').click();
     const deleteDialog = page.getByRole('dialog').filter({ hasText: 'Eliminar egreso' });
     await deleteDialog.getByRole('button', { name: 'Eliminar movimiento' }).click();
     await expect(rowByText(page, 'Listado de egresos', suffix)).toHaveCount(0);
+  });
+
+  test('pagina ingresos y egresos con número, Anterior y Siguiente', async ({ page }) => {
+    const makeIncome = (index) => ({
+      id_ingreso: 910000 + index,
+      fecha: date,
+      id_medio_pago: 1,
+      id_proveedor: 1,
+      id_categoria: 1,
+      id_concepto: 1,
+      proveedor: `PROVEEDOR PÁGINA ${String(index).padStart(2, '0')}`,
+      categoria: 'CATEGORÍA E2E',
+      medio: 'EFECTIVO',
+      concepto: `INGRESO PÁGINA ${String(index).padStart(2, '0')}`,
+      detalle: `DETALLE INGRESO ${index}`,
+      importe: '100.00',
+    });
+    const makeExpense = (index) => ({
+      id_egreso: 920000 + index,
+      fecha: date,
+      id_medio_pago: 1,
+      id_proveedor: 1,
+      id_categoria: 1,
+      id_concepto: 1,
+      proveedor: `PROVEEDOR EGRESO ${String(index).padStart(2, '0')}`,
+      categoria: 'CATEGORÍA E2E',
+      medio: 'EFECTIVO',
+      concepto: `EGRESO PÁGINA ${String(index).padStart(2, '0')}`,
+      numero_comprobante: `PAG-${index}`,
+      detalle: `DETALLE EGRESO ${index}`,
+      importe: '50.00',
+      tiene_archivo: false,
+    });
+
+    await page.route(/api\.php\?action=contable_ingresos_listar(?:&|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          exito: true,
+          items: Array.from({ length: 21 }, (_, index) => makeIncome(index + 1)),
+          resumen: { registros: 21, importe: '2100.00' },
+        }),
+      });
+    });
+    await page.route(/api\.php\?action=contable_egresos_listar(?:&|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          exito: true,
+          items: Array.from({ length: 21 }, (_, index) => makeExpense(index + 1)),
+          resumen: { registros: 21, importe: '1050.00' },
+        }),
+      });
+    });
+
+    await page.goto('/contable/ingresos');
+    await page.getByRole('tab', { name: 'Otros ingresos' }).click();
+    let pagination = page.getByRole('navigation', { name: 'Paginación de ingresos' });
+    await expect(pagination).toContainText('1–10 de 21');
+    await pagination.getByRole('button', { name: '2', exact: true }).click();
+    await expect(pagination).toContainText('11–20 de 21');
+    await expect(page.getByRole('table', { name: 'Listado de ingresos' })).toContainText('INGRESO PÁGINA 11');
+    await pagination.getByRole('button', { name: 'Siguiente' }).click();
+    await expect(pagination).toContainText('21–21 de 21');
+    await pagination.getByRole('button', { name: 'Anterior' }).click();
+    await expect(pagination).toContainText('11–20 de 21');
+
+    await page.goto('/contable/egresos');
+    pagination = page.getByRole('navigation', { name: 'Paginación de egresos' });
+    await expect(pagination).toContainText('1–10 de 21');
+    await pagination.getByRole('button', { name: '3', exact: true }).click();
+    await expect(pagination).toContainText('21–21 de 21');
+    await expect(page.getByRole('table', { name: 'Listado de egresos' })).toContainText('EGRESO PÁGINA 21');
+    await pagination.getByRole('button', { name: 'Anterior' }).click();
+    await expect(pagination).toContainText('11–20 de 21');
+    await pagination.getByRole('button', { name: 'Siguiente' }).click();
+    await expect(pagination).toContainText('21–21 de 21');
   });
 
   test('los años contables salen de la fecha real de cobro y la fila de socio no muestra el separador vacío', async ({ page, request }) => {
@@ -419,6 +576,16 @@ test.describe('Contabilidad completa desde la interfaz', () => {
         name: 'Gráfico de barras de ingresos y egresos por mes',
       }),
     ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Detalle', exact: true }).click();
+    const detailDialog = page.getByRole('dialog', { name: 'Detalle mensual contable' });
+    await expect(detailDialog).toBeVisible();
+    await expect(
+      detailDialog.getByRole('table', { name: new RegExp(`Detalle mensual contable del año ${year}`) }),
+    ).toBeVisible();
+    await expect(detailDialog.getByRole('row')).toHaveCount(13); // encabezado + 12 meses
+    await detailDialog.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(detailDialog).toBeHidden();
 
     await page.getByRole('tab', { name: 'Mensual' }).click();
     await expect(page.getByRole('tab', { name: 'Mensual' })).toHaveAttribute('aria-selected', 'true');

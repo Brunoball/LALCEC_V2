@@ -2,9 +2,12 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const {
   cleanupCatalogByName,
   cleanupContableOptionByName,
+  cleanupSocioByDocument,
 } = require('./helpers/api.helper');
 const { expectToast } = require('./helpers/auth.helper');
 const { uniqueSuffix } = require('./helpers/data.helper');
+const { companyData, personData } = require('./fixtures/socios.fixture');
+const { createCatalog, createCompany, createPerson } = require('./helpers/entities.helper');
 
 const suffix = uniqueSuffix();
 const catalogs = [
@@ -21,6 +24,29 @@ const catalogs = [
     label: 'condición frente al IVA',
     original: `PW E2E IVA ${suffix}`,
     edited: `PW E2E IVA EDITADA ${suffix}`,
+  },
+];
+
+const usedCatalogPerson = personData();
+const usedCatalogCompany = companyData();
+const usedCatalogs = [
+  {
+    tab: 'Medios de pago',
+    list: 'medios_pago',
+    label: 'medio de pago',
+    name: `PW E2E MEDIO USADO UI ${suffix}`,
+    idField: 'id_medio_pago',
+    owner: usedCatalogPerson,
+    type: 'PERSONA',
+  },
+  {
+    tab: 'Condiciones frente al IVA',
+    list: 'condiciones_iva',
+    label: 'condición frente al IVA',
+    name: `PW E2E IVA USADA UI ${suffix}`,
+    idField: 'id_condicion_iva',
+    owner: usedCatalogCompany,
+    type: 'EMPRESA',
   },
 ];
 
@@ -92,6 +118,23 @@ test.describe('Configuración general', () => {
         } catch (_error) {
           // El error principal del escenario debe conservarse.
         }
+      }
+    }
+    for (const definition of usedCatalogs) {
+      try {
+        await cleanupSocioByDocument(request, {
+          tipo: definition.type,
+          documento: definition.type === 'PERSONA'
+            ? definition.owner.dni
+            : definition.owner.cuit,
+        });
+      } catch (_error) {
+        // Puede no haberse creado el registro asociado.
+      }
+      try {
+        await cleanupCatalogByName(request, definition.list, definition.name);
+      } catch (_error) {
+        // Conserva el fallo principal.
       }
     }
     for (const list of contableLists) {
@@ -188,6 +231,56 @@ test.describe('Configuración general', () => {
       await deleteDialog.getByRole('button', { name: 'Eliminar' }).click();
       await expectToast(page, /opción se eliminó definitivamente/i);
       await expect(catalogTableRow(page, catalog.tab, catalog.edited)).toHaveCount(0);
+    }
+  });
+
+  test('da de baja y reactiva desde la UI los catálogos generales que ya están en uso', async ({ page, request }) => {
+    for (const definition of usedCatalogs) {
+      await cleanupSocioByDocument(request, {
+        tipo: definition.type,
+        documento: definition.type === 'PERSONA'
+          ? definition.owner.dni
+          : definition.owner.cuit,
+      }).catch(() => false);
+      await cleanupCatalogByName(request, definition.list, definition.name).catch(() => false);
+
+      const catalog = await createCatalog(request, definition.list, definition.name);
+      if (definition.type === 'PERSONA') {
+        await createPerson(request, definition.owner, {
+          id_medio_pago: catalog[definition.idField],
+        });
+      } else {
+        await createCompany(request, definition.owner, {
+          id_condicion_iva: catalog[definition.idField],
+        });
+      }
+
+      await page.goto('/configuracion/catalogos');
+      await page.getByRole('tab', { name: definition.tab, exact: true }).click();
+      const search = page.getByRole('textbox', { name: 'Buscar', exact: true });
+      await search.fill(definition.name);
+
+      let row = catalogTableRow(page, definition.tab, definition.name);
+      const usageCell = row.locator('.config-catalogUsage');
+      await expect(usageCell.getByText('1', { exact: true })).toBeVisible();
+      await expect(usageCell.getByText('registro asociado', { exact: true })).toBeVisible();
+      await row.getByRole('button', { name: `Dar de baja ${definition.name}` }).click();
+      let stateDialog = page.getByRole('dialog', { name: `Dar de baja ${definition.label}` });
+      await expect(stateDialog).toContainText(/registros existentes conservarán esta opción asociada/i);
+      await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
+      await expectToast(page, /se dio de baja.*registros asociados/i);
+
+      await search.fill(definition.name);
+      row = catalogTableRow(page, definition.tab, definition.name);
+      await expect(row).toContainText('Inactivo');
+      await row.getByRole('button', { name: `Reactivar ${definition.name}` }).click();
+      stateDialog = page.getByRole('dialog', { name: `Reactivar ${definition.label}` });
+      await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
+      await expectToast(page, /se reactivó correctamente/i);
+
+      await search.fill(definition.name);
+      row = catalogTableRow(page, definition.tab, definition.name);
+      await expect(row).toContainText('Activo');
     }
   });
 

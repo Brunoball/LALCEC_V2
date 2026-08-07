@@ -100,6 +100,29 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await expect(page).toHaveURL(/\/panel$/);
   });
 
+  test('abre el perfil, lo cierra por X y Escape y navega a Configuración desde el modal', async ({ page }) => {
+    await page.goto('/panel');
+
+    await page.getByRole('button', { name: 'Abrir perfil' }).click();
+    let dialog = page.getByRole('dialog', { name: 'Perfil de usuario' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('LALCEC San Francisco');
+    await expect(dialog).toContainText(/Administrador/i);
+    await dialog.getByRole('button', { name: 'Cerrar perfil' }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('button', { name: 'Abrir perfil' }).click();
+    dialog = page.getByRole('dialog', { name: 'Perfil de usuario' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('button', { name: 'Abrir perfil' }).click();
+    dialog = page.getByRole('dialog', { name: 'Perfil de usuario' });
+    await dialog.getByRole('button', { name: 'Configuración', exact: true }).click();
+    await expect(page).toHaveURL(/\/configuracion$/);
+    await expect(dialog).toBeHidden();
+  });
+
   test('abre y cierra el menú móvil por botón, enlace, X y fondo', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/panel');
@@ -180,6 +203,20 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await expect(pagination).toContainText('1–100 de 101');
     await pagination.getByRole('button', { name: 'Siguiente' }).click();
     await expect(pagination).toContainText('101–101 de 101');
+
+    await disableExternalLogoLookup(page);
+    await exportFromGlobalModal(page, {
+      openButton: page.getByRole('button', { name: 'Exportar', exact: true }),
+      format: 'Excel',
+      scope: 'Exportar esta página',
+      expectedExtension: '.xlsx',
+    });
+    await exportFromGlobalModal(page, {
+      openButton: page.getByRole('button', { name: 'Exportar', exact: true }),
+      format: 'PDF',
+      scope: 'Exportar todos los socios',
+      expectedExtension: '.pdf',
+    });
   });
 
   test('descarga Excel y PDF reales de socios', async ({ page, request }) => {

@@ -29,6 +29,12 @@ loadTestEnv();
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Contratos, validaciones y seguridad de la API actual', () => {
+  test('health responde sin sesión y confirma disponibilidad de la API', async ({ request }) => {
+    const health = await apiCall(request, 'health', { session: null });
+    expect(health).toBeTruthy();
+    expect(health.exito).not.toBe(false);
+  });
+
   test('todas las rutas privadas rechazan una solicitud sin sesión', async ({ request }) => {
     const endpoints = [
       ['auth_usuario_actual', 'GET'],

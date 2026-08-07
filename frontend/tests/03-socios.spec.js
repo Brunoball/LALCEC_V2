@@ -12,6 +12,7 @@ const person = personData();
 const company = companyData();
 const family = familyData();
 const familyMember = personData();
+const familyMemberRemoved = personData();
 
 function tableRow(page, tableName, text) {
   return page
@@ -48,6 +49,7 @@ test.describe('Socios, empresas y familias', () => {
       { tipo: 'PERSONA', documento: person.dni },
       { tipo: 'EMPRESA', documento: company.cuit },
       { tipo: 'PERSONA', documento: familyMember.dni },
+      { tipo: 'PERSONA', documento: familyMemberRemoved.dni },
     ]) {
       try {
         await cleanupSocioByDocument(request, target);
@@ -82,6 +84,17 @@ test.describe('Socios, empresas y familias', () => {
     await dialog.getByLabel('Localidad').fill('SAN FRANCISCO');
     await dialog.getByLabel('Teléfono').fill(person.telefono);
     await dialog.getByLabel('Correo').fill(person.email);
+    await dialog.getByLabel('Domicilio alternativo').fill('SEDE ALTERNATIVA PLAYWRIGHT');
+    const categorySelect = dialog.getByLabel('Categoría');
+    let selectedCategoryValue = '';
+    if ((await categorySelect.locator('option').count()) > 1) {
+      await categorySelect.selectOption({ index: 1 });
+      selectedCategoryValue = await categorySelect.inputValue();
+    }
+    const usualPaymentSelect = dialog.getByLabel('Medio de pago habitual');
+    if ((await usualPaymentSelect.locator('option').count()) > 1) {
+      await usualPaymentSelect.selectOption({ index: 1 });
+    }
     await dialog.getByLabel('Observaciones').fill('ALTA AUTOMÁTICA DE PLAYWRIGHT');
     await dialog
       .getByRole('checkbox', { name: /Enviar recordatorios/i })
@@ -95,11 +108,19 @@ test.describe('Socios, empresas y familias', () => {
     await expect(row).toContainText(`${person.apellido}, ${person.nombre}`);
     await expect(row).toContainText('SIN AVISO');
 
+    if (selectedCategoryValue) {
+      const categoryFilter = page.getByLabel('Categoría');
+      await categoryFilter.selectOption(selectedCategoryValue);
+      await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
+      await categoryFilter.selectOption('');
+    }
+
     await row.getByTitle('Ver ficha e historial').click();
     let infoDialog = page.getByRole('dialog', { name: 'Información del Socio' });
     await expect(infoDialog).toContainText(person.dni);
     await infoDialog.getByRole('tab', { name: 'Contacto' }).click();
     await expect(infoDialog).toContainText(person.email);
+    await expect(infoDialog).toContainText('SEDE ALTERNATIVA PLAYWRIGHT');
     await infoDialog.getByRole('tab', { name: 'Estados' }).click();
     await expect(infoDialog).toContainText(/ALTA|ACTIVO/i);
     await infoDialog.getByRole('tab', { name: 'Estado de pagos' }).click();
@@ -211,11 +232,15 @@ test.describe('Socios, empresas y familias', () => {
     await expect(tableRow(page, 'Listado de empresas', company.cuit)).toHaveCount(0);
   });
 
-  test('crea, consulta, edita, da de baja y reactiva una familia', async ({ page, request }) => {
+  test('crea, consulta, edita, desvincula con historial, da de baja y reactiva una familia', async ({ page, request }) => {
     cleanupFamilyByPrefix(family.prefix);
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
       documento: familyMember.dni,
+    });
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: familyMemberRemoved.dni,
     });
 
     await apiCall(request, 'socios_guardar', {
@@ -233,6 +258,24 @@ test.describe('Socios, empresas y familias', () => {
         id_condicion_iva: null,
         enviar_recordatorio: true,
         observaciones: 'INTEGRANTE PARA PRUEBA DE FAMILIAS',
+      },
+    });
+
+    await apiCall(request, 'socios_guardar', {
+      method: 'POST',
+      data: {
+        tipo_socio: 'PERSONA',
+        apellido: familyMemberRemoved.apellido,
+        nombre: familyMemberRemoved.nombre,
+        dni: familyMemberRemoved.dni,
+        fecha_alta: todayIso(),
+        telefono: familyMemberRemoved.telefono,
+        email: familyMemberRemoved.email,
+        id_categoria: null,
+        id_medio_pago: null,
+        id_condicion_iva: null,
+        enviar_recordatorio: true,
+        observaciones: 'INTEGRANTE PARA DESVINCULACIÓN E2E',
       },
     });
 
@@ -291,8 +334,42 @@ test.describe('Socios, empresas y familias', () => {
     dialog = page.getByRole('dialog', { name: 'Editar familia' });
     await dialog.getByLabel('Nombre de la familia *').fill(family.nombreEditado);
     await dialog.getByLabel('Descripción').fill(`${family.descripcion} EDITADA`);
+    await dialog.getByRole('tab', { name: 'Integrantes' }).click();
+    await dialog
+      .getByLabel('Buscar socio por nombre, DNI o categoría')
+      .fill(familyMemberRemoved.dni);
+    await dialog.getByRole('checkbox', {
+      name: new RegExp(familyMemberRemoved.apellido, 'i'),
+    }).check();
+    await dialog.getByRole('button', { name: /Agregar miembros \(1\)/ }).click();
+    await expect(dialog.locator('.familias-selected-member').filter({
+      hasText: familyMemberRemoved.apellido,
+    })).toBeVisible();
     await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
     await expectToast(page, 'Familia actualizada correctamente.');
+
+    await search.fill(family.nombreEditado);
+    row = tableRow(page, 'Listado de familias', family.nombreEditado);
+    await row.getByTitle('Editar').click();
+    dialog = page.getByRole('dialog', { name: 'Editar familia' });
+    await dialog.getByRole('tab', { name: 'Integrantes' }).click();
+    const removedMember = dialog.locator('.familias-selected-member').filter({
+      hasText: familyMemberRemoved.apellido,
+    });
+    await removedMember.getByTitle('Quitar integrante').click();
+    await expect(dialog).toContainText('1 integrante será desvinculado');
+    await dialog.getByLabel('Motivo de desvinculación *').fill('DESVINCULACIÓN AUTOMÁTICA E2E');
+    await dialog.getByLabel('Fecha de desvinculación *').fill(todayIso());
+    await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expectToast(page, 'Familia actualizada correctamente.');
+
+    row = tableRow(page, 'Listado de familias', family.nombreEditado);
+    await row.getByTitle('Ver integrantes e historial').click();
+    infoDialog = page.getByRole('dialog', { name: 'Ficha de la familia' });
+    await infoDialog.getByRole('tab', { name: 'Historial' }).click();
+    await expect(infoDialog).toContainText(familyMemberRemoved.apellido);
+    await expect(infoDialog).toContainText(/DESVINCULACIÓN AUTOMÁTICA E2E/i);
+    await infoDialog.getByRole('button', { name: 'Cerrar' }).click();
 
     await search.fill(family.nombreEditado);
     row = tableRow(page, 'Listado de familias', family.nombreEditado);
@@ -320,6 +397,10 @@ test.describe('Socios, empresas y familias', () => {
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
       documento: familyMember.dni,
+    });
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: familyMemberRemoved.dni,
     });
   });
 });

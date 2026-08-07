@@ -33,22 +33,38 @@ function backendActions() {
     modulesRoot,
     (file) => file.endsWith(`${path.sep}routes.php`) && !file.includes(`${path.sep}whatsapp${path.sep}`),
   );
-  return [...new Set(routeFiles.flatMap((file) =>
+  const moduleActions = routeFiles.flatMap((file) =>
     [...read(file).matchAll(/register\('([^']+)'/g)].map((match) => match[1]),
-  ))].sort();
+  );
+  const rootApiFile = path.join(BACKEND_ROOT, 'routes', 'api.php');
+  const rootActions = fs.existsSync(rootApiFile)
+    ? [...read(rootApiFile).matchAll(/register\('([^']+)'/g)].map((match) => match[1])
+    : [];
+  return [...new Set([...moduleActions, ...rootActions])].sort();
 }
 
 function frontendApiActions() {
-  const apiFiles = walk(
-    path.join(SRC_ROOT, 'components'),
-    (file) => /Api\.js$/i.test(file) && !file.includes(`${path.sep}BotPanel${path.sep}`),
+  const frontendFiles = walk(
+    SRC_ROOT,
+    (file) => /\.(?:js|jsx)$/i.test(file) && !file.includes(`${path.sep}BotPanel${path.sep}`),
   );
   const backend = new Set(backendActions());
-  return [...new Set(apiFiles.flatMap((file) =>
+  return [...new Set(frontendFiles.flatMap((file) =>
     [...read(file).matchAll(/["']([a-z][a-z0-9_]+)["']/g)]
       .map((match) => match[1])
       .filter((action) => backend.has(action)),
   ))].sort();
+}
+
+
+function botFrontendEndpoints() {
+  const botRoot = path.join(SRC_ROOT, 'components', 'BotPanel');
+  const botFiles = walk(botRoot, (file) => /\.(?:js|jsx)$/i.test(file));
+  const source = botFiles.map(read).join('\n');
+  return [...new Set(
+    [...source.matchAll(/bot(?:Panel|Management)(?:Get|Post|FormPost)\s*\(\s*["']([^"']+)/g)]
+      .map((match) => match[1]),
+  )].sort();
 }
 
 function applicationRoutes() {
@@ -56,7 +72,7 @@ function applicationRoutes() {
   return [...new Set(
     [...appSource.matchAll(/<Route\s+path="([^"]+)"/g)]
       .map((match) => match[1])
-      .filter((route) => route !== '*' && route !== '/panel-bot'),
+      .filter((route) => route !== '*'),
   )].sort();
 }
 
@@ -102,9 +118,45 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Comprobante',
   'PDF',
   'Eliminar pago',
+  // Cabecera/perfil.
+  'Abrir perfil',
+  'Cerrar perfil',
+  'Perfil de usuario',
+  // Cobertura de ramas que antes quedaban fuera del recorrido E2E.
+  'Quitar integrante',
+  'Motivo de desvinculación',
+  'Exportar cuotas',
+  'Exportar todas las cuotas filtradas',
+  'Paginación de ingresos',
+  'Paginación de egresos',
+  'Detalle mensual contable',
+  'health',
+  // Panel Bot WhatsApp.
+  'Panel Bot WhatsApp',
+  'Buscar por nombre, número, mensaje…',
+  'Ver alertas y errores del bot',
+  'Filtrar por etiqueta',
+  'Modo Bot',
+  'Modo Manual',
+  'Opciones del chat',
+  'Editar nombre',
+  'Cambiar etiqueta',
+  'Ver galería',
+  'Marcar como no leído',
+  'Marcar como leído',
+  'Vaciar chat',
+  'Eliminar contacto',
+  'Cambiar tema',
+  'Adjuntar imagen/PDF',
+  'Emojis',
+  'Enviar',
+  'Marcar revisado',
+  'Eliminar alerta',
+  'Aprobar comprobante',
+  'Rechazar',
 ];
 
-test.describe('Contrato de cobertura total fuera del panel del bot', () => {
+test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
   test('el arranque del frontend no vuelve a envolver la aplicación en React.StrictMode', () => {
     const indexSource = read(path.join(SRC_ROOT, 'index.js'));
     expect(indexSource).not.toContain('<React.StrictMode>');
@@ -130,14 +182,14 @@ test.describe('Contrato de cobertura total fuera del panel del bot', () => {
     expect(cuotasModalCss).toContain('width: min(100%, 190px)');
   });
 
-  test('cada acción registrada por el backend aparece cubierta por la suite', () => {
+  test('cada acción registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {
     expect(fs.existsSync(BACKEND_ROOT), `No se encontró el backend en ${BACKEND_ROOT}`).toBe(true);
     const source = testSources();
     const missing = backendActions().filter((action) => !source.includes(action));
     expect(missing, `Acciones backend sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
   });
 
-  test('cada acción usada por el frontend existe en el backend y está cubierta', () => {
+  test('cada acción usada por el frontend administrativo existe en el backend y está cubierta', () => {
     const backend = backendActions();
     const frontend = frontendApiActions();
     const source = testSources();
@@ -145,7 +197,13 @@ test.describe('Contrato de cobertura total fuera del panel del bot', () => {
     expect(frontend.filter((action) => !source.includes(action))).toEqual([]);
   });
 
-  test('todas las rutas de la aplicación, excepto el panel del bot, están recorridas', () => {
+  test('cada endpoint usado por el Panel Bot tiene cobertura declarada', () => {
+    const source = testSources();
+    const missing = botFrontendEndpoints().filter((endpoint) => !source.includes(endpoint));
+    expect(missing, `Endpoints del Panel Bot sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  test('todas las rutas de la aplicación, incluido el Panel Bot, están recorridas', () => {
     const source = testSources();
     const missing = applicationRoutes().filter((route) => !source.includes(route));
     expect(missing, `Rutas sin prueba: ${missing.join(', ')}`).toEqual([]);

@@ -1,6 +1,7 @@
 const base = require('@playwright/test');
 const { readAuthSession, normalizedApiBase } = require('../helpers/api.helper');
 const { SESSION_KEY } = require('../helpers/auth.helper');
+const { normalizedBotApiBase } = require('../helpers/bot.helper');
 
 const test = base.test.extend({
   page: async ({ page }, use, testInfo) => {
@@ -24,11 +25,11 @@ const test = base.test.extend({
       technicalFailures.push(`Error JavaScript: ${error.message}`);
     });
     page.on('response', (response) => {
-      if (
-        response.url().startsWith(normalizedApiBase()) &&
-        response.status() >= 500
-      ) {
-        technicalFailures.push(`HTTP ${response.status()} en ${response.url()}`);
+      const url = response.url();
+      const monitoredApi =
+        url.startsWith(normalizedApiBase()) || url.startsWith(normalizedBotApiBase());
+      if (monitoredApi && response.status() >= 500) {
+        technicalFailures.push(`HTTP ${response.status()} en ${url}`);
       }
     });
 
