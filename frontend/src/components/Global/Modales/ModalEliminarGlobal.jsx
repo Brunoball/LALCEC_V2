@@ -384,9 +384,7 @@ export default function ModalEliminarGlobal({
             <div className="gdel-extraContent">{extraContent}</div>
           ) : null}
           {showReason ? (
-            <label
-              className={`gdel-reason ${reason.trim() ? "is-active" : ""}`}
-            >
+            <label className="gdel-reason">
               <span className="gdel-reason__label">{reasonLabel}</span>
               <textarea
                 ref={reasonRef}

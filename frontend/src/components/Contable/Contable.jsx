@@ -569,6 +569,8 @@ export default function ContableModule({ view = "summary" }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [summaryDetailOpen, setSummaryDetailOpen] = useState(false);
   const requestId = useRef(0);
+  const tableBodyRef = useRef(null);
+  const pendingTableScrollRef = useRef(null);
   const expenseFileInputRef = useRef(null);
 
   const loadCatalogs = useCallback(async () => {
@@ -588,6 +590,7 @@ export default function ContableModule({ view = "summary" }) {
   }, [loadCatalogs]);
 
   useEffect(() => {
+    pendingTableScrollRef.current = null;
     setCategory("");
     setMean("");
     setSearch("");
@@ -598,6 +601,7 @@ export default function ContableModule({ view = "summary" }) {
   }, [view, incomeTab]);
 
   useEffect(() => {
+    pendingTableScrollRef.current = null;
     setPage(1);
   }, [year, month, search, category, mean]);
 
@@ -637,6 +641,11 @@ export default function ContableModule({ view = "summary" }) {
     }
   }, [view, incomeTab, year, month, search, category, mean]);
 
+  const refreshKeepingTableScroll = useCallback(async () => {
+    pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
+    return loadData();
+  }, [loadData]);
+
   useEffect(() => {
     const timer = window.setTimeout(loadData, search ? 250 : 0);
     return () => {
@@ -644,6 +653,24 @@ export default function ContableModule({ view = "summary" }) {
       requestId.current += 1;
     };
   }, [loadData, search]);
+
+  useEffect(() => {
+    if (loading || pendingTableScrollRef.current == null) return undefined;
+
+    const scrollTop = pendingTableScrollRef.current;
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        const body = tableBodyRef.current;
+        if (body) {
+          const maxScrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+          body.scrollTop = Math.min(scrollTop, maxScrollTop);
+        }
+        pendingTableScrollRef.current = null;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, data.items?.length]);
 
   const requestOption = (type, label, onCreated) => {
     setOptionName("");
@@ -695,7 +722,7 @@ export default function ContableModule({ view = "summary" }) {
       const response = await contableApi.guardarIngreso(incomeForm);
       setIncomeOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await Promise.all([loadData(), loadCatalogs()]);
+      await Promise.all([refreshKeepingTableScroll(), loadCatalogs()]);
     } catch (error) {
       setFeedback({ type: "error", message: error.message });
     } finally {
@@ -794,7 +821,7 @@ export default function ContableModule({ view = "summary" }) {
       const response = await contableApi.guardarEgreso(formData);
       setExpenseOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      await Promise.all([loadData(), loadCatalogs()]);
+      await Promise.all([refreshKeepingTableScroll(), loadCatalogs()]);
     } catch (error) {
       setFeedback({ type: "error", message: error.message });
     } finally {
@@ -808,7 +835,7 @@ export default function ContableModule({ view = "summary" }) {
       deleteTarget.type === "income"
         ? await contableApi.eliminarIngreso(deleteTarget.item.id_ingreso)
         : await contableApi.eliminarEgreso(deleteTarget.item.id_egreso);
-    await Promise.all([loadData(), loadCatalogs()]);
+    await Promise.all([refreshKeepingTableScroll(), loadCatalogs()]);
     setDeleteTarget(null);
     return response;
   };
@@ -1207,6 +1234,7 @@ export default function ContableModule({ view = "summary" }) {
             <GlobalDivTable
               className={`contable-table__data ${totalRecords > 0 || compactActions ? "has-bottom-pagination" : ""}`.trim()}
               bodyClassName="entity-table-wrap"
+              bodyRef={tableBodyRef}
               gridClassName={tableGridClassName}
               columns={tableColumns}
               loading={loading}

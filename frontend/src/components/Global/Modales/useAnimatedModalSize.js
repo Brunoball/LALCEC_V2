@@ -4,6 +4,16 @@ const RESIZE_DURATION_MS = 150;
 const RESIZE_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const SIZE_EPSILON_PX = 1;
 
+// Mide el tamaño de layout, no el tamaño visual transformado.
+// getBoundingClientRect() incluye transform/scale de la animación de apertura
+// y puede hacer que el primer cambio interno parezca falsamente un resize.
+const getLayoutHeight = (element) => {
+  if (!element) return 0;
+
+  const height = element.offsetHeight;
+  return Number.isFinite(height) ? height : 0;
+};
+
 /**
  * Anima de forma global los cambios de alto de un modal ya abierto.
  *
@@ -38,7 +48,7 @@ export default function useAnimatedModalSize(modalRef, open = true) {
     const previousInlineTransition = modal.style.transition;
     const previousInlineHeight = modal.style.height;
 
-    let lastHeight = modal.getBoundingClientRect().height;
+    let lastHeight = getLayoutHeight(modal);
     let destroyed = false;
     let animating = false;
     let pendingChange = false;
@@ -68,7 +78,7 @@ export default function useAnimatedModalSize(modalRef, open = true) {
         measureFrame = 0;
         if (destroyed || animating) return;
 
-        const nextHeight = modal.getBoundingClientRect().height;
+        const nextHeight = getLayoutHeight(modal);
         if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
 
         if (Math.abs(nextHeight - lastHeight) < SIZE_EPSILON_PX) {
@@ -118,7 +128,7 @@ export default function useAnimatedModalSize(modalRef, open = true) {
         settleFrame = 0;
         if (destroyed) return;
 
-        const settledHeight = modal.getBoundingClientRect().height;
+        const settledHeight = getLayoutHeight(modal);
         const changedWhileAnimating =
           pendingChange ||
           (Number.isFinite(settledHeight) &&
