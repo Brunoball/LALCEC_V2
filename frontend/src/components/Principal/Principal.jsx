@@ -10,7 +10,6 @@ import {
   faRightFromBracket,
   faRobot,
   faTags,
-  faUserCircle,
   faUsers,
   faWallet,
   faXmark,
@@ -279,13 +278,17 @@ export default function Principal() {
             <FontAwesomeIcon icon={faGear} />
           </button>
           <button
-            className="mov-topbar__usericon"
+            className="mov-topbar__usericon has-logo"
             type="button"
             onClick={() => setPerfilOpen(true)}
             title="Perfil"
             aria-label="Abrir perfil"
           >
-            <FontAwesomeIcon icon={faUserCircle} />
+            <img
+              className="mov-topbar__userlogo"
+              src={logoLalcec}
+              alt="LALCEC San Francisco"
+            />
           </button>
           <button
             className="pp-topbarLogout"

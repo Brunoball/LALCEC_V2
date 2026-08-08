@@ -10,7 +10,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../Global/ModulePage";
 import GlobalDivTable from "../Global/GlobalDivTable";
-import SummaryCards from "../Global/SummaryCards";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
 import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import ModalComprobantePago from "../Global/Modales/ModalComprobantePago";
@@ -445,6 +444,9 @@ export default function Cuotas() {
   const writable = canWrite();
   const contextRequestId = useRef(0);
   const rowActionsRef = useRef({});
+  const tableBodyRef = useRef(null);
+  const pendingTableScrollRef = useRef(null);
+  const totalsRequestId = useRef(0);
   const [tipo, setTipo] = useState("PERSONA");
   const [estado, setEstado] = useState("DEUDORES");
   const [buscar, setBuscar] = useState("");
@@ -465,6 +467,10 @@ export default function Cuotas() {
   const [selectedPayments, setSelectedPayments] = useState({});
   const [receipt, setReceipt] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [estadoTotales, setEstadoTotales] = useState({
+    DEUDORES: null,
+    PAGADOS: null,
+  });
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -488,7 +494,6 @@ export default function Cuotas() {
   );
   const {
     items,
-    resumen,
     catalogos,
     paginacion,
     loading,
@@ -496,6 +501,55 @@ export default function Cuotas() {
     cargar,
     cargarCatalogos,
   } = useCuotas(filtros);
+
+  const filtrosTotales = useMemo(
+    () => ({
+      tipo,
+      buscar: debouncedBuscar,
+      anio,
+      mes,
+      pagina: 1,
+      por_pagina: 1,
+      incluir_catalogos: 0,
+    }),
+    [tipo, debouncedBuscar, anio, mes],
+  );
+
+  const cargarTotalesEstado = useCallback(async () => {
+    const currentRequest = ++totalsRequestId.current;
+
+    try {
+      const [deudoresResponse, pagadosResponse] = await Promise.all([
+        cuotasApi.listar({ ...filtrosTotales, estado: "DEUDORES" }),
+        cuotasApi.listar({ ...filtrosTotales, estado: "PAGADOS" }),
+      ]);
+
+      if (currentRequest !== totalsRequestId.current) return;
+
+      const totalFromResponse = (response) =>
+        Number(
+          response?.paginacion?.total ??
+            response?.resumen?.total ??
+            response?.items?.length ??
+            0,
+        );
+
+      setEstadoTotales({
+        DEUDORES: totalFromResponse(deudoresResponse),
+        PAGADOS: totalFromResponse(pagadosResponse),
+      });
+    } catch {
+      // El contador es informativo: una falla no debe bloquear la tabla principal.
+    }
+  }, [filtrosTotales]);
+
+  useEffect(() => {
+    void cargarTotalesEstado();
+    return () => {
+      totalsRequestId.current += 1;
+    };
+  }, [cargarTotalesEstado]);
+
   const usaPaginacionRemota = Boolean(
     paginacion &&
       (paginacion.total != null ||
@@ -537,6 +591,14 @@ export default function Cuotas() {
     : Math.min(pagina * PAGE_SIZE, totalRegistros);
 
   useEffect(() => {
+    if (loading) return;
+    setEstadoTotales((current) => ({
+      ...current,
+      [estado]: totalRegistros,
+    }));
+  }, [estado, loading, totalRegistros]);
+
+  useEffect(() => {
     setPagina(1);
   }, [tipo, estado, debouncedBuscar, anio, mes]);
 
@@ -546,6 +608,24 @@ export default function Cuotas() {
       setPagina(Math.max(1, totalPaginas));
     }
   }, [loading, pagina, totalPaginas]);
+
+  useEffect(() => {
+    if (loading || pendingTableScrollRef.current == null) return undefined;
+
+    const scrollTop = pendingTableScrollRef.current;
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        const body = tableBodyRef.current;
+        if (body) {
+          const maxScrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+          body.scrollTop = Math.min(scrollTop, maxScrollTop);
+        }
+        pendingTableScrollRef.current = null;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, itemsPagina.length]);
 
   const visibleYearOptions = useMemo(
     () =>
@@ -1360,12 +1440,13 @@ export default function Cuotas() {
           lineas: fallbackLines,
         }),
       );
-      setAnio(String(paymentForm.anio || anio));
-      setMes(String(selectedMonthIds[0] || paymentForm.mes || mes));
-      setEstado("PAGADOS");
+      pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
       setFeedback(null);
       clearMultipleSelection();
-      // Los cambios de período/estado disparan la recarga del hook automáticamente.
+      // Conservamos pestaña, período, página y posición de la tabla. El pago
+      // desaparece de Deudores al refrescar, pero el usuario sigue exactamente
+      // en el contexto desde el que abrió el modal.
+      await Promise.all([cargar(), cargarTotalesEstado()]);
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
@@ -1381,6 +1462,7 @@ export default function Cuotas() {
     // Si era el último pago de un año futuro, refrescamos los años visibles
     // sin bloquear el cierre ni el feedback del modal.
     void cargarCatalogos();
+    void cargarTotalesEstado();
     return response;
   };
 
@@ -1466,8 +1548,16 @@ export default function Cuotas() {
         if (value === "PAGADOS") clearMultipleSelection();
       },
       options: [
-        { value: "DEUDORES", label: "Deudores" },
-        { value: "PAGADOS", label: "Pagados" },
+        {
+          value: "DEUDORES",
+          label: "Deudores",
+          count: estadoTotales.DEUDORES,
+        },
+        {
+          value: "PAGADOS",
+          label: "Pagados",
+          count: estadoTotales.PAGADOS,
+        },
       ],
     },
     {
@@ -1634,6 +1724,7 @@ export default function Cuotas() {
         <GlobalDivTable
           className={`cuotas-table ${totalRegistros ? "has-bottom-pagination" : ""}`.trim()}
           bodyClassName="entity-table-wrap"
+          bodyRef={tableBodyRef}
           gridClassName={
             isPaid ? "cuotas-grid cuotas-grid--paid" : debtGridClass
           }
@@ -1670,20 +1761,6 @@ export default function Cuotas() {
         </GlobalDivTable>
 
         <div className="cuotas-table-footer">
-          <SummaryCards
-            title=""
-            ariaLabel="Resumen de cuotas del período"
-            variant="footer"
-            items={[
-              {
-                key: "estado",
-                label: isPaid ? "Pagados" : "Deudores",
-                value: Number(resumen.total || 0),
-                detail: `${mes}/${anio} · ${tipo === "EMPRESA" ? "empresas" : "socios"}`,
-              },
-            ]}
-          />
-
           {totalRegistros ? (
             <nav
               className="cuotas-pagination"

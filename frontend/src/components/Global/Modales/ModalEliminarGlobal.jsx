@@ -8,9 +8,10 @@ import React, {
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCheckCircle,
   faExclamationTriangle,
   faTimes,
-  faTrash,
+  faTrashCan,
   faUserCheck,
   faUserSlash,
 } from "@fortawesome/free-solid-svg-icons";
@@ -20,7 +21,7 @@ import "../Global_css/Global_ModalEliminar.css";
 
 const OPERATION_CONFIG = {
   eliminar: {
-    icon: faTrash,
+    icon: faTrashCan,
     tone: "danger",
     title: "Eliminar registro",
     message: "¿Seguro que querés eliminar este registro definitivamente?",
@@ -62,6 +63,18 @@ const OPERATION_CONFIG = {
     message: "¿Seguro que querés continuar?",
     warning: "",
     confirmLabel: "Confirmar",
+    loadingLabel: "Procesando...",
+    loadingMessage: "Procesando…",
+    successMessage: "Operación realizada correctamente.",
+    errorMessage: "No se pudo completar la operación.",
+  },
+  exito: {
+    icon: faCheckCircle,
+    tone: "success",
+    title: "Operación exitosa",
+    message: "La operación se completó correctamente.",
+    warning: "",
+    confirmLabel: "Aceptar",
     loadingLabel: "Procesando...",
     loadingMessage: "Procesando…",
     successMessage: "Operación realizada correctamente.",
@@ -133,10 +146,11 @@ export default function ModalEliminarGlobal({
   closeOnSuccess = true,
   confirmDisabled = false,
   modalClassName = "",
+  fixedHeight = false,
 }) {
   const modalRef = useRef(null);
   const cancelRef = useRef(null);
-  useAnimatedModalSize(modalRef, open);
+  useAnimatedModalSize(modalRef, open && !fixedHeight);
   const reasonRef = useRef(null);
   const [processing, setProcessing] = useState(false);
   const [reason, setReason] = useState(upper(initialReason));
@@ -144,8 +158,13 @@ export default function ModalEliminarGlobal({
 
   const config = OPERATION_CONFIG[operacion] || OPERATION_CONFIG.advertencia;
   const isLoading = loading || processing;
-  const resolvedTone = tone || config.tone;
-  const resolvedIcon = icon || config.icon;
+  const isDeleteOperation = operacion === "eliminar";
+  const resolvedTone = isDeleteOperation
+    ? OPERATION_CONFIG.eliminar.tone
+    : tone || config.tone;
+  const resolvedIcon = isDeleteOperation
+    ? OPERATION_CONFIG.eliminar.icon
+    : icon || config.icon;
   const resolvedTitle = title || config.title;
   const resolvedMessage = message || config.message;
   const resolvedWarning = warning ?? config.warning;
@@ -154,7 +173,10 @@ export default function ModalEliminarGlobal({
   const resolvedLoadingMessage = loadingMessage || config.loadingMessage;
   const resolvedSuccessMessage = successMessage || config.successMessage;
   const resolvedErrorMessage = errorMessage || config.errorMessage;
-  const showSubtitle = operacion !== "baja" && operacion !== "eliminar";
+  // Todas las eliminaciones comparten la misma composición visual global.
+  // La referencia es el modal de Contabilidad/Ingresos: icono, título,
+  // descripción, detalle y acciones se renderizan desde este único componente.
+  const showSubtitle = operacion !== "baja";
 
   const resolvedDetails = useMemo(() => {
     const custom = normalizeDetails(details);
@@ -313,7 +335,7 @@ export default function ModalEliminarGlobal({
       >
         <div
           ref={modalRef}
-          className={`gdel-modal gdel-modal--${resolvedTone} ${modalClassName}`.trim()}
+          className={`gdel-modal gdel-modal--${resolvedTone} ${fixedHeight ? "gdel-modal--fixed-height" : ""} ${modalClassName}`.trim()}
         >
           <button
             type="button"
@@ -324,34 +346,30 @@ export default function ModalEliminarGlobal({
           >
             <FontAwesomeIcon icon={faTimes} />
           </button>
-          <div className="gdel-heading">
-            <div
-              className={`gdel-icon gdel-icon--${resolvedTone}`}
-              aria-hidden="true"
-            >
-              <FontAwesomeIcon icon={resolvedIcon} />
-            </div>
-            <div className="gdel-heading__copy">
-              <h3
-                id="gdel-title"
-                className={`gdel-title gdel-title--${resolvedTone}`}
-              >
-                {resolvedTitle}
-              </h3>
-              {showSubtitle ? (
-                <p className="gdel-body">{resolvedMessage}</p>
-              ) : null}
-              {resolvedWarning ? (
-                <div className="gdel-note">
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    aria-hidden="true"
-                  />
-                  <span>{resolvedWarning}</span>
-                </div>
-              ) : null}
-            </div>
+          <div
+            className={`gdel-icon gdel-icon--${resolvedTone}`}
+            aria-hidden="true"
+          >
+            <FontAwesomeIcon icon={resolvedIcon} />
           </div>
+          <h3
+            id="gdel-title"
+            className={`gdel-title gdel-title--${resolvedTone}`}
+          >
+            {resolvedTitle}
+          </h3>
+          {showSubtitle ? (
+            <p className="gdel-body">{resolvedMessage}</p>
+          ) : null}
+          {resolvedWarning ? (
+            <div className="gdel-note">
+              <FontAwesomeIcon
+                icon={faExclamationTriangle}
+                aria-hidden="true"
+              />
+              <span>{resolvedWarning}</span>
+            </div>
+          ) : null}
           {!hideDefaultCard && resolvedDetails.length ? (
             <div className="gdel-card">
               {resolvedDetails.map((detail) => (

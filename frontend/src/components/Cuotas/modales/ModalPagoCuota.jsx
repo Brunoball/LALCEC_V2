@@ -363,13 +363,15 @@ export default function ModalPagoCuota({
                     </div>
                   ) : null}
 
-                  {familyExpanded ? (
-                    <div className="cuotas-family-members-shell is-open">
-                      <div
-                        id="cuotas-family-members-list"
-                        className="cuotas-family-members"
-                      >
-                        {family.integrantes.map((member) => {
+                  <div
+                    className={`cuotas-family-members-shell ${familyExpanded ? "is-open" : ""}`.trim()}
+                    aria-hidden={!familyExpanded}
+                  >
+                    <div
+                      id="cuotas-family-members-list"
+                      className="cuotas-family-members"
+                    >
+                      {family.integrantes.map((member) => {
                           const paidPeriods =
                             familyPaidPeriodsByMember.get(String(member.id_socio)) || [];
                           const memberClassName = [
@@ -417,10 +419,9 @@ export default function ModalPagoCuota({
                               </div>
                             </article>
                           );
-                        })}
-                      </div>
+                      })}
                     </div>
-                  ) : null}
+                  </div>
                 </section>
               ) : null}
             </div>
@@ -514,17 +515,39 @@ export default function ModalPagoCuota({
               </div>
 
               <div className="cuotas-payment-date-card__fields">
-                <FloatingField
-                  label="Fecha de pago *"
-                  active={Boolean(paymentForm.fecha_pago)}
-                >
-                  <input
-                    type="date"
-                    value={paymentForm.fecha_pago}
-                    onChange={(event) => updatePaymentDate(event.target.value)}
-                    aria-label="Fecha de pago *"
-                  />
-                </FloatingField>
+                <div className="cuotas-payment-date-method-row">
+                  <FloatingField
+                    label="Fecha de pago *"
+                    active={Boolean(paymentForm.fecha_pago)}
+                  >
+                    <input
+                      type="date"
+                      value={paymentForm.fecha_pago}
+                      onChange={(event) => updatePaymentDate(event.target.value)}
+                      aria-label="Fecha de pago *"
+                    />
+                  </FloatingField>
+
+                  <FloatingField label="Medio de pago *" active>
+                    <select
+                      value={paymentForm.id_medio_pago}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({
+                          ...current,
+                          id_medio_pago: event.target.value,
+                        }))
+                      }
+                      aria-label="Medio de pago *"
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(catalogos.medios_pago || []).map((item) => (
+                        <option key={item.id_medio_pago} value={item.id_medio_pago}>
+                          {item.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </FloatingField>
+                </div>
 
                 {selectedMonthIds.length ? (
                   <div className="cuotas-month-amount-editor">
@@ -627,25 +650,6 @@ export default function ModalPagoCuota({
                   </div>
                 ) : null}
 
-                <FloatingField label="Medio de pago *" active>
-                  <select
-                    value={paymentForm.id_medio_pago}
-                    onChange={(event) =>
-                      setPaymentForm((current) => ({
-                        ...current,
-                        id_medio_pago: event.target.value,
-                      }))
-                    }
-                    aria-label="Medio de pago *"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {(catalogos.medios_pago || []).map((item) => (
-                      <option key={item.id_medio_pago} value={item.id_medio_pago}>
-                        {item.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </FloatingField>
               </div>
             </aside>
           </div>

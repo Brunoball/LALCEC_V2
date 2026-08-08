@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import DataTableSkeleton from "./DataTableSkeleton";
 
 /**
@@ -11,6 +11,7 @@ import DataTableSkeleton from "./DataTableSkeleton";
 export default function GlobalDivTable({
   ariaLabel,
   bodyClassName = "",
+  bodyRef: externalBodyRef = null,
   children,
   className = "",
   columns = [],
@@ -21,6 +22,17 @@ export default function GlobalDivTable({
   skeletonRows = 6,
 }) {
   const bodyRef = useRef(null);
+  const setBodyRef = useCallback(
+    (node) => {
+      bodyRef.current = node;
+      if (typeof externalBodyRef === "function") {
+        externalBodyRef(node);
+      } else if (externalBodyRef) {
+        externalBodyRef.current = node;
+      }
+    },
+    [externalBodyRef],
+  );
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
 
@@ -112,7 +124,7 @@ export default function GlobalDivTable({
       </div>
 
       <div
-        ref={bodyRef}
+        ref={setBodyRef}
         className={`mov-tableWrap global-divTable__wrap global-divTable__body ${bodyClassName}`.trim()}
         role="rowgroup"
       >

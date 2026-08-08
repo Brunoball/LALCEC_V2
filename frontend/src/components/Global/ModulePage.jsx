@@ -44,6 +44,22 @@ function filterOptionLabel(option) {
   return typeof option === "object" ? option.label : option;
 }
 
+function filterOptionCount(option) {
+  if (!option || typeof option !== "object") return null;
+  return option.count ?? null;
+}
+
+function ModuleTabContent({ option }) {
+  const count = filterOptionCount(option);
+
+  return (
+    <>
+      <span className="module-tabLabel">{filterOptionLabel(option)}</span>
+      {count != null ? <span className="module-tabCount">{count}</span> : null}
+    </>
+  );
+}
+
 function ModuleTitleTabs({ filter }) {
   const value = filter.value ?? "";
 
@@ -66,7 +82,7 @@ function ModuleTitleTabs({ filter }) {
             key={optionValue}
             onClick={() => filter.onChange?.(optionValue)}
           >
-            {filterOptionLabel(option)}
+            <ModuleTabContent option={option} />
           </button>
         );
       })}
@@ -98,7 +114,7 @@ function ModuleFilter({ filter }) {
                 key={optionValue}
                 onClick={() => filter.onChange?.(optionValue)}
               >
-                {filterOptionLabel(option)}
+                <ModuleTabContent option={option} />
               </button>
             );
           })}

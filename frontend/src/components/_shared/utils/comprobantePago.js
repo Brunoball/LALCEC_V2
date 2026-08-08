@@ -1,3 +1,5 @@
+import logoLalcec from "../../../imagenes/logo_lalcec_sf.png";
+
 const htmlEscape = (value) =>
   String(value ?? "").replace(
     /[&<>'"]/g,
@@ -182,30 +184,29 @@ const receiptBodyHtml = (source) => {
   const { receipt } = data;
 
   return `
-    <div class="receipt-position">
-      <section class="old-receipt" aria-label="${htmlEscape(receipt.titulo)}">
-        <div class="old-receipt__main">
+    <div class="gcuotas-contenedor">
+      <div class="gcuotas-comprobante" aria-label="${htmlEscape(receipt.titulo)}">
+        <div class="gcuotas-talon-socio">
           <p><strong>${htmlEscape(data.entityLabel)}:</strong> ${htmlEscape(data.people)}</p>
           <p><strong>Domicilio:</strong> ${htmlEscape(data.address)}</p>
           <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
           <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
           <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
           <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
-          <p class="old-receipt__notice">Por consultas comunicarse al 03564-15205778</p>
-          <p class="old-receipt__notice">Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
+          <p><strong>Fecha:</strong> ${htmlEscape(date(receipt.fecha))}</p>
+          <p>Por consultas comunicarse al 03564-15205778</p>
+          <p>Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
         </div>
-        <div class="old-receipt__copy">
+
+        <div class="gcuotas-talon-cobrador">
           <p><strong>${htmlEscape(data.copyEntityLabel)}:</strong> ${htmlEscape(data.people)}</p>
           <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
           <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
           <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
           <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
-          <div class="old-receipt__meta">
-            <span>${htmlEscape(date(receipt.fecha))}</span>
-            ${receipt.codigo ? `<span>N.º ${htmlEscape(receipt.codigo)}</span>` : ""}
-          </div>
+          <p><strong>Fecha:</strong> ${htmlEscape(date(receipt.fecha))}</p>
         </div>
-      </section>
+      </div>
     </div>`;
 };
 
@@ -222,20 +223,70 @@ export const paymentReceiptHtml = (source, options = {}) => {
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>${htmlEscape(receipt.titulo)}</title>
       <style>
-        @page { size: A4 portrait; margin: 0; }
-        * { box-sizing: border-box; }
-        html, body { width: 100%; min-height: 100%; }
-        body {
+        @page {
+          size: A4 portrait;
           margin: 0;
-          color: #111827;
-          background: #eef1f4;
+        }
+        * {
+          box-sizing: border-box;
+        }
+        html {
+          margin: 0;
+          padding: 0;
+        }
+        body {
+          width: 210mm;
+          height: 297mm;
+          margin: 0;
+          padding: 0;
           font-family: Arial, sans-serif;
+          font-size: 12px;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          align-items: center;
+          position: relative;
+          transform: rotate(90deg);
+          transform-origin: top left;
+          left: 70%;
+          top: 0;
+          color: #000;
+          background: #fff;
+        }
+        .gcuotas-contenedor {
+          width: 210mm;
+          margin: 10mm 0;
+          page-break-after: always;
+          box-sizing: border-box;
+        }
+        .gcuotas-comprobante {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          box-sizing: border-box;
+        }
+        .gcuotas-talon-socio {
+          width: 60%;
+          padding-left: 12.5mm;
+          padding-top: 13mm;
+        }
+        .gcuotas-talon-cobrador {
+          width: 60mm;
+          padding-left: 5.5mm;
+          padding-top: 16mm;
+        }
+        p {
+          margin-top: 5px;
+          margin-bottom: 1em;
+          font-size: 13px;
         }
         .print-actions {
           position: fixed;
-          top: 18px;
-          left: 18px;
-          z-index: 5;
+          top: 8mm;
+          left: 8mm;
+          z-index: 10;
+          transform: rotate(-90deg);
+          transform-origin: top left;
         }
         .print-actions button {
           min-height: 40px;
@@ -246,67 +297,11 @@ export const paymentReceiptHtml = (source, options = {}) => {
           background: #f97316;
           font-weight: 700;
           cursor: pointer;
-          box-shadow: 0 8px 20px -12px rgba(15, 23, 42, .7);
-        }
-        .sheet {
-          width: 210mm;
-          height: 297mm;
-          margin: 18px auto;
-          position: relative;
-          overflow: hidden;
-          background: #fff;
-          box-shadow: 0 16px 40px -24px rgba(15, 23, 42, .55);
-        }
-        .receipt-position {
-          width: 210mm;
-          height: 70mm;
-          position: absolute;
-          top: 33%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(90deg);
-          transform-origin: center center;
-        }
-        .old-receipt {
-          width: 100%;
-          height: 100%;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 65mm;
-          border: 1px solid #d1d5db;
-          background: #fff;
-        }
-        .old-receipt p {
-          margin: 0 0 5px;
-          font-size: 13px;
-          line-height: 1.28;
-        }
-        .old-receipt__main {
-          min-width: 0;
-          padding: 13mm 8mm 7mm 20mm;
-        }
-        .old-receipt__copy {
-          min-width: 0;
-          padding: 16mm 6mm 7mm 10mm;
-          border-left: 1px dashed #9ca3af;
-          position: relative;
-        }
-        .old-receipt__notice {
-          font-size: 11.5px !important;
-        }
-        .old-receipt__meta {
-          position: absolute;
-          right: 6mm;
-          bottom: 5mm;
-          left: 10mm;
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          color: #6b7280;
-          font-size: 9px;
         }
         @media print {
-          body { background: #fff; }
-          .print-actions { display: none; }
-          .sheet { margin: 0; box-shadow: none; }
+          .print-actions {
+            display: none !important;
+          }
         }
       </style>
     </head>
@@ -314,7 +309,7 @@ export const paymentReceiptHtml = (source, options = {}) => {
       <div class="print-actions">
         <button type="button" onclick="window.print()">${outputLabel}</button>
       </div>
-      <main class="sheet">${receiptBodyHtml(source)}</main>
+      ${receiptBodyHtml(source)}
     </body>
   </html>`;
 };
@@ -381,97 +376,260 @@ const pdfBinary = (objects) => {
   );
 };
 
-const pdfText = (x, y, size, value, { bold = false } = {}) =>
-  `BT /${bold ? "F2" : "F1"} ${size} Tf 0.07 0.09 0.12 rg ${x} ${y} Td (${pdfSafeText(value)}) Tj ET`;
+const pdfColor = {
+  ink: "0.10 0.13 0.17",
+  muted: "0.48 0.52 0.57",
+  orange: "0.98 0.45 0.09",
+  orangeDark: "0.76 0.22 0.04",
+  green: "0.02 0.47 0.34",
+  white: "1 1 1",
+};
 
-const pdfLabelValue = (commands, x, y, label, value, maxLength) => {
-  commands.push(pdfText(x, y, 9.5, `${label}:`, { bold: true }));
+const pdfText = (
+  x,
+  y,
+  size,
+  value,
+  { bold = false, color = pdfColor.ink } = {},
+) =>
+  `BT /${bold ? "F2" : "F1"} ${size} Tf ${color} rg ${x} ${y} Td (${pdfSafeText(value)}) Tj ET`;
+
+const pdfEstimatedWidth = (value, size, bold = false) =>
+  String(value ?? "").length * size * (bold ? 0.58 : 0.53);
+
+const pdfFittedText = (value, maxWidth, size = 9, bold = false) => {
+  const text = String(value ?? "").trim() || "—";
+  if (pdfEstimatedWidth(text, size, bold) <= maxWidth) return text;
+
+  const averageCharacterWidth = size * (bold ? 0.58 : 0.53);
+  const maxLength = Math.max(4, Math.floor(maxWidth / averageCharacterWidth));
+  return compact(text, maxLength);
+};
+
+const pdfField = (
+  commands,
+  x,
+  y,
+  label,
+  value,
+  { width = 225, valueSize = 9.2 } = {},
+) => {
+  commands.push(
+    pdfText(x, y, 7.1, String(label).toUpperCase(), {
+      bold: true,
+      color: pdfColor.muted,
+    }),
+  );
   commands.push(
     pdfText(
-      x + Math.min(112, label.length * 5.4 + 12),
-      y,
-      9.5,
-      compact(value, maxLength),
+      x,
+      y - 16,
+      valueSize,
+      pdfFittedText(value, width, valueSize, true),
+      { bold: true },
     ),
   );
 };
 
-const paymentReceiptPdfContent = (source) => {
+const bytesToBinaryString = (bytes) => {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return binary;
+};
+
+const dataUrlToBytes = (dataUrl) => {
+  const base64 = String(dataUrl).split(",")[1] || "";
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
+let receiptLogoPromise = null;
+
+const loadReceiptLogo = () => {
+  if (receiptLogoPromise) return receiptLogoPromise;
+
+  receiptLogoPromise = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const size = 220;
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(null);
+          return;
+        }
+
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, size, size);
+        const scale = Math.min(size / image.naturalWidth, size / image.naturalHeight);
+        const width = image.naturalWidth * scale;
+        const height = image.naturalHeight * scale;
+        context.drawImage(
+          image,
+          (size - width) / 2,
+          (size - height) / 2,
+          width,
+          height,
+        );
+
+        resolve({
+          bytes: dataUrlToBytes(canvas.toDataURL("image/jpeg", 0.92)),
+          width: size,
+          height: size,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    image.onerror = () => resolve(null);
+    image.src = logoLalcec;
+  });
+
+  return receiptLogoPromise;
+};
+
+const paymentReceiptPdfContent = (source, { hasLogo = false } = {}) => {
   const data = receiptDisplayData(source);
   const { receipt } = data;
   const commands = [];
 
-  commands.push("q 0.82 0.84 0.87 RG 0.8 w 32 205 778 190 re S Q");
-  commands.push("q 0.62 0.65 0.69 RG [5 4] 0 d 600 205 m 600 395 l S Q");
+  // Tarjeta principal centrada en A4 apaisado. Se mantiene lejos de los bordes
+  // para evitar cortes en visores e impresoras con márgenes no imprimibles.
+  commands.push("q 0.98 0.45 0.09 rg 30 482 782 8 re f Q");
+  commands.push("q 0.86 0.88 0.91 RG 0.8 w 30 104 782 386 re S Q");
+  commands.push("q 0.97 0.98 0.99 rg 584 104 228 310 re f Q");
+  commands.push("q 0.77 0.80 0.84 RG [4 4] 0 d 584 104 m 584 414 l S Q");
+  commands.push("q 0.90 0.91 0.93 RG 0.7 w 30 414 m 812 414 l S Q");
 
-  let y = 360;
-  pdfLabelValue(commands, 58, y, data.entityLabel, data.people, 75);
-  y -= 23;
-  pdfLabelValue(commands, 58, y, "Domicilio", data.address, 72);
-  y -= 23;
-  pdfLabelValue(
-    commands,
-    58,
-    y,
-    "Categoría / Monto",
-    `${data.category} / ${data.amountDetail}`,
-    70,
-  );
-  y -= 23;
-  pdfLabelValue(commands, 58, y, "Período", data.periods, 78);
-  y -= 23;
-  pdfLabelValue(commands, 58, y, data.paymentLabel, data.paymentValue, 55);
-  y -= 23;
-  pdfLabelValue(commands, 58, y, "Estado", data.state, 24);
-  commands.push(pdfText(58, 224, 8.5, "Por consultas comunicarse al 03564-15205778"));
+  if (hasLogo) {
+    commands.push("q 44 0 0 44 48 428 cm /Logo Do Q");
+    commands.push("q 24 0 0 24 602 356 cm /Logo Do Q");
+  } else {
+    commands.push("q 1.00 0.97 0.93 rg 48 428 44 44 re f Q");
+    commands.push(pdfText(59, 445, 11, "L", { bold: true, color: pdfColor.orange }));
+  }
+
   commands.push(
-    pdfText(
-      58,
-      211,
-      8.1,
-      "Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.",
-    ),
+    pdfText(105, 458, 15, receipt.organizacion || "LALCEC San Francisco", {
+      bold: true,
+    }),
   );
-
-  let copyY = 360;
-  pdfLabelValue(commands, 620, copyY, data.copyEntityLabel, data.people, 28);
-  copyY -= 27;
-  pdfLabelValue(
-    commands,
-    620,
-    copyY,
-    "Categoría / Monto",
-    `${data.category} / ${data.amountDetail}`,
-    28,
+  commands.push(
+    pdfText(105, 438, 8.5, "Gestión de socios · Comprobante institucional", {
+      color: pdfColor.muted,
+    }),
   );
-  copyY -= 27;
-  pdfLabelValue(commands, 620, copyY, "Período", data.periods, 31);
-  copyY -= 27;
-  pdfLabelValue(commands, 620, copyY, data.paymentLabel, data.paymentValue, 24);
-  copyY -= 27;
-  pdfLabelValue(commands, 620, copyY, "Estado", data.state, 18);
-
-  commands.push(pdfText(620, 220, 7.5, date(receipt.fecha)));
+  commands.push(
+    pdfText(650, 458, 9, String(receipt.titulo || "Comprobante").toUpperCase(), {
+      bold: true,
+      color: pdfColor.orangeDark,
+    }),
+  );
   if (receipt.codigo) {
-    commands.push(pdfText(720, 220, 7.5, `N.º ${compact(receipt.codigo, 18)}`));
+    const code = pdfFittedText(`N.º ${receipt.codigo}`, 155, 9, true);
+    commands.push(pdfText(650, 438, 9, code, { bold: true }));
+  }
+
+  commands.push(
+    pdfText(48, 390, 7.5, "ORIGINAL", { bold: true, color: pdfColor.orange }),
+  );
+  commands.push(
+    pdfText(602, 390, 7.5, "COPIA", { bold: true, color: pdfColor.orange }),
+  );
+
+  pdfField(commands, 48, 362, data.entityLabel, data.people, { width: 500, valueSize: 10 });
+  pdfField(commands, 48, 314, "Domicilio", data.address, { width: 500 });
+  pdfField(commands, 48, 266, "Categoría", data.category, { width: 238 });
+  pdfField(commands, 306, 266, "Período", data.periods, { width: 244 });
+  pdfField(commands, 48, 218, data.paymentLabel, data.paymentValue, { width: 238 });
+  pdfField(commands, 306, 218, "Estado", data.state, { width: 244 });
+
+  commands.push("q 1.00 0.97 0.93 rg 48 132 510 54 re f Q");
+  commands.push("q 0.99 0.79 0.61 RG 0.7 w 48 132 510 54 re S Q");
+  commands.push(
+    pdfText(64, 162, 7.8, "TOTAL ABONADO", {
+      bold: true,
+      color: pdfColor.orangeDark,
+    }),
+  );
+  commands.push(
+    pdfText(438, 151, 18, money(receipt.monto), {
+      bold: true,
+      color: pdfColor.orange,
+    }),
+  );
+
+  commands.push(pdfText(634, 365, 10.5, "LALCEC", { bold: true }));
+  pdfField(commands, 602, 326, data.copyEntityLabel, data.people, { width: 188, valueSize: 8.2 });
+  pdfField(commands, 602, 282, "Categoría", data.category, { width: 188, valueSize: 8.2 });
+  pdfField(commands, 602, 238, "Período", data.periods, { width: 188, valueSize: 8.2 });
+  pdfField(commands, 602, 194, data.paymentLabel, data.paymentValue, { width: 188, valueSize: 8.2 });
+
+  commands.push("q 1.00 0.97 0.93 rg 602 126 188 42 re f Q");
+  commands.push(
+    pdfText(614, 151, 7.2, "TOTAL", { bold: true, color: pdfColor.orangeDark }),
+  );
+  commands.push(
+    pdfText(692, 143, 12, money(receipt.monto), {
+      bold: true,
+      color: pdfColor.orange,
+    }),
+  );
+
+  commands.push(
+    pdfText(602, 112, 7, date(receipt.fecha), { color: pdfColor.muted }),
+  );
+  if (receipt.codigo) {
+    commands.push(
+      pdfText(
+        706,
+        112,
+        7,
+        pdfFittedText(`N.º ${receipt.codigo}`, 84, 7),
+        { color: pdfColor.muted },
+      ),
+    );
   }
 
   return commands.join("\n");
 };
 
-export const downloadPaymentReceiptPdf = (source) => {
+export const downloadPaymentReceiptPdf = async (source) => {
   try {
     const receipt = normalizePaymentReceipt(source);
-    const content = paymentReceiptPdfContent(source);
+    const logo = await loadReceiptLogo();
+    const content = paymentReceiptPdfContent(source, { hasLogo: Boolean(logo) });
+    const imageObjectNumber = logo ? 7 : null;
+    const resources = imageObjectNumber
+      ? `/Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo ${imageObjectNumber} 0 R >>`
+      : "/Font << /F1 3 0 R /F2 4 0 R >>";
+
     const objects = [
       null,
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Kids [5 0 R] /Count 1 >>",
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>",
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << ${resources} >> /Contents 6 0 R >>`,
       `<< /Length ${pdfByteLength(content)} >>\nstream\n${content}\nendstream`,
     ];
+
+    if (logo) {
+      const imageStream = bytesToBinaryString(logo.bytes);
+      objects.push(
+        `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n${imageStream}\nendstream`,
+      );
+    }
 
     const blob = new Blob([pdfBinary(objects)], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);

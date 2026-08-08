@@ -1153,6 +1153,10 @@
   margin-top: 0;
 }
 
+.cuotas-payment-top-context .cuotas-family-card {
+  margin-bottom: 6px;
+}
+
 .cuotas-payment-top-context .cuotas-context-loading,
 .cuotas-payment-top-context .cuotas-no-family {
   min-height: 74px;
@@ -1160,13 +1164,13 @@
 
 .cuotas-payment-main-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 12px;
 }
 
 .cuotas-payment-main-row.is-date-only {
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .cuotas-payment-date-card {
@@ -1319,17 +1323,32 @@
 .cuotas-payment-date-card__fields {
   min-width: 0;
   display: grid;
-  gap: 11px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+}
+
+/* Fecha y medio de pago permanecen siempre en la misma fila. */
+.cuotas-payment-date-method-row,
+.entity-form__grid.cuotas-payment-grid--multiple {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 13px;
+}
+
+.cuotas-payment-date-method-row > *,
+.entity-form__grid.cuotas-payment-grid--multiple > * {
+  min-width: 0;
 }
 
 /* Estado pagado claramente identificable sin confundirse con un mes deshabilitado. */
 .cuotas-month-grid button.is-paid {
-  border-color: #22c55e;
+  border-color: rgb(34 197 94 / 0.75);
   color: #166534;
   background: #ecfdf3;
-  box-shadow:
-    inset 4px 0 0 #22c55e,
-    inset 0 0 0 1px rgb(34 197 94 / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.16);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -1340,22 +1359,13 @@
   color: #166534;
 }
 
-@media (max-width: 900px) {
-  .cuotas-payment-date-card__fields {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 720px) {
-  .cuotas-payment-date-card__fields {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Selector de importes históricos/personalizados por mes. */
 .cuotas-month-amount-editor {
   display: grid;
-  gap: 9px;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--mov-border) 82%, transparent);
 }
 
 .cuotas-month-amount-editor__title {
@@ -1379,17 +1389,20 @@
 
 .cuotas-month-amount-editor__list {
   display: grid;
-  gap: 8px;
-  max-height: 310px;
-  overflow-y: auto;
-  padding-right: 2px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
   scrollbar-width: thin;
 }
 
 .cuotas-month-amount-row {
+  min-width: 0;
   display: grid;
+  align-content: start;
   gap: 7px;
-  padding: 9px;
+  padding: 10px;
   border: 1px solid color-mix(in srgb, var(--balto-action) 16%, var(--mov-border));
   border-radius: 10px;
   background: color-mix(in srgb, var(--balto-action) 2.5%, #fff);
@@ -1442,13 +1455,14 @@
 
 @media (max-width: 760px) {
   .cuotas-month-amount-editor__list {
+    grid-template-columns: 1fr;
     max-height: none;
   }
 }
 
 /* Ajuste compacto del selector de monto por período. */
 .cuotas-month-amount-field {
-  width: min(100%, 190px);
+  width: 100%;
   display: grid;
   gap: 3px;
 }

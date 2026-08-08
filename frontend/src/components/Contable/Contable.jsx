@@ -1905,9 +1905,7 @@ export default function ContableModule({ view = "summary" }) {
       />
       <ModalEliminarGlobal
         open={Boolean(deleteTarget)}
-        operacion="advertencia"
-        tone="danger"
-        icon={faTrashCan}
+        operacion="eliminar"
         row={deleteTarget?.item}
         title={
           deleteTarget?.type === "income" ? "Eliminar ingreso" : "Eliminar egreso"

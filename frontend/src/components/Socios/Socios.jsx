@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAddressBook,
@@ -834,6 +834,8 @@ export default function Socios({ tipo = PERSON }) {
   const type = tipo === COMPANY ? COMPANY : PERSON;
   const isCompany = type === COMPANY;
   const writable = canWrite();
+  const tableBodyRef = useRef(null);
+  const pendingTableScrollRef = useRef(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState(readSharedPartnerStatus);
@@ -865,6 +867,12 @@ export default function Socios({ tipo = PERSON }) {
   );
   const { items, catalogos, paginacion, loading, error, cargar } =
     useSocios(filters);
+
+  const refreshKeepingTableScroll = useCallback(async () => {
+    pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
+    return cargar();
+  }, [cargar]);
+
   const totalPages = Number(paginacion?.total_paginas || 0);
   const pageOptions = useMemo(
     () => paginationItems(page, totalPages),
@@ -877,6 +885,25 @@ export default function Socios({ tipo = PERSON }) {
       setPage(Math.max(1, totalPages));
     }
   }, [loading, page, totalPages]);
+
+  useEffect(() => {
+    if (loading || pendingTableScrollRef.current == null) return undefined;
+
+    const scrollTop = pendingTableScrollRef.current;
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        const body = tableBodyRef.current;
+        if (body) {
+          const maxScrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+          body.scrollTop = Math.min(scrollTop, maxScrollTop);
+        }
+        pendingTableScrollRef.current = null;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, items.length]);
+
   const [form, setForm] = useState(() => emptyForm(type));
   const [formTab, setFormTab] = useState(FORM_TAB_MAIN);
   const [modalOpen, setModalOpen] = useState(false);
@@ -974,7 +1001,7 @@ export default function Socios({ tipo = PERSON }) {
       });
       setModalOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
-      void cargar();
+      void refreshKeepingTableScroll();
     } catch (requestError) {
       setFeedback({ type: "error", message: requestError.message });
     } finally {
@@ -1006,7 +1033,7 @@ export default function Socios({ tipo = PERSON }) {
           id: stateModal.id_socio,
           fecha_reactivacion: today(),
         });
-    void cargar();
+    void refreshKeepingTableScroll();
     return response;
   };
 
@@ -1039,7 +1066,7 @@ export default function Socios({ tipo = PERSON }) {
       id: deleteModal.item.id_socio,
       confirmacion: "ELIMINAR",
     });
-    void cargar();
+    void refreshKeepingTableScroll();
     return response;
   };
 
@@ -1123,6 +1150,7 @@ export default function Socios({ tipo = PERSON }) {
         <GlobalDivTable
           className={`socios-table ${Number(paginacion?.total || 0) > 0 ? "has-bottom-pagination" : ""}`.trim()}
           bodyClassName="entity-table-wrap"
+          bodyRef={tableBodyRef}
           gridClassName={`socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
           ariaLabel={`Listado de ${title.toLowerCase()}`}
           loading={loading}
@@ -1557,10 +1585,13 @@ export default function Socios({ tipo = PERSON }) {
         }
       />
 
+      {/* Eliminacion unificada: usa exclusivamente la variante global. */}
       <ModalEliminarGlobal
         open={Boolean(deleteModal)}
         operacion="eliminar"
         row={deleteModal?.item}
+        fixedHeight
+        modalClassName="socios-delete-modal"
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
         message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."
         details={

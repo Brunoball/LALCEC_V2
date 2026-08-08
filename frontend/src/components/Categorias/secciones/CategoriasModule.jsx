@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -277,6 +277,8 @@ function DiscountForm({ form, setForm }) {
 
 export default function CategoriasModule({ section = "categorias" }) {
   const writable = canWrite();
+  const tableBodyRef = useRef(null);
+  const pendingTableScrollRef = useRef(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("activo");
   const [discountStatus, setDiscountStatus] = useState("vigente");
@@ -303,6 +305,37 @@ export default function CategoriasModule({ section = "categorias" }) {
     error: discountsError,
     cargar: cargarDescuentos,
   } = useDescuentosFamiliares(discountFilters, section === "descuentos");
+
+  const refreshCategoriesKeepingScroll = useCallback(async () => {
+    pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
+    return cargar();
+  }, [cargar]);
+
+  const refreshDiscountsKeepingScroll = useCallback(async () => {
+    pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
+    return cargarDescuentos();
+  }, [cargarDescuentos]);
+
+  const activeLoading = section === "categorias" ? loading : discountsLoading;
+  const activeItemsLength = section === "categorias" ? items.length : discounts.length;
+
+  useEffect(() => {
+    if (activeLoading || pendingTableScrollRef.current == null) return undefined;
+
+    const scrollTop = pendingTableScrollRef.current;
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        const body = tableBodyRef.current;
+        if (body) {
+          const maxScrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+          body.scrollTop = Math.min(scrollTop, maxScrollTop);
+        }
+        pendingTableScrollRef.current = null;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeLoading, activeItemsLength]);
 
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
   const [categoryFormTab, setCategoryFormTab] = useState(CATEGORY_TAB_GENERAL);
@@ -391,7 +424,7 @@ export default function CategoriasModule({ section = "categorias" }) {
         type: "success",
         message: response.mensaje || "Categoría guardada correctamente.",
       });
-      void cargar();
+      await refreshCategoriesKeepingScroll();
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
@@ -465,7 +498,7 @@ export default function CategoriasModule({ section = "categorias" }) {
         message: response.mensaje || "Descuento familiar guardado correctamente.",
       });
       setDiscountStatus("vigente");
-      await cargarDescuentos();
+      await refreshDiscountsKeepingScroll();
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
@@ -478,7 +511,7 @@ export default function CategoriasModule({ section = "categorias" }) {
     const response = stateModal.activo
       ? await categoriasApi.darBaja(stateModal.id_categoria)
       : await categoriasApi.reactivar(stateModal.id_categoria);
-    void cargar();
+    await refreshCategoriesKeepingScroll();
     return response;
   };
 
@@ -487,7 +520,7 @@ export default function CategoriasModule({ section = "categorias" }) {
     const response = await categoriasApi.eliminarDescuentoFamiliar(
       deleteDiscountModal.id_descuento_familiar,
     );
-    await cargarDescuentos();
+    await refreshDiscountsKeepingScroll();
     return response;
   };
 
@@ -585,6 +618,7 @@ export default function CategoriasModule({ section = "categorias" }) {
 
         {section === "categorias" ? (
           <GlobalDivTable
+            bodyRef={tableBodyRef}
             className="categorias-table"
             bodyClassName="entity-table-wrap"
             gridClassName="categorias-grid"
@@ -664,6 +698,7 @@ export default function CategoriasModule({ section = "categorias" }) {
           </GlobalDivTable>
         ) : (
           <GlobalDivTable
+            bodyRef={tableBodyRef}
             className="categorias-discountsTable"
             bodyClassName="entity-table-wrap"
             gridClassName={`categorias-discountsGrid ${discountHistoryView ? "categorias-discountsGrid--history" : ""}`.trim()}
