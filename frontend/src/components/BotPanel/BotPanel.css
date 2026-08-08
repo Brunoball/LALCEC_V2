@@ -149,7 +149,7 @@
 
 .wp-side-top{
   display: grid;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 8px;
   padding: 12px 12px 10px;

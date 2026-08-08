@@ -41,6 +41,7 @@ import notificationSound from "./notificacion/notificacion.mp3";
 import EditNombreModal from "./modales/EditNombreModal";
 import EditEtiquetaModal from "./modales/EditEtiquetaModal";
 import ConfirmActionModal from "./modales/ConfirmActionModal";
+import ReportesBotModal from "./modales/ReportesBotModal";
 
 import GaleriaModal from "./modales/GaleriaModal";
 
@@ -1006,6 +1007,7 @@ const BotPanel = () => {
 
   // ✅ NUEVO: Galería
   const [galeriaOpen, setGaleriaOpen] = useState(false);
+  const [reportesOpen, setReportesOpen] = useState(false);
 
   const openEditarNombre = (waId) => {
     setModalEditError("");
@@ -1224,6 +1226,7 @@ const BotPanel = () => {
         loadingChats={loadingChats}
         loadingEtiquetas={loadingEtiquetas}
         onBack={() => navigate("/panel", { replace: true })}
+        onOpenReportes={() => setReportesOpen(true)}
         openChat={openChat}
         q={q}
         selectedId={selectedId}
@@ -1304,6 +1307,11 @@ const BotPanel = () => {
           </>
         )}
       </main>
+
+      <ReportesBotModal
+        open={reportesOpen}
+        onClose={() => setReportesOpen(false)}
+      />
 
       <MediaViewerModal open={viewerOpen} onClose={closeViewer} item={viewerItem} />
 

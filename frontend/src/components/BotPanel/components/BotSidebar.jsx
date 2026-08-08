@@ -5,6 +5,7 @@ import {
   faCircle,
   faEllipsisVertical,
   faMagnifyingGlass,
+  faChartColumn,
   faRobot,
   faSpinner,
   faTag,
@@ -23,6 +24,7 @@ const BotSidebar = ({
   loadingChats,
   loadingEtiquetas,
   onBack,
+  onOpenReportes,
   openChat,
   q,
   selectedId,
@@ -54,6 +56,16 @@ const BotSidebar = ({
           <div className="wp-brand-title">Panel Bot WhatsApp</div>
         </div>
       </div>
+
+      <button
+        className="wp-report-launch"
+        onClick={onOpenReportes}
+        type="button"
+        title="Reportes del bot"
+        aria-label="Abrir reportes del bot"
+      >
+        <FontAwesomeIcon icon={faChartColumn} />
+      </button>
     </div>
 
     <div className="wp-searchbar" ref={tagFilterRef}>
