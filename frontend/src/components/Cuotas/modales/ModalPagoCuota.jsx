@@ -630,9 +630,9 @@ export default function ModalPagoCuota({
                             {amountState.personalizado ? (
                               <FloatingField label="Monto personalizado *" active>
                                 <input
-                                  type="number"
-                                  min="0.01"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
+                                  pattern="[0-9]*[.,]?[0-9]{0,2}"
                                   value={amountState.monto ?? ""}
                                   onChange={(event) =>
                                     updateMonthCustomAmount(monthId, event.target.value)
@@ -738,9 +738,9 @@ export default function ModalPagoCuota({
                   <label>
                     <span>Monto</span>
                     <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[.,]?[0-9]{0,2}"
                       value={payment.monto}
                       onChange={(event) =>
                         updateBatchAmount(index, event.target.value)

@@ -38,6 +38,18 @@ const currentYear = currentDate.getFullYear();
 const currentMonth = currentDate.getMonth() + 1;
 const PAGE_SIZE = 100;
 
+const decimalInput = (value, maxIntegerDigits = 12, maxDecimals = 2) => {
+  const normalized = String(value ?? "")
+    .replace(/,/g, ".")
+    .replace(/[^0-9.]/g, "");
+  const [rawInteger = "", ...decimalParts] = normalized.split(".");
+  const integer = rawInteger.slice(0, maxIntegerDigits);
+  if (!decimalParts.length) return integer;
+
+  const decimals = decimalParts.join("").slice(0, maxDecimals);
+  return `${integer || "0"}.${decimals}`;
+};
+
 const CUOTAS_EXPORT_COLUMNS = [
   { key: "denominacion", label: "Socio / Empresa" },
   { key: "documento", label: "DNI / CUIT" },
@@ -1207,18 +1219,22 @@ export default function Cuotas() {
 
   const updateMonthCustomAmount = (monthId, value) => {
     const normalizedMonth = String(monthId);
+    const sanitizedValue = decimalInput(value);
     setPaymentForm((current) => {
       const previous = current.montos_por_mes?.[normalizedMonth] || {};
       return {
         ...current,
         aplicar_familia: false,
-        monto: String(current.mes) === normalizedMonth ? value : current.monto,
+        monto:
+          String(current.mes) === normalizedMonth
+            ? sanitizedValue
+            : current.monto,
         montos_por_mes: {
           ...(current.montos_por_mes || {}),
           [normalizedMonth]: {
             ...previous,
             personalizado: true,
-            monto: value,
+            monto: sanitizedValue,
           },
         },
       };
@@ -1226,10 +1242,13 @@ export default function Cuotas() {
   };
 
   const updateBatchAmount = (index, value) => {
+    const sanitizedValue = decimalInput(value);
     setPaymentForm((current) => ({
       ...current,
       pagos: current.pagos.map((payment, paymentIndex) =>
-        paymentIndex === index ? { ...payment, monto: value } : payment,
+        paymentIndex === index
+          ? { ...payment, monto: sanitizedValue }
+          : payment,
       ),
     }));
   };
@@ -1264,7 +1283,11 @@ export default function Cuotas() {
         !paymentForm.aplicar_familia &&
         selectedMonthIds.some(
           (monthId) =>
-            !(Number(paymentForm.montos_por_mes?.[monthId]?.monto) > 0),
+            !(
+              Number(
+                decimalInput(paymentForm.montos_por_mes?.[monthId]?.monto),
+              ) > 0
+            ),
         )
       ) {
         setFeedback({
@@ -1275,7 +1298,9 @@ export default function Cuotas() {
       }
     } else if (
       !paymentForm.pagos.length ||
-      paymentForm.pagos.some((payment) => !(Number(payment.monto) > 0))
+      paymentForm.pagos.some(
+        (payment) => !(Number(decimalInput(payment.monto)) > 0),
+      )
     ) {
       setFeedback({
         type: "error",
@@ -1296,7 +1321,7 @@ export default function Cuotas() {
             id_socio: Number(payment.id_socio),
             anio: Number(payment.anio),
             mes: Number(payment.mes),
-            monto: Number(payment.monto),
+            monto: Number(decimalInput(payment.monto)),
           })),
         });
       } else if (paymentForm.aplicar_familia && family) {
@@ -1320,12 +1345,14 @@ export default function Cuotas() {
               anio: Number(paymentForm.anio),
               mes: Number(monthId),
               monto: Number(
-                paymentForm.montos_por_mes?.[monthId]?.monto ||
+                decimalInput(
+                  paymentForm.montos_por_mes?.[monthId]?.monto ||
                   defaultAmountOption(periodPrincipal)?.monto ||
                   periodPrincipal?.monto_sugerido ||
                   periodPrincipal?.monto_base ||
                   selectedPartner?.monto_sugerido ||
                   0,
+                ),
               ),
             };
           }),
@@ -1337,8 +1364,10 @@ export default function Cuotas() {
           mes: Number(selectedMonthIds[0]),
           fecha_pago: paymentForm.fecha_pago,
           monto: Number(
-            paymentForm.montos_por_mes?.[selectedMonthIds[0]]?.monto ||
-              paymentForm.monto,
+            decimalInput(
+              paymentForm.montos_por_mes?.[selectedMonthIds[0]]?.monto ||
+                paymentForm.monto,
+            ),
           ),
           id_medio_pago: Number(paymentForm.id_medio_pago),
           aplicar_familia: false,

@@ -18,11 +18,14 @@ import CrudModal from "../../Global/Modales/CrudModal";
 import ModalEliminarGlobal from "../../Global/Modales/ModalEliminarGlobal";
 import ModuleFeedback from "../../Global/ModuleFeedback";
 import { canWrite } from "../../_shared/auth/session";
+import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { contableApi } from "../../Contable/api/contableApi";
 import "../configuracion.css";
 import "./ContableConfiguracion.css";
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
+const sanitizeOptionName = (type, value) =>
+  type === "PROVEEDOR" ? upper(value) : upperWithoutDigits(value);
 
 const LIST_META = {
   PROVEEDOR: {
@@ -263,13 +266,19 @@ export default function ContableConfiguracion() {
 
   const saveItem = async (event) => {
     event.preventDefault();
+    const sanitizedName = sanitizeOptionName(form.tipo, form.nombre).trim();
+    if (!sanitizedName) {
+      setFeedback({ type: "error", message: "Ingresá un nombre válido." });
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
     try {
       const response = await contableApi.guardarOpcion({
         id_opcion: form.id_opcion || null,
         tipo: form.tipo,
-        nombre: form.nombre.trim(),
+        nombre: sanitizedName,
       });
       setFormOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
@@ -389,7 +398,7 @@ export default function ContableConfiguracion() {
                 value={form.nombre}
                 onChange={(event) => setForm((current) => ({
                   ...current,
-                  nombre: upper(event.target.value),
+                  nombre: sanitizeOptionName(form.tipo, event.target.value),
                 }))}
                 maxLength={160}
                 required

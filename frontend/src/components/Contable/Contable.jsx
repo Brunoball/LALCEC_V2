@@ -98,6 +98,22 @@ const localDate = () => {
 };
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
+const upperWithoutDigits = (value) => upper(String(value ?? "").replace(/[0-9]/g, ""));
+
+const decimalInput = (value, maxIntegerDigits = 12, maxDecimals = 2) => {
+  const normalized = String(value ?? "")
+    .replace(/,/g, ".")
+    .replace(/[^\d.]/g, "");
+  const [rawInteger = "", ...decimalParts] = normalized.split(".");
+  const integer = rawInteger.slice(0, maxIntegerDigits);
+  if (!decimalParts.length) return integer;
+
+  const decimals = decimalParts.join("").slice(0, maxDecimals);
+  return `${integer || "0"}.${decimals}`;
+};
+
+const sanitizeOptionName = (type, value) =>
+  type === "PROVEEDOR" ? upper(value) : upperWithoutDigits(value);
 
 const emptyCatalogs = {
   opciones: {
@@ -680,11 +696,21 @@ export default function ContableModule({ view = "summary" }) {
   const saveOption = async (event) => {
     event.preventDefault();
     if (!optionModal) return;
+
+    const sanitizedName = sanitizeOptionName(optionModal.type, optionName).trim();
+    if (!sanitizedName) {
+      setFeedback({
+        type: "error",
+        message: "Ingresá un nombre válido para la opción.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await contableApi.guardarOpcion({
         tipo: optionModal.type,
-        nombre: optionName,
+        nombre: sanitizedName,
       });
       await loadCatalogs();
       optionModal.onCreated(String(response.item.id_opcion));
@@ -717,9 +743,24 @@ export default function ContableModule({ view = "summary" }) {
 
   const saveIncome = async (event) => {
     event.preventDefault();
+
+    const sanitizedIncomeForm = {
+      ...incomeForm,
+      importe: decimalInput(incomeForm.importe),
+      detalle: upper(incomeForm.detalle),
+    };
+
+    if (!(Number(sanitizedIncomeForm.importe) > 0)) {
+      setFeedback({
+        type: "error",
+        message: "Ingresá un importe válido mayor a cero.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
-      const response = await contableApi.guardarIngreso(incomeForm);
+      const response = await contableApi.guardarIngreso(sanitizedIncomeForm);
       setIncomeOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
       await Promise.all([refreshKeepingTableScroll(), loadCatalogs()]);
@@ -792,13 +833,21 @@ export default function ContableModule({ view = "summary" }) {
 
   const saveExpense = async (event) => {
     event.preventDefault();
+
+    const sanitizedExpenseForm = {
+      ...expenseForm,
+      importe: decimalInput(expenseForm.importe),
+      numero_comprobante: upper(expenseForm.numero_comprobante),
+      detalle: upper(expenseForm.detalle),
+    };
+
     if (
-      !expenseForm.fecha ||
-      !expenseForm.id_medio_pago ||
-      !expenseForm.id_proveedor ||
-      !expenseForm.id_categoria ||
-      !expenseForm.id_concepto ||
-      Number(expenseForm.importe) <= 0
+      !sanitizedExpenseForm.fecha ||
+      !sanitizedExpenseForm.id_medio_pago ||
+      !sanitizedExpenseForm.id_proveedor ||
+      !sanitizedExpenseForm.id_categoria ||
+      !sanitizedExpenseForm.id_concepto ||
+      Number(sanitizedExpenseForm.importe) <= 0
     ) {
       setExpenseFormTab("movement");
       setFeedback({
@@ -809,14 +858,15 @@ export default function ContableModule({ view = "summary" }) {
     }
     setSaving(true);
     const formData = new FormData();
-    Object.entries(expenseForm).forEach(([key, value]) => {
+    Object.entries(sanitizedExpenseForm).forEach(([key, value]) => {
       if (key === "archivo") return;
       formData.append(
         key,
         typeof value === "boolean" ? (value ? "1" : "0") : (value ?? ""),
       );
     });
-    if (expenseForm.archivo) formData.append("archivo", expenseForm.archivo);
+    if (sanitizedExpenseForm.archivo)
+      formData.append("archivo", sanitizedExpenseForm.archivo);
     try {
       const response = await contableApi.guardarEgreso(formData);
       setExpenseOpen(false);
@@ -1625,16 +1675,16 @@ export default function ContableModule({ view = "summary" }) {
               active={Boolean(incomeForm.importe)}
             >
               <input
-                type="number"
-                min="0.01"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 required
                 value={incomeForm.importe}
                 placeholder=" "
                 onChange={(event) =>
                   setIncomeForm((current) => ({
                     ...current,
-                    importe: event.target.value,
+                    importe: decimalInput(event.target.value),
                   }))
                 }
               />
@@ -1798,16 +1848,16 @@ export default function ContableModule({ view = "summary" }) {
                 wide
               >
                 <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
                   required
                   value={expenseForm.importe}
                   placeholder=" "
                   onChange={(event) =>
                     setExpenseForm((current) => ({
                       ...current,
-                      importe: event.target.value,
+                      importe: decimalInput(event.target.value),
                     }))
                   }
                 />
@@ -1908,7 +1958,9 @@ export default function ContableModule({ view = "summary" }) {
             required
             maxLength="160"
             value={optionName}
-            onChange={(event) => setOptionName(upper(event.target.value))}
+            onChange={(event) =>
+              setOptionName(sanitizeOptionName(optionModal?.type, event.target.value))
+            }
             placeholder=" "
           />
         </FloatingField>

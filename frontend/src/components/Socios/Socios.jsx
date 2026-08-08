@@ -37,6 +37,10 @@ import {
   EntityTabs,
   FloatingField,
 } from "../Global/Formularios/TabbedForm";
+import {
+  onlyDigits,
+  upperWithoutDigits,
+} from "../Global/Formularios/inputSanitizers";
 import { canWrite } from "../_shared/auth/session";
 import { sociosApi } from "./api/sociosApi";
 import { useSocios } from "./hooks/useSocios";
@@ -590,7 +594,7 @@ function PartnerForm({
                 <input
                   value={form.cuit}
                   onChange={(event) =>
-                    update("cuit", event.target.value.replace(/\D/g, ""))
+                    update("cuit", onlyDigits(event.target.value, 11))
                   }
                   maxLength={11}
                   inputMode="numeric"
@@ -632,7 +636,7 @@ function PartnerForm({
                 <input
                   value={form.apellido}
                   onChange={(event) =>
-                    update("apellido", upper(event.target.value))
+                    update("apellido", upperWithoutDigits(event.target.value))
                   }
                   maxLength={100}
                   placeholder=" "
@@ -643,7 +647,7 @@ function PartnerForm({
                 <input
                   value={form.nombre}
                   onChange={(event) =>
-                    update("nombre", upper(event.target.value))
+                    update("nombre", upperWithoutDigits(event.target.value))
                   }
                   maxLength={100}
                   placeholder=" "
@@ -653,7 +657,7 @@ function PartnerForm({
                 <input
                   value={form.dni}
                   onChange={(event) =>
-                    update("dni", event.target.value.replace(/\D/g, ""))
+                    update("dni", onlyDigits(event.target.value, 8))
                   }
                   maxLength={8}
                   inputMode="numeric"
@@ -705,9 +709,11 @@ function PartnerForm({
                 <input
                   value={form.numero_domicilio}
                   onChange={(event) =>
-                    update("numero_domicilio", upper(event.target.value))
+                    update("numero_domicilio", onlyDigits(event.target.value, 20))
                   }
                   maxLength={20}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder=" "
                 />
               </FloatingField>
@@ -717,7 +723,7 @@ function PartnerForm({
                 <input
                   value={form.localidad}
                   onChange={(event) =>
-                    update("localidad", upper(event.target.value))
+                    update("localidad", upperWithoutDigits(event.target.value))
                   }
                   maxLength={100}
                   placeholder=" "
@@ -731,15 +737,18 @@ function PartnerForm({
             >
               <input
                 type="tel"
-                inputMode="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.telefono}
-                onChange={(event) => update("telefono", event.target.value)}
+                onChange={(event) =>
+                  update("telefono", onlyDigits(event.target.value, 15))
+                }
                 onBlur={(event) => {
                   const normalized = normalizeArgentinePhone(event.target.value);
                   if (normalized.length === 10) update("telefono", normalized);
                 }}
-                maxLength={30}
-                placeholder="Ej: 3564-672304"
+                maxLength={15}
+                placeholder="Ej: 3564672304"
               />
             </FloatingField>
             <FloatingField label="Correo" active={Boolean(form.email)}>
@@ -1049,7 +1058,7 @@ export default function Socios({ tipo = PERSON }) {
       setFeedback({
         type: "error",
         message:
-          "Ingresá un teléfono válido de 10 dígitos (característica + número). Podés escribirlo con guiones, espacios, 0, 15 o +54; el sistema lo limpia al guardar.",
+          "Ingresá un teléfono válido de 10 dígitos (característica + número). El campo acepta sólo números y normaliza prefijos como 54, 0 o 15 al guardar.",
       });
       return;
     }
@@ -1066,6 +1075,12 @@ export default function Socios({ tipo = PERSON }) {
     try {
       const response = await sociosApi.guardar({
         ...form,
+        apellido: upperWithoutDigits(form.apellido),
+        nombre: upperWithoutDigits(form.nombre),
+        dni: onlyDigits(form.dni, 8),
+        cuit: onlyDigits(form.cuit, 11),
+        numero_domicilio: onlyDigits(form.numero_domicilio, 20),
+        localidad: upperWithoutDigits(form.localidad),
         telefono: normalizedPhone || "",
         tipo_socio: type,
         id_categoria: form.id_categoria || null,

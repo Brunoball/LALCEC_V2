@@ -32,6 +32,7 @@ import {
   EntityTabs,
   FloatingField,
 } from "../../Global/Formularios/TabbedForm";
+import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { canWrite } from "../../_shared/auth/session";
 import { familiasApi } from "../api/sociosApi";
 import { useFamilias } from "../hooks/useFamilias";
@@ -253,7 +254,7 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
-                  nombre: upper(event.target.value),
+                  nombre: upperWithoutDigits(event.target.value),
                 }))
               }
               maxLength={150}
@@ -423,7 +424,7 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                         className="familias-member-input"
                         value={member.parentesco || ""}
                         onChange={(event) =>
-                          updateMember(member.id_socio, "parentesco", upper(event.target.value))
+                          updateMember(member.id_socio, "parentesco", upperWithoutDigits(event.target.value))
                         }
                         maxLength={50}
                         placeholder="Parentesco"
@@ -620,11 +621,11 @@ export default function Familias() {
     try {
       const response = await familiasApi.guardar({
         id_familia: form.id_familia || null,
-        nombre: form.nombre,
+        nombre: upperWithoutDigits(form.nombre),
         descripcion: form.descripcion,
         integrantes: form.integrantes.map((member) => ({
           id_socio: member.id_socio,
-          parentesco: member.parentesco,
+          parentesco: upperWithoutDigits(member.parentesco),
           es_titular: member.es_titular,
           observaciones: member.observaciones,
           fecha_incorporacion: member.fecha_incorporacion,

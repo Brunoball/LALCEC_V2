@@ -90,7 +90,7 @@ const NAV_ITEMS = [
 ];
 
 const GROUP_CLICK_DELAY = 0;
-const BOT_NOTIFICATION_POLL_MS = 5000;
+const BOT_NOTIFICATION_POLL_MS = 2000;
 
 const toBotNumber = (value) => {
   const number = Number(value);
@@ -103,51 +103,142 @@ const formatBotBadge = (value) => {
   return number > 99 ? "99+" : String(number);
 };
 
-const calculateBotBadgesFromChats = (rows) => {
+const getBotChatId = (chat) =>
+  String(chat?.wa_id || chat?.id || chat?.telefono || "").trim();
+
+const getBotChatSummary = (chat) => {
+  const unread = Math.max(0, toBotNumber(chat?.unread || 0));
+  const pendingQueries = Math.max(
+    0,
+    toBotNumber(chat?.consultas_pendientes || chat?.pending_consultas || 0),
+  );
+  const pendingReceipts = Math.max(
+    0,
+    toBotNumber(
+      chat?.comprobantes_pendientes || chat?.pending_comprobantes || 0,
+    ),
+  );
+  const priority = String(
+    chat?.prioridad || chat?.notificacion_tipo || chat?.tipo_notificacion || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  return {
+    id: getBotChatId(chat),
+    unread,
+    pendingQueries,
+    pendingReceipts,
+    priority,
+  };
+};
+
+// BotPanel considera "Consulta pendiente" solamente cuando el mensaje trae
+// es_consulta=1 y todavía no fue atendido. No usamos modo manual, prioridad,
+// tipo de notificación ni el texto del mensaje para evitar falsos positivos.
+const isPendingPersonalAttentionMessage = (message) =>
+  Number(message?.es_consulta || 0) === 1 &&
+  Number(message?.consulta_atendida || 0) !== 1;
+
+const getBotAttentionMessageToken = (message) =>
+  String(
+    message?.id ||
+      message?.consulta_fecha ||
+      message?.fecha ||
+      `${message?.wa_id || ""}:${message?.mensaje || "consulta"}`,
+  );
+
+const getBotChatChangeSignature = (chat, summary) =>
+  [
+    summary.id,
+    summary.unread,
+    summary.pendingQueries,
+    toBotNumber(chat?.total || 0),
+    toBotNumber(chat?.ultima_ts || chat?.updated_at || 0),
+    String(chat?.ultima_fecha || ""),
+    String(chat?.ultimo_mensaje || ""),
+  ].join("|");
+
+const inspectPendingPersonalAttention = async (summary) => {
+  if (!summary.id || summary.unread <= 0) {
+    return { pendingQueries: 0, attentionToken: "" };
+  }
+
+  try {
+    const data = await botPanelGet("panel_mensajes", {
+      wa_id: summary.id,
+      limit: Math.max(60, Math.min(220, summary.unread + 80)),
+    });
+    const messages = Array.isArray(data?.mensajes) ? data.mensajes : [];
+    const pending = messages.filter(isPendingPersonalAttentionMessage);
+
+    return {
+      pendingQueries: pending.length,
+      attentionToken: pending.map(getBotAttentionMessageToken).join("|"),
+    };
+  } catch {
+    // Si el detalle falla, panel_chats sigue funcionando como fallback.
+    return { pendingQueries: 0, attentionToken: "" };
+  }
+};
+
+const calculateBotNotificationsFromChats = (rows, detailsByChat = new Map()) => {
   const chats = Array.isArray(rows) ? rows : [];
   let normal = 0;
   let urgent = 0;
   let approval = 0;
+  const snapshot = [];
 
   for (const chat of chats) {
-    const unread = Math.max(0, toBotNumber(chat?.unread || 0));
+    const summary = getBotChatSummary(chat);
+    const detail = detailsByChat.get(summary.id) || {};
+
+    // panel_chats es la fuente rápida. panel_mensajes completa el dato cuando
+    // ese endpoint todavía no expone consultas_pendientes.
     const pendingQueries = Math.max(
-      0,
-      toBotNumber(chat?.consultas_pendientes || chat?.pending_consultas || 0),
+      summary.pendingQueries,
+      Math.max(0, toBotNumber(detail.pendingQueries || 0)),
     );
-    const pendingReceipts = Math.max(
-      0,
-      toBotNumber(
-        chat?.comprobantes_pendientes || chat?.pending_comprobantes || 0,
-      ),
-    );
-    const priority = String(
-      chat?.prioridad || chat?.notificacion_tipo || chat?.tipo_notificacion || "",
-    ).toLowerCase();
 
     const isReceiptAlert =
-      priority === "aprobacion_comprobante" ||
-      priority === "comprobante_pendiente" ||
-      priority.includes("comprobante");
+      summary.priority === "aprobacion_comprobante" ||
+      summary.priority === "comprobante_pendiente" ||
+      summary.priority.includes("comprobante");
 
     const approvalsForChat =
-      pendingReceipts > 0
-        ? pendingReceipts
+      summary.pendingReceipts > 0
+        ? summary.pendingReceipts
         : isReceiptAlert
-          ? Math.max(1, Math.min(unread, 1))
+          ? Math.max(1, Math.min(summary.unread, 1))
           : 0;
-    const urgentForChat = Math.min(unread, pendingQueries);
+
+    // Igual que Cooperadora en cantidad: una consulta pendiente consume uno de
+    // los unread verdes y lo transforma en rojo. La diferencia es que acá el
+    // fallback lee es_consulta directamente del mensaje para no depender de un
+    // contador que en este backend puede llegar tarde o quedar en cero.
+    const urgentForChat = Math.min(summary.unread, pendingQueries);
     const classifiedForChat = Math.min(
-      unread,
-      urgentForChat + Math.min(unread, approvalsForChat),
+      summary.unread,
+      urgentForChat + Math.min(summary.unread, approvalsForChat),
     );
 
     urgent += urgentForChat;
     approval += approvalsForChat;
-    normal += Math.max(0, unread - classifiedForChat);
+    normal += Math.max(0, summary.unread - classifiedForChat);
+
+    snapshot.push({
+      id: summary.id,
+      unread: summary.unread,
+      urgentCount: urgentForChat,
+      pendingQueries,
+      attentionToken: String(detail.attentionToken || ""),
+    });
   }
 
-  return { normal, urgent, approval };
+  return {
+    badges: { normal, urgent, approval },
+    snapshot,
+  };
 };
 
 const getGroupKeyForPath = (pathname) =>
@@ -223,8 +314,13 @@ export default function Principal() {
     approval: 0,
   });
   const botNotificationAudioRef = useRef(null);
-  const previousBotNotificationsRef = useRef(null);
+  const botNotificationUserInteractedRef = useRef(false);
+  const botNotificationAudioUnlockedRef = useRef(false);
+  const botNotificationAudioContextRef = useRef(null);
+  const previousBotChatsRef = useRef([]);
+  const firstBotChatsLoadRef = useRef(true);
   const botNotificationRequestRef = useRef(false);
+  const botAttentionDetailsCacheRef = useRef(new Map());
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -239,20 +335,135 @@ export default function Principal() {
   );
 
   useEffect(() => {
+    try {
+      botNotificationUserInteractedRef.current =
+        Boolean(navigator?.userActivation?.hasBeenActive) ||
+        botNotificationUserInteractedRef.current;
+    } catch {}
+
+    const unlockBotNotificationAudio = () => {
+      botNotificationUserInteractedRef.current = true;
+
+      // Dejamos un AudioContext habilitado como respaldo. Esto evita que el
+      // navegador silencie la alerta varios segundos después del primer clic.
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass && !botNotificationAudioContextRef.current) {
+          botNotificationAudioContextRef.current = new AudioContextClass();
+        }
+        const context = botNotificationAudioContextRef.current;
+        if (context?.state === "suspended") {
+          const resumePromise = context.resume();
+          if (resumePromise && typeof resumePromise.catch === "function") {
+            resumePromise.catch(() => {});
+          }
+        }
+      } catch {}
+
+      // También desbloqueamos explícitamente el MP3 durante el gesto del usuario.
+      // Se reproduce muteado y se detiene enseguida, por lo que no se oye nada.
+      if (!botNotificationAudioUnlockedRef.current) {
+        const audio = botNotificationAudioRef.current;
+        if (audio) {
+          try {
+            const previousMuted = audio.muted;
+            audio.muted = true;
+            audio.currentTime = 0;
+            const playPromise = audio.play();
+            if (playPromise && typeof playPromise.then === "function") {
+              playPromise
+                .then(() => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                  audio.muted = previousMuted;
+                  botNotificationAudioUnlockedRef.current = true;
+                })
+                .catch(() => {
+                  audio.muted = previousMuted;
+                });
+            } else {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.muted = previousMuted;
+              botNotificationAudioUnlockedRef.current = true;
+            }
+          } catch {}
+        }
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockBotNotificationAudio, { passive: true });
+    window.addEventListener("keydown", unlockBotNotificationAudio);
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockBotNotificationAudio);
+      window.removeEventListener("keydown", unlockBotNotificationAudio);
+      try {
+        botNotificationAudioContextRef.current?.close?.();
+      } catch {}
+      botNotificationAudioContextRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
-    const playNotificationSound = () => {
-      const audio = botNotificationAudioRef.current;
-      if (!audio) return;
+    const playFallbackAttentionTone = () => {
+      const renderTone = () => {
+        try {
+          const context = botNotificationAudioContextRef.current;
+          if (!context || context.state === "closed") return;
+
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          const now = context.currentTime;
+
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(880, now);
+          oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.18);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+          oscillator.connect(gain);
+          gain.connect(context.destination);
+          oscillator.start(now);
+          oscillator.stop(now + 0.24);
+        } catch {}
+      };
 
       try {
+        const context = botNotificationAudioContextRef.current;
+        if (!context || context.state === "closed") return;
+        if (context.state === "suspended") {
+          const resumed = context.resume();
+          if (resumed && typeof resumed.then === "function") {
+            resumed.then(renderTone).catch(() => {});
+            return;
+          }
+        }
+        renderTone();
+      } catch {}
+    };
+
+    const playUrgentNotificationSound = () => {
+      const audio = botNotificationAudioRef.current;
+      if (!audio) {
+        playFallbackAttentionTone();
+        return;
+      }
+
+      try {
+        audio.muted = false;
         audio.pause();
         audio.currentTime = 0;
         const playPromise = audio.play();
         if (playPromise && typeof playPromise.catch === "function") {
-          playPromise.catch(() => {});
+          playPromise.catch(() => playFallbackAttentionTone());
         }
-      } catch {}
+      } catch {
+        playFallbackAttentionTone();
+      }
     };
 
     const refreshBotNotifications = async () => {
@@ -260,53 +471,96 @@ export default function Principal() {
       botNotificationRequestRef.current = true;
 
       try {
-        let next = null;
+        const data = await botPanelGet("panel_chats");
+        if (!mounted || !Array.isArray(data?.chats)) return;
 
-        // Cooperadora clasifica las notificaciones por chat: normales,
-        // atención personalizada y comprobantes pendientes de aprobación.
-        try {
-          const chatData = await botPanelGet("panel_chats");
-          if (Array.isArray(chatData?.chats)) {
-            next = calculateBotBadgesFromChats(chatData.chats);
+        // panel_chats sirve para unread/comprobantes. Para atención personalizada
+        // verificamos también el mismo flag de mensaje que usa BotPanel:
+        // es_consulta=1 && consulta_atendida=0. Esto evita los dos errores que
+        // tuvimos antes: "todo rojo" por modo/prioridad y "todo verde" porque
+        // consultas_pendientes no estaba llegando en este backend.
+        const detailsByChat = new Map();
+        const now = Date.now();
+        const activeIds = new Set();
+
+        await Promise.all(
+          data.chats.map(async (chat) => {
+            const summary = getBotChatSummary(chat);
+            if (!summary.id || summary.unread <= 0) return;
+
+            activeIds.add(summary.id);
+            const signature = getBotChatChangeSignature(chat, summary);
+            const cached = botAttentionDetailsCacheRef.current.get(summary.id);
+            const cacheStillFresh =
+              cached &&
+              cached.signature === signature &&
+              now - Number(cached.checkedAt || 0) < 3000;
+
+            if (cacheStillFresh) {
+              detailsByChat.set(summary.id, cached.detail);
+              return;
+            }
+
+            const detail = await inspectPendingPersonalAttention(summary);
+            botAttentionDetailsCacheRef.current.set(summary.id, {
+              signature,
+              checkedAt: now,
+              detail,
+            });
+            detailsByChat.set(summary.id, detail);
+          }),
+        );
+
+        // Limpiamos chats ya leídos/eliminados para que una solicitud vieja no
+        // pueda volver a disparar sonido más adelante.
+        for (const id of botAttentionDetailsCacheRef.current.keys()) {
+          if (!activeIds.has(id)) {
+            botAttentionDetailsCacheRef.current.delete(id);
           }
-        } catch {
-          // Si esta instalación no expone panel_chats, conservamos el endpoint
-          // liviano que ya utilizaba LALCEC.
-        }
-
-        if (!next) {
-          const data = await botPanelGet("panel_unread_total");
-          next = {
-            normal: Math.max(0, toBotNumber(data?.total_normal || 0)),
-            urgent: Math.max(0, toBotNumber(data?.total_urgent || 0)),
-            approval: Math.max(
-              0,
-              toBotNumber(
-                data?.total_approval ||
-                  data?.total_approvals ||
-                  data?.total_comprobantes ||
-                  data?.comprobantes_pendientes ||
-                  0,
-              ),
-            ),
-          };
         }
 
         if (!mounted) return;
 
-        const previous = previousBotNotificationsRef.current;
+        const { badges, snapshot } = calculateBotNotificationsFromChats(
+          data.chats,
+          detailsByChat,
+        );
 
-        if (
-          previous &&
-          (next.normal > previous.normal ||
-            next.urgent > previous.urgent ||
-            next.approval > previous.approval)
-        ) {
-          playNotificationSound();
+        if (firstBotChatsLoadRef.current) {
+          firstBotChatsLoadRef.current = false;
+        } else {
+          const previousChats = previousBotChatsRef.current;
+
+          // Sonido SOLO por una nueva solicitud real de atención personalizada.
+          // Un mensaje normal, aunque llegue en un chat que esté en modo manual,
+          // no altera pendingQueries/attentionToken y por eso no suena.
+          const mustPlayUrgent = snapshot.some((nextChat) => {
+            const previousChat = previousChats.find(
+              (chat) => chat.id === nextChat.id,
+            );
+            const previousPending = Number(previousChat?.pendingQueries || 0);
+            const previousUrgentCount = Number(previousChat?.urgentCount || 0);
+            const pendingIncreased = nextChat.pendingQueries > previousPending;
+            const becameUrgent =
+              nextChat.urgentCount > 0 && previousUrgentCount === 0;
+            const tokenChanged =
+              !!nextChat.attentionToken &&
+              nextChat.attentionToken !== previousChat?.attentionToken;
+
+            return pendingIncreased || becameUrgent || tokenChanged;
+          });
+
+          if (mustPlayUrgent) {
+            playUrgentNotificationSound();
+          }
         }
 
-        previousBotNotificationsRef.current = next;
-        setBotNotifications(next);
+        previousBotChatsRef.current = snapshot;
+        setBotNotifications({
+          normal: Math.max(0, toBotNumber(badges.normal)),
+          urgent: Math.max(0, toBotNumber(badges.urgent)),
+          approval: Math.max(0, toBotNumber(badges.approval)),
+        });
       } catch {
         // Si el bot está temporalmente inaccesible, el sistema principal sigue funcionando.
       } finally {

@@ -29,6 +29,7 @@ import {
   FloatingField,
 } from "../../Global/Formularios/TabbedForm";
 import { canWrite } from "../../_shared/auth/session";
+import { onlyDigits, upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { categoriasApi } from "../api/categoriasApi";
 import { useCategorias } from "../hooks/useCategorias";
 import { useDescuentosFamiliares } from "../hooks/useDescuentosFamiliares";
@@ -52,7 +53,19 @@ const openDatePicker = (event) => {
   }
 };
 
-const upper = (value) => value.toLocaleUpperCase("es-AR");
+const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
+const decimalInput = (value, maxIntegerDigits = 10, maxDecimals = 2) => {
+  const normalized = String(value ?? "")
+    .replace(",", ".")
+    .replace(/[^0-9.]/g, "");
+  const [rawInteger = "", ...decimalParts] = normalized.split(".");
+  const integer = rawInteger.slice(0, maxIntegerDigits);
+
+  if (decimalParts.length === 0) return integer;
+
+  const decimals = decimalParts.join("").slice(0, maxDecimals);
+  return `${integer || "0"}.${decimals}`;
+};
 const CATEGORY_TAB_GENERAL = "general";
 const CATEGORY_TAB_PRICE = "price";
 const money = (value) =>
@@ -124,7 +137,7 @@ function CategoryForm({ form, setForm, activeTab, onTabChange }) {
             <input
               value={form.nombre}
               placeholder=" "
-              onChange={(event) => update("nombre", upper(event.target.value))}
+              onChange={(event) => update("nombre", upperWithoutDigits(event.target.value))}
               required
               maxLength={120}
               autoFocus
@@ -153,13 +166,13 @@ function CategoryForm({ form, setForm, activeTab, onTabChange }) {
         >
           <FloatingField label="Monto mensual *" active={form.monto_actual !== ""}>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder=" "
-              min="0"
-              max="9999999999.99"
-              step="0.01"
               value={form.monto_actual}
-              onChange={(event) => update("monto_actual", event.target.value)}
+              onChange={(event) =>
+                update("monto_actual", decimalInput(event.target.value, 10, 2))
+              }
               required
             />
           </FloatingField>
@@ -197,13 +210,11 @@ function DiscountForm({ form, setForm }) {
       >
         <FloatingField label="Cantidad mínima de integrantes *" active>
           <input
-            type="number"
-            min="2"
-            max="50"
-            step="1"
+            type="text"
+            inputMode="numeric"
             value={form.cantidad_integrantes_desde}
             onChange={(event) =>
-              update("cantidad_integrantes_desde", event.target.value)
+              update("cantidad_integrantes_desde", onlyDigits(event.target.value, 2))
             }
             required
             autoFocus
@@ -214,14 +225,12 @@ function DiscountForm({ form, setForm }) {
           active={form.cantidad_integrantes_hasta !== ""}
         >
           <input
-            type="number"
-            min="2"
-            max="50"
-            step="1"
+            type="text"
+            inputMode="numeric"
             placeholder=" "
             value={form.cantidad_integrantes_hasta}
             onChange={(event) =>
-              update("cantidad_integrantes_hasta", event.target.value)
+              update("cantidad_integrantes_hasta", onlyDigits(event.target.value, 2))
             }
           />
         </FloatingField>
@@ -230,14 +239,12 @@ function DiscountForm({ form, setForm }) {
           active={form.porcentaje_descuento !== ""}
         >
           <input
-            type="number"
-            min="0.01"
-            max="100"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             placeholder=" "
             value={form.porcentaje_descuento}
             onChange={(event) =>
-              update("porcentaje_descuento", event.target.value)
+              update("porcentaje_descuento", decimalInput(event.target.value, 3, 2))
             }
             required
           />
@@ -396,17 +403,23 @@ export default function CategoriasModule({ section = "categorias" }) {
 
   const saveCategory = async (event) => {
     event.preventDefault();
-    if (!categoryForm.nombre.trim()) {
+    const sanitizedCategory = {
+      ...categoryForm,
+      nombre: upperWithoutDigits(categoryForm.nombre).trim(),
+      monto_actual: decimalInput(categoryForm.monto_actual, 10, 2),
+    };
+
+    if (!sanitizedCategory.nombre) {
       setCategoryFormTab(CATEGORY_TAB_GENERAL);
       setFeedback({ type: "error", message: "Completá el nombre de la categoría." });
       return;
     }
-    if (categoryForm.monto_actual === "" || Number(categoryForm.monto_actual) < 0) {
+    if (sanitizedCategory.monto_actual === "" || Number(sanitizedCategory.monto_actual) < 0) {
       setCategoryFormTab(CATEGORY_TAB_PRICE);
       setFeedback({ type: "error", message: "Ingresá un monto mensual válido." });
       return;
     }
-    if (!categoryForm.vigente_desde) {
+    if (!sanitizedCategory.vigente_desde) {
       setCategoryFormTab(CATEGORY_TAB_PRICE);
       setFeedback({
         type: "error",
@@ -417,7 +430,7 @@ export default function CategoriasModule({ section = "categorias" }) {
 
     setSaving(true);
     try {
-      const response = await categoriasApi.guardar(categoryForm);
+      const response = await categoriasApi.guardar(sanitizedCategory);
       setCategoryModalOpen(false);
       setCategoryForm(emptyCategoryForm());
       setFeedback({
@@ -434,11 +447,12 @@ export default function CategoriasModule({ section = "categorias" }) {
 
   const saveDiscount = async (event) => {
     event.preventDefault();
-    const from = Number(discountForm.cantidad_integrantes_desde);
-    const to = discountForm.cantidad_integrantes_hasta === ""
-      ? null
-      : Number(discountForm.cantidad_integrantes_hasta);
-    const discount = Number(discountForm.porcentaje_descuento);
+    const fromText = onlyDigits(discountForm.cantidad_integrantes_desde, 2);
+    const toText = onlyDigits(discountForm.cantidad_integrantes_hasta, 2);
+    const discountText = decimalInput(discountForm.porcentaje_descuento, 3, 2);
+    const from = Number(fromText);
+    const to = toText === "" ? null : Number(toText);
+    const discount = Number(discountText);
 
     if (!Number.isInteger(from) || from < 2 || from > 50) {
       setFeedback({

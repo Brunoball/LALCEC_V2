@@ -21,6 +21,7 @@ import ModalEliminarGlobal from "../../Global/Modales/ModalEliminarGlobal";
 import ModuleFeedback from "../../Global/ModuleFeedback";
 import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import { canWrite } from "../../_shared/auth/session";
+import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { configuracionApi } from "../api/configuracionApi";
 import { useConfiguracion } from "../hooks/useConfiguracion";
 import "../configuracion.css";
@@ -403,13 +404,19 @@ function CatalogsPanel() {
 
   const saveItem = async (event) => {
     event.preventDefault();
+    const sanitizedName = upperWithoutDigits(form.nombre).trim();
+    if (!sanitizedName) {
+      setFeedback({ type: "error", message: "Ingresá un nombre válido." });
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
     try {
       const response = await configuracionApi.guardarItem({
         lista: form.lista,
         id: form.id || null,
-        nombre: form.nombre.trim(),
+        nombre: sanitizedName,
       });
       setFormOpen(false);
       setFeedback({ type: "success", message: response.mensaje });
@@ -574,7 +581,7 @@ function CatalogsPanel() {
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    nombre: upper(event.target.value),
+                    nombre: upperWithoutDigits(event.target.value),
                   }))
                 }
                 maxLength={meta.maxLength}
