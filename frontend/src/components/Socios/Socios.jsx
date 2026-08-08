@@ -724,7 +724,11 @@ function PartnerForm({
                 />
               </FloatingField>
             ) : null}
-            <FloatingField label="Teléfono" active={Boolean(form.telefono)}>
+            <FloatingField
+              label="Teléfono"
+              active={Boolean(form.telefono)}
+              placeholderOnFloat
+            >
               <input
                 type="tel"
                 inputMode="tel"
@@ -735,7 +739,7 @@ function PartnerForm({
                   if (normalized.length === 10) update("telefono", normalized);
                 }}
                 maxLength={30}
-                placeholder="Ej.: 3564-672304"
+                placeholder="Ej: 3564-672304"
               />
             </FloatingField>
             <FloatingField label="Correo" active={Boolean(form.email)}>

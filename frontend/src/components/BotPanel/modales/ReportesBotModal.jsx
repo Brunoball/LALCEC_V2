@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowTrendUp,
@@ -102,7 +102,6 @@ const DetailRow = ({ label, value, hint, strong = false }) => (
 );
 
 const ReportesBotModal = ({ open, onClose }) => {
-  const boxRef = useRef(null);
   const now = useMemo(() => new Date(), []);
   const [period, setPeriod] = useState(() =>
     normalizePeriod(now.getFullYear(), now.getMonth() + 1)
@@ -136,17 +135,6 @@ const ReportesBotModal = ({ open, onClose }) => {
     fetchReport(period);
   }, [open, period, fetchReport]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const onDown = (event) => {
-      const box = boxRef.current;
-      if (box && !box.contains(event.target)) onClose?.();
-    };
-
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open, onClose]);
 
   const periodOptions = useMemo(() => {
     const current = normalizePeriod(now.getFullYear(), now.getMonth() + 1);
@@ -187,14 +175,14 @@ const ReportesBotModal = ({ open, onClose }) => {
 
   return (
     <div className="wp-report-backdrop" role="dialog" aria-modal="true" aria-label="Reportes del bot">
-      <div className="wp-report-modal" ref={boxRef}>
+      <div className="wp-report-modal">
         <header className="wp-report-head">
           <div className="wp-report-head-title">
             <span className="wp-report-head-icon" aria-hidden="true">
               <FontAwesomeIcon icon={faChartColumn} />
             </span>
             <div>
-              <span className="wp-report-eyebrow">Panel de gestión</span>
+              <span className="wp-report-eyebrow">WhatsApp · Bot</span>
               <h2>Reportes del Bot</h2>
               <p>Actividad, contactos, pagos y costos mensuales de WhatsApp.</p>
             </div>

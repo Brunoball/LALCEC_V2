@@ -179,6 +179,29 @@
   padding-top: 18px;
 }
 
+/*
+ * Placeholder opcional para floating labels:
+ * queda oculto mientras el label ocupa el centro del campo y aparece recién
+ * cuando el label flota (focus o valor activo). El placeholder nativo vuelve
+ * a desaparecer automáticamente apenas el usuario escribe.
+ */
+.entity-floating-field.has-placeholder-on-float > input::placeholder,
+.entity-floating-field.has-placeholder-on-float > textarea::placeholder {
+  color: transparent;
+  opacity: 0;
+  transition:
+    color var(--entity-modal-transition),
+    opacity var(--entity-modal-transition);
+}
+
+.entity-floating-field.has-placeholder-on-float:focus-within > input::placeholder,
+.entity-floating-field.has-placeholder-on-float:focus-within > textarea::placeholder,
+.entity-floating-field.has-placeholder-on-float.is-active > input::placeholder,
+.entity-floating-field.has-placeholder-on-float.is-active > textarea::placeholder {
+  color: color-mix(in srgb, var(--entity-modal-text) 56%, transparent);
+  opacity: 1;
+}
+
 .entity-floating-field > span {
   position: absolute;
   top: 50%;

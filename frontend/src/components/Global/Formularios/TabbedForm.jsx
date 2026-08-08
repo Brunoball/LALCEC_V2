@@ -122,12 +122,13 @@ export function FloatingField({
   active = false,
   wide = false,
   textarea = false,
+  placeholderOnFloat = false,
   className = "",
   children,
 }) {
   return (
     <label
-      className={`entity-field entity-floating-field ${wide ? "entity-field--wide" : ""} ${textarea ? "is-textarea" : ""} ${active ? "is-active" : ""} ${className}`.trim()}
+      className={`entity-field entity-floating-field ${wide ? "entity-field--wide" : ""} ${textarea ? "is-textarea" : ""} ${active ? "is-active" : ""} ${placeholderOnFloat ? "has-placeholder-on-float" : ""} ${className}`.trim()}
     >
       {children}
       <span>{label}</span>

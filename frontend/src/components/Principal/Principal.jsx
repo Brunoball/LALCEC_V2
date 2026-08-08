@@ -50,6 +50,13 @@ const NAV_ITEMS = [
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
   {
+    key: "bot-whatsapp",
+    label: "Bot WhatsApp",
+    path: BOT_PANEL_ROUTE,
+    icon: faRobot,
+    external: true,
+  },
+  {
     key: "categorias",
     label: "Categorías",
     path: "/categorias",
@@ -84,6 +91,64 @@ const NAV_ITEMS = [
 
 const GROUP_CLICK_DELAY = 0;
 const BOT_NOTIFICATION_POLL_MS = 5000;
+
+const toBotNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const formatBotBadge = (value) => {
+  const number = Math.max(0, toBotNumber(value));
+  if (number <= 0) return "";
+  return number > 99 ? "99+" : String(number);
+};
+
+const calculateBotBadgesFromChats = (rows) => {
+  const chats = Array.isArray(rows) ? rows : [];
+  let normal = 0;
+  let urgent = 0;
+  let approval = 0;
+
+  for (const chat of chats) {
+    const unread = Math.max(0, toBotNumber(chat?.unread || 0));
+    const pendingQueries = Math.max(
+      0,
+      toBotNumber(chat?.consultas_pendientes || chat?.pending_consultas || 0),
+    );
+    const pendingReceipts = Math.max(
+      0,
+      toBotNumber(
+        chat?.comprobantes_pendientes || chat?.pending_comprobantes || 0,
+      ),
+    );
+    const priority = String(
+      chat?.prioridad || chat?.notificacion_tipo || chat?.tipo_notificacion || "",
+    ).toLowerCase();
+
+    const isReceiptAlert =
+      priority === "aprobacion_comprobante" ||
+      priority === "comprobante_pendiente" ||
+      priority.includes("comprobante");
+
+    const approvalsForChat =
+      pendingReceipts > 0
+        ? pendingReceipts
+        : isReceiptAlert
+          ? Math.max(1, Math.min(unread, 1))
+          : 0;
+    const urgentForChat = Math.min(unread, pendingQueries);
+    const classifiedForChat = Math.min(
+      unread,
+      urgentForChat + Math.min(unread, approvalsForChat),
+    );
+
+    urgent += urgentForChat;
+    approval += approvalsForChat;
+    normal += Math.max(0, unread - classifiedForChat);
+  }
+
+  return { normal, urgent, approval };
+};
 
 const getGroupKeyForPath = (pathname) =>
   NAV_ITEMS.find(
@@ -155,6 +220,7 @@ export default function Principal() {
   const [botNotifications, setBotNotifications] = useState({
     normal: 0,
     urgent: 0,
+    approval: 0,
   });
   const botNotificationAudioRef = useRef(null);
   const previousBotNotificationsRef = useRef(null);
@@ -194,18 +260,47 @@ export default function Principal() {
       botNotificationRequestRef.current = true;
 
       try {
-        const data = await botPanelGet("panel_unread_total");
+        let next = null;
+
+        // Cooperadora clasifica las notificaciones por chat: normales,
+        // atención personalizada y comprobantes pendientes de aprobación.
+        try {
+          const chatData = await botPanelGet("panel_chats");
+          if (Array.isArray(chatData?.chats)) {
+            next = calculateBotBadgesFromChats(chatData.chats);
+          }
+        } catch {
+          // Si esta instalación no expone panel_chats, conservamos el endpoint
+          // liviano que ya utilizaba LALCEC.
+        }
+
+        if (!next) {
+          const data = await botPanelGet("panel_unread_total");
+          next = {
+            normal: Math.max(0, toBotNumber(data?.total_normal || 0)),
+            urgent: Math.max(0, toBotNumber(data?.total_urgent || 0)),
+            approval: Math.max(
+              0,
+              toBotNumber(
+                data?.total_approval ||
+                  data?.total_approvals ||
+                  data?.total_comprobantes ||
+                  data?.comprobantes_pendientes ||
+                  0,
+              ),
+            ),
+          };
+        }
+
         if (!mounted) return;
 
-        const next = {
-          normal: Math.max(0, Number(data?.total_normal || 0)),
-          urgent: Math.max(0, Number(data?.total_urgent || 0)),
-        };
         const previous = previousBotNotificationsRef.current;
 
         if (
           previous &&
-          (next.normal > previous.normal || next.urgent > previous.urgent)
+          (next.normal > previous.normal ||
+            next.urgent > previous.urgent ||
+            next.approval > previous.approval)
         ) {
           playNotificationSound();
         }
@@ -321,6 +416,9 @@ export default function Principal() {
     botNotifications.urgent > 0
       ? `${botNotifications.urgent} de atención personalizada`
       : null,
+    botNotifications.approval > 0
+      ? `${botNotifications.approval} comprobante${botNotifications.approval === 1 ? "" : "s"} pendiente${botNotifications.approval === 1 ? "" : "s"} de aprobación`
+      : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -354,39 +452,6 @@ export default function Principal() {
         </div>
         <div className="mov-topbar__right">
           <div className="mov-topbar__section">{activeLabel}</div>
-          <button
-            className="pp-topbarBot"
-            type="button"
-            onClick={() => openAuthenticatedTab(BOT_PANEL_ROUTE)}
-            title={
-              botNotificationTitle
-                ? `Abrir bot de WhatsApp · ${botNotificationTitle}`
-                : "Abrir bot de WhatsApp"
-            }
-            aria-label={
-              botNotificationTitle
-                ? `Abrir bot de WhatsApp. ${botNotificationTitle}`
-                : "Abrir bot de WhatsApp"
-            }
-          >
-            <FontAwesomeIcon icon={faRobot} />
-            {botNotifications.normal > 0 ? (
-              <span
-                className="pp-topbarBot__badge pp-topbarBot__badge--normal"
-                aria-label={`${botNotifications.normal} mensajes normales sin leer`}
-              >
-                {botNotifications.normal > 99 ? "99+" : botNotifications.normal}
-              </span>
-            ) : null}
-            {botNotifications.urgent > 0 ? (
-              <span
-                className="pp-topbarBot__badge pp-topbarBot__badge--urgent"
-                aria-label={`${botNotifications.urgent} mensajes de atención personalizada sin leer`}
-              >
-                {botNotifications.urgent > 99 ? "99+" : botNotifications.urgent}
-              </span>
-            ) : null}
-          </button>
           <button
             className={`pp-topbarConfig ${location.pathname.startsWith("/configuracion") ? "is-active" : ""}`}
             type="button"
@@ -481,15 +546,53 @@ export default function Principal() {
                   <button
                     className="pp-nav__item"
                     type="button"
-                    title="Abrir en una pestaña nueva"
+                    title={
+                      item.key === "bot-whatsapp" && botNotificationTitle
+                        ? `Abrir Bot WhatsApp · ${botNotificationTitle}`
+                        : "Abrir en una pestaña nueva"
+                    }
+                    aria-label={
+                      item.key === "bot-whatsapp" && botNotificationTitle
+                        ? `Abrir Bot WhatsApp. ${botNotificationTitle}`
+                        : undefined
+                    }
                     onClick={() => {
                       closeOpenGroup();
                       setDrawerOpen(false);
                       openAuthenticatedTab(item.path);
                     }}
                   >
-                    <span className="pp-nav__icon">
+                    <span
+                      className={`pp-nav__icon ${item.key === "bot-whatsapp" ? "pp-nav__icon--bot" : ""}`}
+                    >
                       <FontAwesomeIcon icon={item.icon} />
+                      {item.key === "bot-whatsapp" && botNotifications.approval > 0 ? (
+                        <span
+                          className="pp-navBotBadge pp-navBotBadge--approval"
+                          aria-label={`Comprobantes pendientes de aprobación: ${botNotifications.approval}`}
+                          title={`Comprobantes para aprobar: ${botNotifications.approval}`}
+                        >
+                          {formatBotBadge(botNotifications.approval)}
+                        </span>
+                      ) : null}
+                      {item.key === "bot-whatsapp" && botNotifications.normal > 0 ? (
+                        <span
+                          className="pp-navBotBadge pp-navBotBadge--normal"
+                          aria-label={`Notificaciones normales: ${botNotifications.normal}`}
+                          title={`Mensajes sin leer: ${botNotifications.normal}`}
+                        >
+                          {formatBotBadge(botNotifications.normal)}
+                        </span>
+                      ) : null}
+                      {item.key === "bot-whatsapp" && botNotifications.urgent > 0 ? (
+                        <span
+                          className="pp-navBotBadge pp-navBotBadge--urgent"
+                          aria-label={`Notificaciones urgentes: ${botNotifications.urgent}`}
+                          title={`Atención personalizada: ${botNotifications.urgent}`}
+                        >
+                          {formatBotBadge(botNotifications.urgent)}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="pp-nav__label">{item.label}</span>
                   </button>
