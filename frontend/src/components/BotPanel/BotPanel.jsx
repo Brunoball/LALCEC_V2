@@ -18,7 +18,6 @@ import BotSidebar from "./components/BotSidebar";
 import BotConversationHeader from "./components/BotConversationHeader";
 import BotMessageList from "./components/BotMessageList";
 import BotComposer from "./components/BotComposer";
-import BotEventosModal from "./modales/BotEventosModal";
 import MediaViewerModal from "./modales/MediaViewerModal";
 import {
   CONSULTA_MANUAL_TEMPLATE_ENABLED,
@@ -29,7 +28,6 @@ import {
   isImageMime,
   isPdfMime,
   normStr,
-  parseMoneyInput,
   pickModo,
   pickNombre,
   toTs,
@@ -43,7 +41,6 @@ import notificationSound from "./notificacion/notificacion.mp3";
 import EditNombreModal from "./modales/EditNombreModal";
 import EditEtiquetaModal from "./modales/EditEtiquetaModal";
 import ConfirmActionModal from "./modales/ConfirmActionModal";
-import ComprobanteRevisionModal from "./modales/ComprobanteRevisionModal";
 
 import GaleriaModal from "./modales/GaleriaModal";
 
@@ -63,31 +60,6 @@ const BotPanel = () => {
 
   const [errorChats, setErrorChats] = useState("");
   const [errorMsgs, setErrorMsgs] = useState("");
-
-  const [eventosOpen, setEventosOpen] = useState(false);
-  const [eventos, setEventos] = useState([]);
-  const [eventosResumen, setEventosResumen] = useState({
-    pendientes: 0,
-    errores_pendientes: 0,
-    warnings_pendientes: 0,
-    total_ultimos_7_dias: 0,
-  });
-  const [loadingEventos, setLoadingEventos] = useState(false);
-  const [errorEventos, setErrorEventos] = useState("");
-
-  const [comprobanteConfirm, setComprobanteConfirm] = useState({
-    open: false,
-    accion: "",
-    idComprobante: 0,
-    idEvento: 0,
-    motivo: "",
-    montoManual: "",
-    cantidadManual: "",
-    detalle: null,
-    loadingDetalle: false,
-  });
-  const [comprobanteConfirmLoading, setComprobanteConfirmLoading] = useState(false);
-  const [comprobanteConfirmError, setComprobanteConfirmError] = useState("");
 
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState("bot");
@@ -259,49 +231,6 @@ const BotPanel = () => {
   }, [tagFilterOpen]);
 
 
-  const fetchEventos = useCallback(
-    async (silent = false) => {
-      if (!silent) setLoadingEventos(true);
-      setErrorEventos("");
-      try {
-        const data = await botPanelGet("panel_eventos", {
-          estado: "pendiente",
-          limit: 100,
-        });
-        setEventos(Array.isArray(data.eventos) ? data.eventos : []);
-        setEventosResumen({
-          pendientes: Number(data?.resumen?.pendientes || 0),
-          errores_pendientes: Number(data?.resumen?.errores_pendientes || 0),
-          warnings_pendientes: Number(data?.resumen?.warnings_pendientes || 0),
-          total_ultimos_7_dias: Number(data?.resumen?.total_ultimos_7_dias || 0),
-        });
-      } catch (e) {
-        setErrorEventos(e?.message || "No se pudieron cargar las alertas del bot");
-      } finally {
-        if (!silent) setLoadingEventos(false);
-      }
-    },
-    []
-  );
-
-  const marcarEventoRevisado = useCallback(
-    async (idEvento = 0) => {
-      try {
-        setLoadingEventos(true);
-        await botPanelPost("panel_eventos", {
-          accion: "marcar_revisado",
-          id_evento: Number(idEvento || 0),
-        });
-        await fetchEventos(true);
-      } catch (e) {
-        setErrorEventos(e?.message || "No se pudo marcar la alerta como revisada");
-      } finally {
-        setLoadingEventos(false);
-      }
-    },
-    [fetchEventos]
-  );
-
   const fetchChats = useCallback(
     async (silent = false) => {
       if (silent) setRefreshingChats(true);
@@ -320,22 +249,15 @@ const BotPanel = () => {
           const consultasPendientes = Number(
             c.consultas_pendientes || c.pending_consultas || 0
           );
-          const comprobantesPendientes = Number(
-            c.comprobantes_pendientes || c.pending_comprobantes || 0
-          );
-
           const chatTone =
             consultasPendientes > 0
               ? "consulta"
-              : comprobantesPendientes > 0
-                ? "comprobante"
-                : prioridad === "alta"
-                  ? "danger"
-                  : "normal";
+              : prioridad === "alta"
+                ? "danger"
+                : "normal";
 
           const urgente =
             consultasPendientes > 0 ||
-            comprobantesPendientes > 0 ||
             (modo === "manual" && unread > 0) ||
             prioridad === "alta";
 
@@ -357,7 +279,6 @@ const BotPanel = () => {
             modo,
             urgente,
             consultasPendientes,
-            comprobantesPendientes,
             chatTone,
           };
         });
@@ -404,28 +325,6 @@ const BotPanel = () => {
     [playUrgentSound]
   );
 
-  const eliminarEventoSinAccion = useCallback(
-    async (idEvento = 0, options = {}) => {
-      try {
-        setLoadingEventos(true);
-        setErrorEventos("");
-        await botPanelPost("panel_eventos", {
-          accion: "eliminar_alerta",
-          id_evento: Number(idEvento || 0),
-        });
-        await fetchEventos(true);
-        await fetchChats(true);
-      } catch (e) {
-        const msg = e?.message || "No se pudo eliminar la alerta";
-        setErrorEventos(msg);
-        if (options?.throwOnError) throw e;
-      } finally {
-        setLoadingEventos(false);
-      }
-    },
-    [fetchEventos, fetchChats]
-  );
-
   // ==========================
   // ✅ MEDIA VISOR STATE
   // ==========================
@@ -442,165 +341,6 @@ const BotPanel = () => {
     setViewerOpen(false);
     setViewerItem(null);
   };
-
-  const abrirConfirmacionComprobante = useCallback((accion, idComprobante = 0, idEvento = 0) => {
-    const tipo = accion === "rechazar" ? "rechazar" : "aprobar";
-    const baseState = {
-      open: true,
-      accion: tipo,
-      idComprobante: Number(idComprobante || 0),
-      idEvento: Number(idEvento || 0),
-      motivo: "",
-      montoManual: "",
-      cantidadManual: "",
-      detalle: null,
-      loadingDetalle: true,
-    };
-
-    setComprobanteConfirm(baseState);
-    setComprobanteConfirmError("");
-
-    (async () => {
-      try {
-        const data = await botPanelPost(
-          "panel_ventas_comprobante_transferencia",
-          {
-            accion: "detalle_comprobante",
-            id_comprobante: Number(idComprobante || 0),
-            id_evento: Number(idEvento || 0),
-          },
-        );
-
-        const cantidad = Number(data?.cantidad_sugerida || data?.cantidad_estimada || 1);
-        const monto = data?.monto_detectado ?? data?.monto_confirmado ?? "";
-
-        setComprobanteConfirm((prev) => {
-          if (!prev.open || Number(prev.idComprobante || 0) !== Number(idComprobante || 0)) return prev;
-          return {
-            ...prev,
-            detalle: data,
-            loadingDetalle: false,
-            cantidadManual: cantidad > 0 ? String(cantidad) : "1",
-            montoManual: monto !== "" && monto !== null && monto !== undefined ? String(monto) : "",
-          };
-        });
-      } catch (e) {
-        const msg = e?.message || "No se pudo cargar el detalle del comprobante.";
-        setComprobanteConfirm((prev) => {
-          if (!prev.open || Number(prev.idComprobante || 0) !== Number(idComprobante || 0)) return prev;
-          return { ...prev, loadingDetalle: false };
-        });
-        setComprobanteConfirmError(msg);
-      }
-    })();
-  }, []);
-
-  const cerrarConfirmacionComprobante = useCallback(() => {
-    if (comprobanteConfirmLoading) return;
-    setComprobanteConfirm({
-      open: false,
-      accion: "",
-      idComprobante: 0,
-      idEvento: 0,
-      motivo: "",
-      montoManual: "",
-      cantidadManual: "",
-      detalle: null,
-      loadingDetalle: false,
-    });
-    setComprobanteConfirmError("");
-  }, [comprobanteConfirmLoading]);
-
-  const ejecutarAccionComprobante = useCallback(
-    async () => {
-      const accion = comprobanteConfirm.accion === "rechazar" ? "rechazar" : "aprobar";
-      const idComprobante = Number(comprobanteConfirm.idComprobante || 0);
-      const idEvento = Number(comprobanteConfirm.idEvento || 0);
-
-      if (idComprobante <= 0) {
-        setComprobanteConfirmError("Falta el comprobante a procesar.");
-        return;
-      }
-
-      const payload = {
-        accion: accion === "rechazar" ? "rechazar_comprobante" : "aprobar_comprobante",
-        id_comprobante: idComprobante,
-        id_evento: idEvento,
-      };
-
-      if (accion === "rechazar") {
-        payload.motivo = String(comprobanteConfirm.motivo || "").trim();
-      } else {
-        const cantidadManual = Number.parseInt(String(comprobanteConfirm.cantidadManual || ""), 10);
-        const montoManual = parseMoneyInput(comprobanteConfirm.montoManual);
-
-        if (!Number.isFinite(cantidadManual) || cantidadManual <= 0) {
-          setComprobanteConfirmError("Ingresá una cantidad de entradas válida.");
-          return;
-        }
-
-        payload.cantidad_manual = cantidadManual;
-        if (montoManual !== null) payload.monto_manual = montoManual;
-      }
-
-      try {
-        setComprobanteConfirmLoading(true);
-        setLoadingEventos(true);
-        setErrorEventos("");
-        setComprobanteConfirmError("");
-
-        await botPanelPost(
-          "panel_ventas_comprobante_transferencia",
-          payload,
-        );
-
-        setComprobanteConfirm({
-          open: false,
-          accion: "",
-          idComprobante: 0,
-          idEvento: 0,
-          motivo: "",
-          montoManual: "",
-          cantidadManual: "",
-          detalle: null,
-          loadingDetalle: false,
-        });
-        await fetchEventos(true);
-        await fetchChats(true);
-      } catch (e) {
-        const msg = e?.message || (comprobanteConfirm.accion === "rechazar" ? "No se pudo rechazar el comprobante" : "No se pudo aprobar el comprobante");
-        setComprobanteConfirmError(msg);
-        setErrorEventos(msg);
-      } finally {
-        setComprobanteConfirmLoading(false);
-        setLoadingEventos(false);
-      }
-    },
-    [comprobanteConfirm, fetchEventos, fetchChats]
-  );
-
-  const setCampoComprobanteConfirm = useCallback((campo, valor) => {
-    setComprobanteConfirm((prev) => ({ ...prev, [campo]: valor }));
-  }, []);
-
-  const aprobarComprobanteVenta = useCallback(
-    (idComprobante = 0, idEvento = 0) => {
-      abrirConfirmacionComprobante("aprobar", idComprobante, idEvento);
-    },
-    [abrirConfirmacionComprobante]
-  );
-
-  const rechazarComprobanteVenta = useCallback(
-    (idComprobante = 0, idEvento = 0) => {
-      abrirConfirmacionComprobante("rechazar", idComprobante, idEvento);
-    },
-    [abrirConfirmacionComprobante]
-  );
-
-  const abrirPanelAlertas = useCallback(() => {
-    setEventosOpen(true);
-    fetchEventos(true);
-  }, [fetchEventos]);
 
   const fetchMensajes = useCallback(
     async (waId, { silent = false } = {}) => {
@@ -724,10 +464,9 @@ const BotPanel = () => {
       if (newHash && newHash !== globalHashRef.current) {
         globalHashRef.current = newHash;
         if (!refreshingChats && !loadingChats) fetchChats(true);
-        fetchEventos(true);
       }
     } catch {}
-  }, [fetchChats, fetchEventos, getGlobalHash, refreshingChats, loadingChats]);
+  }, [fetchChats, getGlobalHash, refreshingChats, loadingChats]);
 
   const setModeDB = useCallback(
     async (nextMode) => {
@@ -764,13 +503,12 @@ const BotPanel = () => {
   useEffect(() => {
     fetchChats(false);
     fetchEtiquetas();
-    fetchEventos(true);
 
     (async () => {
       const h = await getGlobalHash();
       globalHashRef.current = h || "";
     })();
-  }, [fetchChats, fetchEtiquetas, fetchEventos, getGlobalHash]);
+  }, [fetchChats, fetchEtiquetas, getGlobalHash]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -800,11 +538,6 @@ const BotPanel = () => {
     return () => clearInterval(t);
   }, [fetchChats]);
 
-
-  useEffect(() => {
-    const t = setInterval(() => fetchEventos(true), 2000);
-    return () => clearInterval(t);
-  }, [fetchEventos]);
 
   const tagCounts = useMemo(() => {
     const counts = { all: chats.length, sin: 0, byId: {}, byName: {} };
@@ -1266,11 +999,6 @@ const BotPanel = () => {
   const [modalEliminarLoading, setModalEliminarLoading] = useState(false);
   const [modalEliminarError, setModalEliminarError] = useState("");
 
-  const [modalEliminarAlertaOpen, setModalEliminarAlertaOpen] = useState(false);
-  const [modalEliminarAlertaId, setModalEliminarAlertaId] = useState(null);
-  const [modalEliminarAlertaLoading, setModalEliminarAlertaLoading] = useState(false);
-  const [modalEliminarAlertaError, setModalEliminarAlertaError] = useState("");
-
   const [modalTagOpen, setModalTagOpen] = useState(false);
   const [modalTagWa, setModalTagWa] = useState("");
   const [modalTagLoading, setModalTagLoading] = useState(false);
@@ -1297,12 +1025,6 @@ const BotPanel = () => {
     setModalEliminarOpen(true);
   };
 
-  const openEliminarAlerta = (idEvento) => {
-    setModalEliminarAlertaError("");
-    setModalEliminarAlertaId(Number(idEvento || 0));
-    setModalEliminarAlertaOpen(true);
-  };
-
   const openCambiarEtiqueta = (waId) => {
     setModalTagError("");
     setModalTagWa(waId);
@@ -1325,7 +1047,7 @@ const BotPanel = () => {
                   unread: Number(data.unread || 1),
                   urgente:
                     Number(data.unread || 1) > 0 &&
-                    (c.modo === "manual" || c.prioridad === "alta" || Number(c.consultasPendientes || 0) > 0 || Number(c.comprobantesPendientes || 0) > 0),
+                    (c.modo === "manual" || c.prioridad === "alta" || Number(c.consultasPendientes || 0) > 0),
                 }
               : c
           )
@@ -1352,7 +1074,7 @@ const BotPanel = () => {
             ? {
                 ...c,
                 unread: 0,
-                urgente: Number(c.consultasPendientes || 0) > 0 || Number(c.comprobantesPendientes || 0) > 0 || c.prioridad === "alta",
+                urgente: Number(c.consultasPendientes || 0) > 0 || c.prioridad === "alta",
               }
             : c
         )
@@ -1452,23 +1174,6 @@ const BotPanel = () => {
     }
   };
 
-  const doEliminarAlerta = async () => {
-    const idEvento = Number(modalEliminarAlertaId || 0);
-    if (idEvento <= 0) return;
-
-    setModalEliminarAlertaLoading(true);
-    setModalEliminarAlertaError("");
-    try {
-      await eliminarEventoSinAccion(idEvento, { throwOnError: true });
-      setModalEliminarAlertaOpen(false);
-      setModalEliminarAlertaId(null);
-    } catch (e) {
-      setModalEliminarAlertaError(e?.message || "No se pudo eliminar la alerta");
-    } finally {
-      setModalEliminarAlertaLoading(false);
-    }
-  };
-
   const galleryItems = useMemo(() => {
     const arr = Array.isArray(mensajes) ? mensajes : [];
     const files = arr
@@ -1511,12 +1216,10 @@ const BotPanel = () => {
 
       <BotSidebar
         activeTagFilterLabel={activeTagFilterLabel}
-        abrirPanelAlertas={abrirPanelAlertas}
         chats={chats}
         errorChats={errorChats}
         errorEtiquetas={errorEtiquetas}
         etiquetas={etiquetas}
-        eventosResumen={eventosResumen}
         list={list}
         loadingChats={loadingChats}
         loadingEtiquetas={loadingEtiquetas}
@@ -1569,8 +1272,7 @@ const BotPanel = () => {
             />
 
             <BotMessageList
-              abrirPanelAlertas={abrirPanelAlertas}
-              errorMsgs={errorMsgs}
+                    errorMsgs={errorMsgs}
               mensajes={mensajes}
               messagesRef={messagesRef}
               msgEndRef={msgEndRef}
@@ -1605,39 +1307,6 @@ const BotPanel = () => {
 
       <MediaViewerModal open={viewerOpen} onClose={closeViewer} item={viewerItem} />
 
-      <BotEventosModal
-        open={eventosOpen}
-        onClose={() => setEventosOpen(false)}
-        eventos={eventos}
-        resumen={eventosResumen}
-        loading={loadingEventos}
-        error={errorEventos}
-        onRefresh={() => fetchEventos(false)}
-        onMarkOne={(idEvento) => marcarEventoRevisado(idEvento)}
-        onDeleteOne={(idEvento) => openEliminarAlerta(idEvento)}
-        onAprobarComprobante={(idComprobante, idEvento) => aprobarComprobanteVenta(idComprobante, idEvento)}
-        onRechazarComprobante={(idComprobante, idEvento) => rechazarComprobanteVenta(idComprobante, idEvento)}
-        onOpenChat={(waId) => {
-          setEventosOpen(false);
-          openChat(waId);
-        }}
-      />
-
-      <ComprobanteRevisionModal
-        open={comprobanteConfirm.open}
-        accion={comprobanteConfirm.accion}
-        detalle={comprobanteConfirm.detalle}
-        loadingDetalle={comprobanteConfirm.loadingDetalle}
-        motivo={comprobanteConfirm.motivo}
-        montoManual={comprobanteConfirm.montoManual}
-        cantidadManual={comprobanteConfirm.cantidadManual}
-        loading={comprobanteConfirmLoading}
-        error={comprobanteConfirmError}
-        onChangeCampo={setCampoComprobanteConfirm}
-        onClose={cerrarConfirmacionComprobante}
-        onConfirm={ejecutarAccionComprobante}
-      />
-
       <GaleriaModal
         open={galeriaOpen}
         inactive={viewerOpen}
@@ -1669,24 +1338,6 @@ const BotPanel = () => {
         onSave={saveEtiqueta}
         onRefreshEtiquetas={fetchEtiquetas}
         onLabelsChanged={refreshEtiquetasYChats}
-      />
-
-      <ConfirmActionModal
-        open={modalEliminarAlertaOpen}
-        title="Eliminar alerta"
-        description="La alerta va a desaparecer del panel. No se aprueba, no se rechaza y no se envía ningún mensaje por WhatsApp."
-        confirmText="Eliminar alerta"
-        cancelText="Cancelar"
-        danger
-        loading={modalEliminarAlertaLoading}
-        error={modalEliminarAlertaError}
-        onClose={() => {
-          if (modalEliminarAlertaLoading) return;
-          setModalEliminarAlertaOpen(false);
-          setModalEliminarAlertaId(null);
-          setModalEliminarAlertaError("");
-        }}
-        onConfirm={doEliminarAlerta}
       />
 
       <ConfirmActionModal

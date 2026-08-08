@@ -307,10 +307,40 @@ body.pp-lockScroll{ overflow:hidden !important; }
 
 
 .pp-topbarBot{
+  position:relative;
+  overflow:visible;
   border:1px solid rgba(255,255,255,.18);
   background:rgba(255,255,255,.10);
   color:#fff;
   font-size:18px;
+}
+.pp-topbarBot__badge{
+  position:absolute;
+  right:-8px;
+  z-index:2;
+  min-width:20px;
+  height:20px;
+  padding:0 5px;
+  border:2px solid #fff;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+  box-shadow:0 3px 8px rgba(15,23,42,.28);
+  pointer-events:none;
+}
+.pp-topbarBot__badge--normal{
+  top:-8px;
+  background:#22a75a;
+}
+.pp-topbarBot__badge--urgent{
+  bottom:-8px;
+  background:#ef4444;
 }
 .pp-topbarBot:hover{
   background:rgba(255,255,255,.18);

@@ -21,6 +21,8 @@ import {
 } from "../_shared/auth/session";
 import { apiPost } from "../_shared/api/apiClient";
 import { BOT_PANEL_ROUTE } from "../../config/config";
+import { botPanelGet } from "../BotPanel/api/botApi";
+import notificationSound from "../BotPanel/notificacion/notificacion.mp3";
 import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
 import ModalPerfil from "../Perfil/ModalPerfil";
 import "./principal.css";
@@ -81,6 +83,7 @@ const NAV_ITEMS = [
 ];
 
 const GROUP_CLICK_DELAY = 0;
+const BOT_NOTIFICATION_POLL_MS = 5000;
 
 const getGroupKeyForPath = (pathname) =>
   NAV_ITEMS.find(
@@ -149,6 +152,14 @@ export default function Principal() {
   const groupClickTimer = useRef(null);
   const logoutInProgress = useRef(false);
 
+  const [botNotifications, setBotNotifications] = useState({
+    normal: 0,
+    urgent: 0,
+  });
+  const botNotificationAudioRef = useRef(null);
+  const previousBotNotificationsRef = useRef(null);
+  const botNotificationRequestRef = useRef(false);
+
   useEffect(() => {
     setDrawerOpen(false);
     setOpenGroupKey(getGroupKeyForPath(location.pathname));
@@ -160,6 +171,74 @@ export default function Principal() {
     },
     [],
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    const playNotificationSound = () => {
+      const audio = botNotificationAudioRef.current;
+      if (!audio) return;
+
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(() => {});
+        }
+      } catch {}
+    };
+
+    const refreshBotNotifications = async () => {
+      if (botNotificationRequestRef.current) return;
+      botNotificationRequestRef.current = true;
+
+      try {
+        const data = await botPanelGet("panel_unread_total");
+        if (!mounted) return;
+
+        const next = {
+          normal: Math.max(0, Number(data?.total_normal || 0)),
+          urgent: Math.max(0, Number(data?.total_urgent || 0)),
+        };
+        const previous = previousBotNotificationsRef.current;
+
+        if (
+          previous &&
+          (next.normal > previous.normal || next.urgent > previous.urgent)
+        ) {
+          playNotificationSound();
+        }
+
+        previousBotNotificationsRef.current = next;
+        setBotNotifications(next);
+      } catch {
+        // Si el bot está temporalmente inaccesible, el sistema principal sigue funcionando.
+      } finally {
+        botNotificationRequestRef.current = false;
+      }
+    };
+
+    refreshBotNotifications();
+    const timer = window.setInterval(
+      refreshBotNotifications,
+      BOT_NOTIFICATION_POLL_MS,
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshBotNotifications();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   const activeLabel = useMemo(() => {
     const configurationLabels = {
@@ -235,8 +314,24 @@ export default function Principal() {
     setOpenGroupKey(null);
   };
 
+  const botNotificationTitle = [
+    botNotifications.normal > 0
+      ? `${botNotifications.normal} mensaje${botNotifications.normal === 1 ? "" : "s"} sin leer`
+      : null,
+    botNotifications.urgent > 0
+      ? `${botNotifications.urgent} de atención personalizada`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="pp-shell">
+      <audio
+        ref={botNotificationAudioRef}
+        preload="auto"
+        src={notificationSound}
+      />
       <header className="mov-topbar">
         <div className="mov-topbar__left">
           <button
@@ -263,10 +358,34 @@ export default function Principal() {
             className="pp-topbarBot"
             type="button"
             onClick={() => openAuthenticatedTab(BOT_PANEL_ROUTE)}
-            title="Abrir bot de WhatsApp"
-            aria-label="Abrir bot de WhatsApp"
+            title={
+              botNotificationTitle
+                ? `Abrir bot de WhatsApp · ${botNotificationTitle}`
+                : "Abrir bot de WhatsApp"
+            }
+            aria-label={
+              botNotificationTitle
+                ? `Abrir bot de WhatsApp. ${botNotificationTitle}`
+                : "Abrir bot de WhatsApp"
+            }
           >
             <FontAwesomeIcon icon={faRobot} />
+            {botNotifications.normal > 0 ? (
+              <span
+                className="pp-topbarBot__badge pp-topbarBot__badge--normal"
+                aria-label={`${botNotifications.normal} mensajes normales sin leer`}
+              >
+                {botNotifications.normal > 99 ? "99+" : botNotifications.normal}
+              </span>
+            ) : null}
+            {botNotifications.urgent > 0 ? (
+              <span
+                className="pp-topbarBot__badge pp-topbarBot__badge--urgent"
+                aria-label={`${botNotifications.urgent} mensajes de atención personalizada sin leer`}
+              >
+                {botNotifications.urgent > 99 ? "99+" : botNotifications.urgent}
+              </span>
+            ) : null}
           </button>
           <button
             className={`pp-topbarConfig ${location.pathname.startsWith("/configuracion") ? "is-active" : ""}`}

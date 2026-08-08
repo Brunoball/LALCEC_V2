@@ -57,7 +57,7 @@ const BotComposer = ({
                       <div className="wp-template-preview-bubble">
                         <div>Hola 👋</div>
                         <br />
-                        <div>Te respondemos desde la Cooperadora del IPET 50.</div>
+                        <div>Te respondemos desde LALCEC San Francisco.</div>
                         <br />
                         <div
                           className={`wp-template-preview-var ${

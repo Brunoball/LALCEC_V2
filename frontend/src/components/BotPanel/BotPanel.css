@@ -149,7 +149,7 @@
 
 .wp-side-top{
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 44px 1fr;
   align-items: center;
   gap: 8px;
   padding: 12px 12px 10px;
@@ -1348,15 +1348,7 @@
   text-transform: uppercase;
   letter-spacing: .04em;
   font-family: inherit;
-  cursor: pointer;
-}
-.wp-consulta-pill:hover{
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-}
-.wp-consulta-pill:focus-visible{
-  outline: 3px solid rgba(251,191,36,.25);
-  outline-offset: 2px;
+  cursor: default;
 }
 
 :root[data-botpanel-theme="light"] .wp-shell{

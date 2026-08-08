@@ -223,6 +223,22 @@
   box-shadow: 0 11px 24px -19px rgb(15 23 42 / 0.48);
 }
 
+.socios-reminder-option.is-disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--entity-modal-bg) 88%, #fff);
+}
+
+.socios-reminder-option.is-disabled:hover {
+  transform: none;
+  border-color: var(--entity-modal-border);
+  box-shadow: 0 6px 18px -16px rgb(15 23 42 / 0.4);
+}
+
+.socios-reminder-option input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
 .socios-reminder-option.is-selected {
   border-color: color-mix(in srgb, var(--entity-modal-action) 48%, #fff);
   background: color-mix(in srgb, var(--entity-modal-action) 8%, #fff);

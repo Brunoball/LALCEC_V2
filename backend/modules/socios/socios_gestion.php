@@ -43,11 +43,11 @@ trait SociosGestion
             'medio de pago',
             $current['id_medio_pago'] ?? null
         );
-        $reminder = self::booleanValue($body['enviar_recordatorio'] ?? true) ? 1 : 0;
+        $reminder = self::booleanValue($body['enviar_recordatorio'] ?? false) ? 1 : 0;
 
         $specific = $type === 'PERSONA'
-            ? self::validatePerson($body)
-            : self::validateCompany($db, $body, $current);
+            ? self::validatePerson($body, $reminder === 1)
+            : self::validateCompany($db, $body, $current, $reminder === 1);
 
         try {
             $saved = transaction($db, static function () use (
@@ -395,7 +395,7 @@ trait SociosGestion
         return ['item' => $saved];
     }
 
-    private static function validatePerson(array $body): array
+    private static function validatePerson(array $body, bool $reminderEnabled): array
     {
         $dni = preg_replace('/\D+/', '', (string)($body['dni'] ?? '')) ?? '';
         if ($dni !== '' && !preg_match('/^[0-9]{7,8}$/', $dni)) {
@@ -409,13 +409,13 @@ trait SociosGestion
             'domicilio' => optional_text($body['domicilio'] ?? null, 150),
             'numero_domicilio' => optional_text($body['numero_domicilio'] ?? null, 20),
             'localidad' => optional_text($body['localidad'] ?? null, 100),
-            'telefono' => optional_text($body['telefono'] ?? null, 30, false),
+            'telefono' => self::normalizePhone($body['telefono'] ?? null, $reminderEnabled),
             'email' => self::optionalEmail($body['email'] ?? null),
             'domicilio_alternativo' => optional_text($body['domicilio_alternativo'] ?? null, 255),
         ];
     }
 
-    private static function validateCompany(PDO $db, array $body, ?array $current): array
+    private static function validateCompany(PDO $db, array $body, ?array $current, bool $reminderEnabled): array
     {
         $cuit = preg_replace('/\D+/', '', (string)($body['cuit'] ?? '')) ?? '';
         if ($cuit !== '' && !preg_match('/^[0-9]{11}$/', $cuit)) {
@@ -435,11 +435,61 @@ trait SociosGestion
             'razon_social' => required_text($body, 'razon_social', 'razón social', 255),
             'cuit' => $cuit === '' ? null : $cuit,
             'domicilio' => optional_text($body['domicilio'] ?? null, 255),
-            'telefono' => optional_text($body['telefono'] ?? null, 30, false),
+            'telefono' => self::normalizePhone($body['telefono'] ?? null, $reminderEnabled),
             'email' => self::optionalEmail($body['email'] ?? null),
             'domicilio_alternativo' => optional_text($body['domicilio_alternativo'] ?? null, 255),
             'id_condicion_iva' => $taxConditionId,
         ];
+    }
+
+    private static function normalizePhone(mixed $value, bool $requiredForReminder): ?string
+    {
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            if ($requiredForReminder) {
+                api_error(
+                    'Para activar los recordatorios, ingresá primero un teléfono.',
+                    'VALIDATION_ERROR',
+                    422,
+                    ['campo' => 'telefono']
+                );
+            }
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        if (str_starts_with($digits, '549')) {
+            $digits = substr($digits, 3);
+        } elseif (str_starts_with($digits, '54')) {
+            $digits = substr($digits, 2);
+        }
+
+        // Quita el 0 de larga distancia nacional.
+        $digits = preg_replace('/^0+/', '', $digits) ?? '';
+
+        // Compatibilidad con el formato celular argentino antiguo:
+        // característica + 15 + número local.
+        if (strlen($digits) > 10 && preg_match('/^(\d{2,4})15(\d{6,8})$/', $digits, $matches)) {
+            $without15 = $matches[1] . $matches[2];
+            if (strlen($without15) === 10) {
+                $digits = $without15;
+            }
+        }
+
+        if (!preg_match('/^\d{10}$/', $digits)) {
+            api_error(
+                'El teléfono debe tener 10 dígitos (característica + número). Podés ingresarlo con guiones, espacios, 0, 15 o +54; el sistema lo normaliza al guardar.',
+                'VALIDATION_ERROR',
+                422,
+                ['campo' => 'telefono']
+            );
+        }
+
+        return $digits;
     }
 
     private static function optionalEmail(mixed $value): ?string

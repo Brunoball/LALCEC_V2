@@ -85,6 +85,35 @@ const today = () => {
     .slice(0, 10);
 };
 const upper = (value) => String(value || "").toLocaleUpperCase("es-AR");
+
+function normalizeArgentinePhone(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("00")) digits = digits.slice(2);
+
+  if (digits.startsWith("549")) {
+    digits = digits.slice(3);
+  } else if (digits.startsWith("54")) {
+    digits = digits.slice(2);
+  }
+
+  digits = digits.replace(/^0+/, "");
+
+  // Formato celular argentino antiguo: característica + 15 + número local.
+  if (digits.length > 10) {
+    const withLocal15 = digits.match(/^(\d{2,4})15(\d{6,8})$/);
+    if (withLocal15) {
+      const without15 = `${withLocal15[1]}${withLocal15[2]}`;
+      if (without15.length === 10) digits = without15;
+    }
+  }
+
+  return digits;
+}
+
+const hasValidReminderPhone = (value) =>
+  normalizeArgentinePhone(value).length === 10;
 const formatDate = (value) =>
   value
     ? new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(
@@ -482,7 +511,7 @@ function emptyForm(type, catalogs = {}) {
       ?.id_medio_pago
       ? String(catalogs.medios_pago.find((item) => item.activo).id_medio_pago)
       : "",
-    enviar_recordatorio: true,
+    enviar_recordatorio: false,
     observaciones: "",
   };
 }
@@ -504,6 +533,8 @@ function PartnerForm({
   const isCompany = type === COMPANY;
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
+  const reminderPhoneReady = hasValidReminderPhone(form.telefono);
+  const reminderDisabled = !reminderPhoneReady && !form.enviar_recordatorio;
 
   return (
     <div className="entity-form socios-modal__form">
@@ -695,10 +726,16 @@ function PartnerForm({
             ) : null}
             <FloatingField label="Teléfono" active={Boolean(form.telefono)}>
               <input
+                type="tel"
+                inputMode="tel"
                 value={form.telefono}
                 onChange={(event) => update("telefono", event.target.value)}
+                onBlur={(event) => {
+                  const normalized = normalizeArgentinePhone(event.target.value);
+                  if (normalized.length === 10) update("telefono", normalized);
+                }}
                 maxLength={30}
-                placeholder=" "
+                placeholder="Ej.: 3564-672304"
               />
             </FloatingField>
             <FloatingField label="Correo" active={Boolean(form.email)}>
@@ -765,19 +802,29 @@ function PartnerForm({
           </div>
 
           <label
-            className={`socios-reminder-option ${form.enviar_recordatorio ? "is-selected" : ""}`.trim()}
+            className={`socios-reminder-option ${form.enviar_recordatorio ? "is-selected" : ""} ${reminderDisabled ? "is-disabled" : ""}`.trim()}
+            aria-disabled={reminderDisabled}
+            title={
+              reminderDisabled
+                ? "Ingresá primero un teléfono válido para habilitar los recordatorios."
+                : undefined
+            }
           >
             <input
               type="checkbox"
               checked={Boolean(form.enviar_recordatorio)}
-              onChange={(event) =>
-                update("enviar_recordatorio", event.target.checked)
-              }
+              disabled={reminderDisabled}
+              onChange={(event) => {
+                if (event.target.checked && !reminderPhoneReady) return;
+                update("enviar_recordatorio", event.target.checked);
+              }}
             />
             <span>
               <strong>Enviar recordatorios</strong>
               <small>
-                Permite incluir este socio en futuros avisos de cuota.
+                {reminderPhoneReady
+                  ? "Permite incluir este socio en futuros avisos de cuota."
+                  : "Ingresá un teléfono válido para habilitar los recordatorios."}
               </small>
             </span>
           </label>
@@ -990,10 +1037,32 @@ export default function Socios({ tipo = PERSON }) {
       });
       return;
     }
+
+    const normalizedPhone = normalizeArgentinePhone(form.telefono);
+    const hasPhone = Boolean(String(form.telefono || "").trim());
+    if (hasPhone && normalizedPhone.length !== 10) {
+      setFormTab(FORM_TAB_CONFIG);
+      setFeedback({
+        type: "error",
+        message:
+          "Ingresá un teléfono válido de 10 dígitos (característica + número). Podés escribirlo con guiones, espacios, 0, 15 o +54; el sistema lo limpia al guardar.",
+      });
+      return;
+    }
+    if (form.enviar_recordatorio && normalizedPhone.length !== 10) {
+      setFormTab(FORM_TAB_CONFIG);
+      setFeedback({
+        type: "error",
+        message: "Para activar los recordatorios, ingresá primero un teléfono válido.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await sociosApi.guardar({
         ...form,
+        telefono: normalizedPhone || "",
         tipo_socio: type,
         id_categoria: form.id_categoria || null,
         id_medio_pago: form.id_medio_pago || null,
