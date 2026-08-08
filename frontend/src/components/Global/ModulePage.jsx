@@ -53,10 +53,10 @@ function ModuleTabContent({ option }) {
   const count = filterOptionCount(option);
 
   return (
-    <>
+    <span className="module-tabContent">
       <span className="module-tabLabel">{filterOptionLabel(option)}</span>
       {count != null ? <span className="module-tabCount">{count}</span> : null}
-    </>
+    </span>
   );
 }
 
