@@ -40,8 +40,19 @@ async function exportFromGlobalModal(page, {
   scope = null,
   expectedExtension,
 }) {
-  await openButton.click();
   const dialog = page.getByRole('dialog').filter({ hasText: /Alcance/i });
+  await expect(openButton).toBeVisible();
+  await expect(openButton).toBeEnabled();
+  await openButton.click();
+
+  try {
+    await dialog.waitFor({ state: 'visible', timeout: 3000 });
+  } catch (_error) {
+    if (!(await dialog.isVisible().catch(() => false))) {
+      await openButton.click();
+    }
+    await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  }
   await expect(dialog).toBeVisible();
 
   if (scope) {

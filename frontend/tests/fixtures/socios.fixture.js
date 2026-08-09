@@ -1,12 +1,14 @@
-const { digitsFromSuffix, uniqueSuffix } = require('../helpers/data.helper');
+const { digitsFromSuffix, lettersFromSuffix, uniqueSuffix } = require('../helpers/data.helper');
 
 function personData() {
   const suffix = uniqueSuffix();
+  const textSuffix = lettersFromSuffix(suffix);
   return {
     suffix,
-    apellido: `PW E2E APELLIDO ${suffix}`,
-    nombre: `NOMBRE ${suffix}`,
-    nombreEditado: `NOMBRE EDITADO ${suffix}`,
+    textSuffix,
+    apellido: `PW EE APELLIDO ${textSuffix}`,
+    nombre: `NOMBRE ${textSuffix}`,
+    nombreEditado: `NOMBRE EDITADO ${textSuffix}`,
     dni: `9${digitsFromSuffix(suffix, 7)}`.slice(0, 8),
     email: `pw.socio.${suffix.toLowerCase()}@example.test`,
     telefono: `351${digitsFromSuffix(suffix, 7)}`,
@@ -27,12 +29,14 @@ function companyData() {
 
 function familyData() {
   const suffix = uniqueSuffix();
+  const textSuffix = lettersFromSuffix(suffix);
   return {
     suffix,
-    prefix: `PW E2E FAM ${suffix}`,
-    nombre: `PW E2E FAM ${suffix}`,
-    nombreEditado: `PW E2E FAM ${suffix} EDITADA`,
-    descripcion: `FAMILIA CREADA POR PLAYWRIGHT ${suffix}`,
+    textSuffix,
+    prefix: `PW EE FAM ${textSuffix}`,
+    nombre: `PW EE FAM ${textSuffix}`,
+    nombreEditado: `PW EE FAM ${textSuffix} EDITADA`,
+    descripcion: `FAMILIA CREADA POR PLAYWRIGHT ${textSuffix}`,
   };
 }
 

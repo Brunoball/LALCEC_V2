@@ -1,12 +1,14 @@
-const { uniqueSuffix } = require('../helpers/data.helper');
+const { lettersFromSuffix, uniqueSuffix } = require('../helpers/data.helper');
 
 function categoryData() {
   const suffix = uniqueSuffix();
+  const textSuffix = lettersFromSuffix(suffix);
   return {
     suffix,
-    prefix: 'PW E2E CAT ',
-    nombre: `PW E2E CAT ${suffix}`,
-    nombreEditado: `PW E2E CAT ${suffix} EDITADA`,
+    textSuffix,
+    prefix: 'PW EE CAT ',
+    nombre: `PW EE CAT ${textSuffix}`,
+    nombreEditado: `PW EE CAT ${textSuffix} EDITADA`,
     descripcion: 'CATEGORÍA CREADA POR PLAYWRIGHT',
     descripcionEditada: 'CATEGORÍA EDITADA Y AUDITADA POR PLAYWRIGHT',
     montoInicial: '1234.56',

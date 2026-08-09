@@ -10,18 +10,19 @@ const {
 } = require('./helpers/api.helper');
 const { createPerson } = require('./helpers/entities.helper');
 const { exportFromGlobalModal } = require('./helpers/download.helper');
-const { todayIso, uniqueSuffix } = require('./helpers/data.helper');
+const { lettersFromSuffix, todayIso, uniqueSuffix } = require('./helpers/data.helper');
 
 const suffix = uniqueSuffix();
+const textSuffix = lettersFromSuffix(suffix);
 const date = todayIso();
 const [year, month] = date.split('-').map(Number);
 const names = {
-  incomeProvider: `PW E2E PROVEEDOR ING ${suffix}`,
-  incomeCategory: `PW E2E CAT ING ${suffix}`,
-  incomeConcept: `PW E2E CONCEPTO ING ${suffix}`,
-  expenseProvider: `PW E2E PROVEEDOR EGR ${suffix}`,
-  expenseCategory: `PW E2E CAT EGR ${suffix}`,
-  expenseConcept: `PW E2E CONCEPTO EGR ${suffix}`,
+  incomeProvider: `PW EE PROVEEDOR ING ${textSuffix}`,
+  incomeCategory: `PW EE CAT ING ${textSuffix}`,
+  incomeConcept: `PW EE CONCEPTO ING ${textSuffix}`,
+  expenseProvider: `PW EE PROVEEDOR EGR ${textSuffix}`,
+  expenseCategory: `PW EE CAT EGR ${textSuffix}`,
+  expenseConcept: `PW EE CONCEPTO EGR ${textSuffix}`,
 };
 const incomeDetail = `PW E2E UI INGRESO ${suffix}`;
 const incomeEdited = `${incomeDetail} EDITADO`;

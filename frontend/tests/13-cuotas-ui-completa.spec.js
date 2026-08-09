@@ -98,42 +98,7 @@ async function activeCategoryAndMedium(request) {
   return { category, medium };
 }
 
-async function removePaymentsForDocument(request, data, tipo = 'PERSONA') {
-  const catalogs = await apiCall(request, 'cuotas_catalogos').catch(() => ({ catalogos: {} }));
-  const years = new Set(
-    [
-      previousYear,
-      currentYear,
-      currentYear + 1,
-      ...(catalogs.catalogos?.anios || []),
-    ].map(Number),
-  );
-
-  for (const year of years) {
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) continue;
-    for (let month = 1; month <= 12; month += 1) {
-      const response = await apiCall(request, 'cuotas_listar', {
-        params: {
-          tipo,
-          estado: 'PAGADOS',
-          anio: year,
-          mes: month,
-          buscar: tipo === 'EMPRESA' ? data.cuit : data.dni,
-        },
-      }).catch(() => ({ items: [] }));
-
-      for (const payment of response.items || []) {
-        await apiCall(request, 'cuotas_eliminar_pago', {
-          method: 'POST',
-          data: { id_pago: payment.id_pago },
-        }).catch(() => undefined);
-      }
-    }
-  }
-}
-
 async function cleanupPerson(request, data) {
-  await removePaymentsForDocument(request, data, 'PERSONA');
   await cleanupSocioByDocument(request, {
     tipo: 'PERSONA',
     documento: data.dni,
@@ -141,7 +106,6 @@ async function cleanupPerson(request, data) {
 }
 
 async function cleanupCompany(request, data) {
-  await removePaymentsForDocument(request, data, 'EMPRESA');
   await cleanupSocioByDocument(request, {
     tipo: 'EMPRESA',
     documento: data.cuit,
@@ -188,6 +152,8 @@ function singlePaymentDialog(page, person) {
     name: new RegExp(person.apellido, 'i'),
   });
 }
+
+test.describe.configure({ timeout: 90000 });
 
 test.describe('Cuotas completas desde la interfaz', () => {
   test.afterEach(async ({ request }) => {

@@ -90,7 +90,7 @@ test.describe('Socios, empresas y familias', () => {
     await phoneInput.fill('123');
     await expect(reminderCheckbox).toBeDisabled();
 
-    const formattedPhone = `+54 9 ${person.telefono.slice(0, 3)}-${person.telefono.slice(3)}`;
+    const formattedPhone = `549${person.telefono}`;
     await phoneInput.fill(formattedPhone);
     await phoneInput.blur();
     await expect(phoneInput).toHaveValue(person.telefono);

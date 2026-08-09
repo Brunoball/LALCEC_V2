@@ -52,6 +52,27 @@ function digitsFromSuffix(suffix, length) {
   return value;
 }
 
+function lettersFromSuffix(suffix, length = 18) {
+  const requestedLength = Number(length);
+  if (!Number.isInteger(requestedLength) || requestedLength <= 0 || requestedLength > 64) {
+    throw new TypeError('La longitud alfabética debe ser un entero entre 1 y 64.');
+  }
+
+  const digest = crypto
+    .createHash('sha256')
+    .update(`letters:${String(suffix)}`)
+    .digest('hex');
+  let value = BigInt(`0x${digest}`);
+  let result = '';
+
+  for (let index = 0; index < requestedLength; index += 1) {
+    result += String.fromCharCode(65 + Number(value % 26n));
+    value /= 26n;
+  }
+
+  return result;
+}
+
 function todayIso() {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -63,4 +84,4 @@ function normalizeUiText(value) {
   return String(value || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { digitsFromSuffix, normalizeUiText, todayIso, uniqueSuffix };
+module.exports = { digitsFromSuffix, lettersFromSuffix, normalizeUiText, todayIso, uniqueSuffix };

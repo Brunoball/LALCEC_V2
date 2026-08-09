@@ -753,6 +753,8 @@ test.describe('Panel Bot WhatsApp', () => {
 
   test('el botón global muestra badge normal/urgente y reproduce sonido cuando aumentan', async ({ page }) => {
     let notificationState = { total_normal: 2, total_urgent: 1 };
+    const normalChatId = '5493492000001';
+    const urgentChatId = '5493492000002';
 
     await page.addInitScript(() => {
       window.__pwBotAudioPlays = 0;
@@ -765,24 +767,46 @@ test.describe('Panel Bot WhatsApp', () => {
       });
     });
 
-    await mockEndpoint(page, 'panel_unread_total', async () => ({
+    await mockEndpoint(page, 'panel_chats', async () => ({
       success: true,
-      ...notificationState,
-      total_badge: notificationState.total_normal + notificationState.total_urgent,
+      chats: [
+        {
+          wa_id: normalChatId,
+          unread: notificationState.total_normal,
+          consultas_pendientes: 0,
+          prioridad: 'normal',
+          total: notificationState.total_normal,
+          ultimo_mensaje: 'Mensaje normal de Playwright',
+        },
+        {
+          wa_id: urgentChatId,
+          unread: notificationState.total_urgent,
+          consultas_pendientes: notificationState.total_urgent,
+          prioridad: 'consulta',
+          total: notificationState.total_urgent,
+          ultimo_mensaje: 'Consulta pendiente de Playwright',
+        },
+      ],
+    }));
+    await mockEndpoint(page, 'panel_mensajes', async () => ({
+      success: true,
+      mensajes: [],
     }));
 
     await page.goto('/panel');
-    await expect(page.locator('.pp-topbarBot__badge--normal')).toHaveText('2');
-    await expect(page.locator('.pp-topbarBot__badge--urgent')).toHaveText('1');
-    await expect(page.getByLabel('2 mensajes normales sin leer')).toBeVisible();
-    await expect(page.getByLabel('1 mensajes de atención personalizada sin leer')).toBeVisible();
+    await expect(page.locator('.pp-navBotBadge--normal')).toHaveText('2');
+    await expect(page.locator('.pp-navBotBadge--urgent')).toHaveText('1');
+    await expect(page.getByLabel('Notificaciones normales: 2')).toBeVisible();
+    await expect(page.getByLabel('Notificaciones urgentes: 1')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.__pwBotAudioPlays)).toBe(0);
 
     notificationState = { total_normal: 3, total_urgent: 2 };
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 
-    await expect(page.locator('.pp-topbarBot__badge--normal')).toHaveText('3');
-    await expect(page.locator('.pp-topbarBot__badge--urgent')).toHaveText('2');
+    await expect(page.locator('.pp-navBotBadge--normal')).toHaveText('3');
+    await expect(page.locator('.pp-navBotBadge--urgent')).toHaveText('2');
+    await expect(page.getByLabel('Notificaciones normales: 3')).toBeVisible();
+    await expect(page.getByLabel('Notificaciones urgentes: 2')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.__pwBotAudioPlays)).toBeGreaterThan(0);
   });
 });

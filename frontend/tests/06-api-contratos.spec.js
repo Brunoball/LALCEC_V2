@@ -662,7 +662,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             id: current.id,
-            usuario: current.usuario,
+            usuario: `pw_self_${uniqueSuffix().toLowerCase()}`.slice(0, 80),
             email: current.email,
             rol: 'vista',
             contrasena: '',

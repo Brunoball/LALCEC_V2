@@ -5,25 +5,26 @@ const {
   cleanupSocioByDocument,
 } = require('./helpers/api.helper');
 const { expectToast } = require('./helpers/auth.helper');
-const { uniqueSuffix } = require('./helpers/data.helper');
+const { lettersFromSuffix, uniqueSuffix } = require('./helpers/data.helper');
 const { companyData, personData } = require('./fixtures/socios.fixture');
 const { createCatalog, createCompany, createPerson } = require('./helpers/entities.helper');
 
 const suffix = uniqueSuffix();
+const textSuffix = lettersFromSuffix(suffix);
 const catalogs = [
   {
     tab: 'Medios de pago',
     list: 'medios_pago',
     label: 'medio de pago',
-    original: `PW E2E MEDIO ${suffix}`,
-    edited: `PW E2E MEDIO EDITADO ${suffix}`,
+    original: `PW EE MEDIO ${textSuffix}`,
+    edited: `PW EE MEDIO EDITADO ${textSuffix}`,
   },
   {
     tab: 'Condiciones frente al IVA',
     list: 'condiciones_iva',
     label: 'condición frente al IVA',
-    original: `PW E2E IVA ${suffix}`,
-    edited: `PW E2E IVA EDITADA ${suffix}`,
+    original: `PW EE IVA ${textSuffix}`,
+    edited: `PW EE IVA EDITADA ${textSuffix}`,
   },
 ];
 
@@ -34,7 +35,7 @@ const usedCatalogs = [
     tab: 'Medios de pago',
     list: 'medios_pago',
     label: 'medio de pago',
-    name: `PW E2E MEDIO USADO UI ${suffix}`,
+    name: `PW EE MEDIO USADO UI ${textSuffix}`,
     idField: 'id_medio_pago',
     owner: usedCatalogPerson,
     type: 'PERSONA',
@@ -43,7 +44,7 @@ const usedCatalogs = [
     tab: 'Condiciones frente al IVA',
     list: 'condiciones_iva',
     label: 'condición frente al IVA',
-    name: `PW E2E IVA USADA UI ${suffix}`,
+    name: `PW EE IVA USADA UI ${textSuffix}`,
     idField: 'id_condicion_iva',
     owner: usedCatalogCompany,
     type: 'EMPRESA',
@@ -56,40 +57,40 @@ const contableLists = [
     type: 'PROVEEDOR',
     label: 'persona o proveedor',
     createLabel: 'Nueva persona o proveedor',
-    original: `PW E2E PROVEEDOR ${suffix}`,
-    edited: `PW E2E PROVEEDOR EDITADO ${suffix}`,
+    original: `PW EE PROVEEDOR ${textSuffix}`,
+    edited: `PW EE PROVEEDOR EDITADO ${textSuffix}`,
   },
   {
     tab: 'Categorías de ingresos',
     type: 'CATEGORIA_INGRESO',
     label: 'categoría de ingreso',
     createLabel: 'Nueva categoría de ingreso',
-    original: `PW E2E CAT ING ${suffix}`,
-    edited: `PW E2E CAT ING EDITADA ${suffix}`,
+    original: `PW EE CAT ING ${textSuffix}`,
+    edited: `PW EE CAT ING EDITADA ${textSuffix}`,
   },
   {
     tab: 'Conceptos de ingresos',
     type: 'CONCEPTO_INGRESO',
     label: 'concepto de ingreso',
     createLabel: 'Nuevo concepto de ingreso',
-    original: `PW E2E CON ING ${suffix}`,
-    edited: `PW E2E CON ING EDITADO ${suffix}`,
+    original: `PW EE CON ING ${textSuffix}`,
+    edited: `PW EE CON ING EDITADO ${textSuffix}`,
   },
   {
     tab: 'Categorías de egresos',
     type: 'CATEGORIA_EGRESO',
     label: 'categoría de egreso',
     createLabel: 'Nueva categoría de egreso',
-    original: `PW E2E CAT EGR ${suffix}`,
-    edited: `PW E2E CAT EGR EDITADA ${suffix}`,
+    original: `PW EE CAT EGR ${textSuffix}`,
+    edited: `PW EE CAT EGR EDITADA ${textSuffix}`,
   },
   {
     tab: 'Conceptos de egresos',
     type: 'CONCEPTO_EGRESO',
     label: 'concepto de egreso',
     createLabel: 'Nuevo concepto de egreso',
-    original: `PW E2E CON EGR ${suffix}`,
-    edited: `PW E2E CON EGR EDITADO ${suffix}`,
+    original: `PW EE CON EGR ${textSuffix}`,
+    edited: `PW EE CON EGR EDITADO ${textSuffix}`,
   },
 ];
 
@@ -105,44 +106,65 @@ function contableOptionCard(page, name) {
   return page.locator('.config-contableTable__row').filter({ hasText: name }).last();
 }
 
-// Un crash nativo aislado de Chromium/Windows no debe dejar roja una suite que
-// no llegó a ejecutar la aserción. Los fallos reproducibles siguen fallando tras el retry.
-test.describe.configure({ retries: 1 });
-
 test.describe('Configuración general', () => {
-  test.afterEach(async ({ request }) => {
-    for (const catalog of catalogs) {
-      for (const name of [catalog.original, catalog.edited]) {
-        try {
-          await cleanupCatalogByName(request, catalog.list, name);
-        } catch (_error) {
-          // El error principal del escenario debe conservarse.
+  // Cada escenario limpia únicamente los datos que pudo crear. Antes se recorrían
+  // todos los catálogos y listas después de CADA test, generando decenas de requests
+  // innecesarios durante el cierre del contexto de Chromium. En Windows eso podía
+  // coincidir con un cierre nativo del worker (0xC0000409) y dejar el test siguiente
+  // como flaky aunque su retry pasara.
+  test.afterEach(async ({ page, request }, testInfo) => {
+    // Primero desmontamos la pantalla React y dejamos terminar cualquier request
+    // del módulo antes de iniciar la limpieza por API.
+    try {
+      await page.goto('about:blank', { waitUntil: 'commit', timeout: 5000 });
+    } catch (_error) {
+      // Si la página ya se cerró por un fallo, la limpieza de datos igual continúa.
+    }
+
+    const title = testInfo.title;
+
+    if (title === 'crea, busca, edita y elimina los dos catálogos generales' && testInfo.status !== 'passed') {
+      for (const catalog of catalogs) {
+        for (const name of [catalog.original, catalog.edited]) {
+          try {
+            await cleanupCatalogByName(request, catalog.list, name);
+          } catch (_error) {
+            // El error principal del escenario debe conservarse.
+          }
         }
       }
+      return;
     }
-    for (const definition of usedCatalogs) {
-      try {
-        await cleanupSocioByDocument(request, {
-          tipo: definition.type,
-          documento: definition.type === 'PERSONA'
-            ? definition.owner.dni
-            : definition.owner.cuit,
-        });
-      } catch (_error) {
-        // Puede no haberse creado el registro asociado.
-      }
-      try {
-        await cleanupCatalogByName(request, definition.list, definition.name);
-      } catch (_error) {
-        // Conserva el fallo principal.
-      }
-    }
-    for (const list of contableLists) {
-      for (const name of [list.original, list.edited]) {
+
+    if (title === 'da de baja y reactiva desde la UI los catálogos generales que ya están en uso') {
+      for (const definition of usedCatalogs) {
         try {
-          await cleanupContableOptionByName(request, list.type, name);
+          await cleanupSocioByDocument(request, {
+            tipo: definition.type,
+            documento: definition.type === 'PERSONA'
+              ? definition.owner.dni
+              : definition.owner.cuit,
+          });
         } catch (_error) {
-          // El error principal del escenario debe conservarse.
+          // Puede no haberse creado el registro asociado.
+        }
+        try {
+          await cleanupCatalogByName(request, definition.list, definition.name);
+        } catch (_error) {
+          // Conserva el fallo principal.
+        }
+      }
+      return;
+    }
+
+    if (title === 'administra las cinco listas usadas por ingresos y egresos' && testInfo.status !== 'passed') {
+      for (const list of contableLists) {
+        for (const name of [list.original, list.edited]) {
+          try {
+            await cleanupContableOptionByName(request, list.type, name);
+          } catch (_error) {
+            // El error principal del escenario debe conservarse.
+          }
         }
       }
     }

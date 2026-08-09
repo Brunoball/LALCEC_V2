@@ -41,24 +41,57 @@ async function exportBothFormats(page, button) {
   });
 }
 
-// Los recorridos son independientes. Si Chromium/Windows termina el worker de forma
-// nativa durante una exportación, reintenta solo ese caso una vez en un worker limpio.
-test.describe.configure({ retries: 1 });
-
 test.describe('Navegación, responsive, paginación y exportaciones', () => {
-  test.afterEach(async ({ request }) => {
+  // Limpia solamente los datos que el escenario actual pudo crear. Antes se ejecutaba
+  // un PHP síncrono para familias y tres búsquedas/borrados por API después de CADA test,
+  // incluso en navegación/perfil/menú móvil, que no crean ningún registro. En Windows esa
+  // acumulación de procesos justo entre tests podía terminar el worker nativo antes de que
+  // comenzara el escenario siguiente (0 ms, 0xC0000409).
+  test.afterEach(async ({ page, request }, testInfo) => {
+    const title = testInfo.title;
+    const createsData = [
+      'pagina socios con Anterior, número de página y Siguiente',
+      'descarga Excel y PDF reales de socios',
+      'descarga Excel y PDF reales de empresas',
+      'descarga Excel y PDF reales de familias',
+    ].includes(title);
+
+    if (!createsData) return;
+
+    // Desmonta React antes de tocar datos para evitar que queden requests de la pantalla
+    // compitiendo con la limpieza mientras Playwright cierra el contexto.
     try {
-      cleanupFamilyByPrefix(family.prefix);
+      await page.goto('about:blank', { waitUntil: 'commit', timeout: 5000 });
     } catch (_error) {
-      // Puede no haberse creado.
+      // Si la página ya estaba cerrada por un fallo, igual intentamos limpiar por API/DB.
     }
-    for (const target of [
-      { tipo: 'PERSONA', documento: person.dni },
-      { tipo: 'EMPRESA', documento: company.cuit },
-      { tipo: 'PERSONA', documento: familyMember.dni },
-    ]) {
-      await cleanupSocioByDocument(request, target).catch(() => undefined);
+
+    if (title === 'descarga Excel y PDF reales de familias') {
+      try {
+        cleanupFamilyByPrefix(family.prefix);
+      } catch (_error) {
+        // Puede no haberse creado la familia.
+      }
+      await cleanupSocioByDocument(request, {
+        tipo: 'PERSONA',
+        documento: familyMember.dni,
+      }).catch(() => undefined);
+      return;
     }
+
+    if (title === 'descarga Excel y PDF reales de empresas') {
+      await cleanupSocioByDocument(request, {
+        tipo: 'EMPRESA',
+        documento: company.cuit,
+      }).catch(() => undefined);
+      return;
+    }
+
+    // Tanto la paginación como la exportación real de socios usan `person`.
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: person.dni,
+    }).catch(() => undefined);
   });
 
   test('recorre menú lateral, grupos, doble clic, configuración y redirecciones', async ({ page }) => {

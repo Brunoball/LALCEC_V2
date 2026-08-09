@@ -28,13 +28,21 @@ $value = $argv[2] ?? '';
 $allowed = ['family-prefix', 'user-prefix', 'login-prefix', 'category-prefix', 'discount-thresholds', 'audit-actions'];
 if (!in_array($operation, $allowed, true)) fail('Operación de limpieza no válida.');
 
-if ($operation === 'family-prefix' && !str_starts_with($value, 'PW E2E FAM ')) {
+if (
+    $operation === 'family-prefix'
+    && !str_starts_with($value, 'PW E2E FAM ')
+    && !str_starts_with($value, 'PW EE FAM ')
+) {
     fail('Prefijo de familias inválido.');
 }
 if (in_array($operation, ['user-prefix', 'login-prefix'], true) && !str_starts_with($value, 'pw_e2e_')) {
     fail('Prefijo de usuarios inválido.');
 }
-if ($operation === 'category-prefix' && !str_starts_with($value, 'PW E2E CAT ')) {
+if (
+    $operation === 'category-prefix'
+    && !str_starts_with($value, 'PW E2E CAT ')
+    && !str_starts_with($value, 'PW EE CAT ')
+) {
     fail('Prefijo de categorías inválido.');
 }
 if ($operation === 'discount-thresholds') {

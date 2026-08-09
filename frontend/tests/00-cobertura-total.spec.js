@@ -171,8 +171,8 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Enviar',
   'Mensajes de prioridad alta',
   'Consultas atendidas',
-  'mensajes normales sin leer',
-  'mensajes de atención personalizada sin leer',
+  'Notificaciones normales:',
+  'Notificaciones urgentes:',
   'Ventana 24 horas',
 ];
 

@@ -271,10 +271,11 @@ function runDbCleanup(operation, value) {
 }
 
 function cleanupFamilyByPrefix(prefix) {
-  if (!String(prefix).startsWith('PW E2E FAM ')) {
-    throw new Error('La limpieza de familias solo admite el prefijo PW E2E FAM.');
+  const value = String(prefix);
+  if (!value.startsWith('PW E2E FAM ') && !value.startsWith('PW EE FAM ')) {
+    throw new Error('La limpieza de familias solo admite prefijos de Playwright controlados.');
   }
-  return runDbCleanup('family-prefix', prefix);
+  return runDbCleanup('family-prefix', value);
 }
 
 function cleanupUsersByPrefix(prefix) {
@@ -292,10 +293,11 @@ function cleanupLoginAuditByPrefix(prefix) {
 }
 
 function cleanupCategoriesByPrefix(prefix) {
-  if (!String(prefix).startsWith('PW E2E CAT ')) {
-    throw new Error('La limpieza de categorías solo admite el prefijo PW E2E CAT.');
+  const value = String(prefix);
+  if (!value.startsWith('PW E2E CAT ') && !value.startsWith('PW EE CAT ')) {
+    throw new Error('La limpieza de categorías solo admite prefijos de Playwright controlados.');
   }
-  return runDbCleanup('category-prefix', prefix);
+  return runDbCleanup('category-prefix', value);
 }
 
 function cleanupDiscountsByThresholds(thresholds) {
