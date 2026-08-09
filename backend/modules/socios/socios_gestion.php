@@ -91,14 +91,12 @@ trait SociosGestion
                             $specific['domicilio_alternativo'],
                         ]);
                     } else {
-                        $legacyId = self::nextLegacyCompanyId($db, $partnerId);
                         $db->prepare(
                             'INSERT INTO socios_empresas
-                             (id_socio, id_empresa_anterior, razon_social, cuit, domicilio, telefono, email, domicilio_alternativo, id_condicion_iva)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                             (id_socio, razon_social, cuit, domicilio, telefono, email, domicilio_alternativo, id_condicion_iva)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
                         )->execute([
                             $partnerId,
-                            $legacyId,
                             $specific['razon_social'],
                             $specific['cuit'],
                             $specific['domicilio'],
@@ -528,24 +526,6 @@ trait SociosGestion
         return in_array(strtolower(trim((string)$value)), ['1', 'true', 'si', 'sí', 'on'], true);
     }
 
-    private static function nextLegacyCompanyId(PDO $db, int $partnerId): int
-    {
-        $sameId = $db->prepare('SELECT 1 FROM socios_empresas WHERE id_empresa_anterior = ? LIMIT 1');
-        $sameId->execute([$partnerId]);
-        if (!$sameId->fetchColumn()) return $partnerId;
-
-        // Bloquea el extremo superior del índice UNIQUE para serializar altas
-        // concurrentes que necesiten un ID alternativo.
-        $last = $db->query(
-            'SELECT id_empresa_anterior
-             FROM socios_empresas
-             ORDER BY id_empresa_anterior DESC
-             LIMIT 1
-             FOR UPDATE'
-        )->fetchColumn();
-        return ((int)($last ?: 0)) + 1;
-    }
-
     private static function setHistoryVariables(
         PDO $db,
         int $userId,
@@ -618,9 +598,6 @@ trait SociosGestion
         $message = $error->getMessage();
         if (str_contains($message, 'uq_socios_personas_dni')) {
             api_error('Ya existe otro socio con ese DNI.', 'DNI_DUPLICADO', 409);
-        }
-        if (str_contains($message, 'uq_socios_empresas_id_anterior')) {
-            api_error('No se pudo generar el identificador interno de la empresa. Volvé a intentar.', 'EMPRESA_ID_DUPLICADO', 409);
         }
         api_error(
             $type === 'PERSONA'

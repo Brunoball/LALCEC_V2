@@ -24,5 +24,7 @@ export const familiasApi = {
       "familias_eliminar",
       typeof payload === "object" ? payload : { id: payload },
     ),
+  eliminarDefinitivo: (payload) =>
+    apiPost("familias_eliminar_definitivo", payload),
   reactivar: (id) => apiPost("familias_reactivar", { id }),
 };

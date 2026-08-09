@@ -339,7 +339,7 @@ trait SociosConsultas
                     p.apellido, p.nombre, p.dni, p.domicilio AS persona_domicilio,
                     p.numero_domicilio, p.localidad, p.telefono AS persona_telefono,
                     p.email AS persona_email, p.domicilio_alternativo AS persona_domicilio_alternativo,
-                    e.id_empresa_anterior, e.razon_social, e.cuit,
+                    e.razon_social, e.cuit,
                     e.domicilio AS empresa_domicilio, e.telefono AS empresa_telefono,
                     e.email AS empresa_email, e.domicilio_alternativo AS empresa_domicilio_alternativo,
                     e.id_condicion_iva, ci.nombre AS condicion_iva,
@@ -374,7 +374,7 @@ trait SociosConsultas
     private static function castSocio(array $row): array
     {
         $row['id_socio'] = (int)$row['id_socio'];
-        foreach (['id_categoria', 'id_medio_pago', 'id_empresa_anterior', 'id_condicion_iva', 'id_familia'] as $field) {
+        foreach (['id_categoria', 'id_medio_pago', 'id_condicion_iva', 'id_familia'] as $field) {
             $row[$field] = $row[$field] === null ? null : (int)$row[$field];
         }
         $row['enviar_recordatorio'] = (bool)$row['enviar_recordatorio'];

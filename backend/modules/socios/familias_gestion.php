@@ -290,6 +290,69 @@ trait FamiliasGestion
         return ['item' => $saved];
     }
 
+    private static function eliminarDefinitivoDatos(array $auth, int $id): array
+    {
+        $db = $auth['db'];
+
+        try {
+            return transaction($db, static function () use ($db, $auth, $id): array {
+                $lock = $db->prepare('SELECT * FROM familias WHERE id_familia = ? FOR UPDATE');
+                $lock->execute([$id]);
+                $locked = $lock->fetch();
+                if (!$locked) api_error('La familia no existe.', 'FAMILIA_NO_ENCONTRADA', 404);
+
+                $before = self::familyDetail($db, $id, true) ?? $locked;
+                $links = $db->prepare(
+                    'SELECT COUNT(*) AS vinculos_totales,
+                            COUNT(DISTINCT CASE WHEN fecha_desvinculacion IS NULL THEN id_socio END) AS socios_sin_familia
+                     FROM familias_socios
+                     WHERE id_familia = ?'
+                );
+                $links->execute([$id]);
+                $impactRow = $links->fetch() ?: [];
+                $impact = [
+                    'socios_sin_familia' => (int)($impactRow['socios_sin_familia'] ?? 0),
+                    'vinculos_eliminados' => (int)($impactRow['vinculos_totales'] ?? 0),
+                ];
+                $name = trim((string)($locked['nombre'] ?? '')) ?: "ID {$id}";
+
+                // Se eliminan únicamente los vínculos familiares. Los socios y
+                // todos sus pagos, estados y datos personales permanecen intactos.
+                $db->prepare('DELETE FROM familias_socios WHERE id_familia = ?')->execute([$id]);
+                $db->prepare('DELETE FROM familias WHERE id_familia = ?')->execute([$id]);
+
+                audit_change(
+                    $db,
+                    $auth,
+                    'FAMILIAS',
+                    'ELIMINAR_DEFINITIVO',
+                    'familias',
+                    $id,
+                    "Se eliminó definitivamente la familia {$name}. Sus socios quedaron sin familia y conservaron toda su información.",
+                    [
+                        'familia' => $before,
+                        'impacto_eliminacion' => $impact,
+                    ],
+                    null
+                );
+
+                return [
+                    'id_familia' => $id,
+                    'impacto_eliminacion' => $impact,
+                ];
+            });
+        } catch (PDOException $error) {
+            if ((string)$error->getCode() === '23000') {
+                api_error(
+                    'No se pudo eliminar la familia porque existe otra relación protegida en la base.',
+                    'FAMILIA_CON_RELACIONES_PROTEGIDAS',
+                    409
+                );
+            }
+            throw $error;
+        }
+    }
+
     private static function normalizeMembers(array $body): array
     {
         $raw = $body['integrantes'] ?? null;

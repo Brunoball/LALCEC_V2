@@ -542,6 +542,7 @@ export default function Familias() {
   const [saving, setSaving] = useState(false);
   const [stateModal, setStateModal] = useState(null);
   const [stateDate, setStateDate] = useState(today());
+  const [deleteModal, setDeleteModal] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [detailTab, setDetailTab] = useState(INFO_TAB_CURRENT);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -667,6 +668,38 @@ export default function Familias() {
     void cargar();
     return response;
   };
+  const openPermanentDelete = async (item) => {
+    if (!item) return;
+    setDeleteModal({ item, data: null, loading: true, error: "" });
+    try {
+      const response = await familiasApi.obtener(item.id_familia);
+      setDeleteModal({ item, data: response.item, loading: false, error: "" });
+    } catch (requestError) {
+      setDeleteModal({
+        item,
+        data: null,
+        loading: false,
+        error:
+          requestError.message ||
+          "No se pudo calcular el impacto de la eliminación.",
+      });
+    }
+  };
+  const deletePermanently = async () => {
+    if (!deleteModal?.item) return null;
+    const response = await familiasApi.eliminarDefinitivo({
+      id: deleteModal.item.id_familia,
+      confirmacion: "ELIMINAR",
+    });
+    void cargar();
+    return response;
+  };
+
+  const activeMembersToUnlink =
+    deleteModal?.data?.integrantes?.length ??
+    Number(deleteModal?.item?.cantidad_integrantes || 0);
+  const familyLinksToDelete =
+    deleteModal?.data?.historial_integrantes?.length ?? "Calculando...";
 
   const filtersUi = [
     {
@@ -800,6 +833,15 @@ export default function Familias() {
                         <FontAwesomeIcon
                           icon={item.activo ? faUserSlash : faRotateLeft}
                         />
+                      </button>
+                      <button
+                        className="mov-iconBtn mov-iconBtn--danger"
+                        type="button"
+                        title="Eliminar definitivamente la familia"
+                        aria-label={`Eliminar definitivamente la familia ${item.nombre}`}
+                        onClick={() => openPermanentDelete(item)}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
                       </button>
                     </>
                   ) : null}
@@ -1053,6 +1095,49 @@ export default function Familias() {
           setFeedback({ type: typeFeedback, message, duration })
         }
         confirmLabel={stateModal?.activo ? "Dar de baja" : "Reactivar"}
+      />
+
+      <ModalEliminarGlobal
+        open={Boolean(deleteModal)}
+        operacion="eliminar"
+        row={deleteModal?.item}
+        loading={Boolean(deleteModal?.loading)}
+        fixedHeight
+        title="Eliminar definitivamente la familia"
+        message="Confirmá la eliminación definitiva. Esta operación es irreversible, pero no eliminará ningún socio ni sus pagos."
+        warning="Todos los integrantes vinculados quedarán sin familia y podrán incorporarse a otra."
+        details={
+          deleteModal?.item
+            ? [
+                { label: "Familia", value: deleteModal.item.nombre },
+                {
+                  label: "Socios que quedarán sin familia",
+                  value: activeMembersToUnlink,
+                },
+                {
+                  label: "Vínculos familiares que se borrarán",
+                  value: familyLinksToDelete,
+                },
+                {
+                  label: "Socios, pagos y datos personales",
+                  value: "SE CONSERVAN",
+                },
+              ]
+            : []
+        }
+        extraContent={deleteModal?.error ? <p>{deleteModal.error}</p> : null}
+        confirmDisabled={
+          Boolean(deleteModal?.loading) || Boolean(deleteModal?.error)
+        }
+        onClose={() => setDeleteModal(null)}
+        onConfirm={deletePermanently}
+        onToast={(typeFeedback, message, duration) =>
+          setFeedback({ type: typeFeedback, message, duration })
+        }
+        confirmLabel="Eliminar definitivamente"
+        loadingLabel={deleteModal?.loading ? "Cargando..." : "Eliminando..."}
+        successMessage="La familia fue eliminada definitivamente. Sus socios quedaron sin familia."
+        errorMessage="No se pudo eliminar definitivamente la familia."
       />
     </>
   );

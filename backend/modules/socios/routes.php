@@ -18,5 +18,6 @@ function register_socios_routes(Router $router): void
     $router->register('familias_obtener', 'GET', [Familias::class, 'obtener'], true);
     $router->register('familias_guardar', 'POST', [Familias::class, 'guardar'], true);
     $router->register('familias_eliminar', 'POST', [Familias::class, 'darBaja'], true);
+    $router->register('familias_eliminar_definitivo', 'POST', [Familias::class, 'eliminarDefinitivo'], true);
     $router->register('familias_reactivar', 'POST', [Familias::class, 'reactivar'], true);
 }

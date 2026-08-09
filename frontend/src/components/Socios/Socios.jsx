@@ -624,11 +624,6 @@ function PartnerForm({
                   ))}
                 </select>
               </FloatingField>
-              {form.id_empresa_anterior ? (
-                <FloatingField label="ID anterior" active>
-                  <input value={form.id_empresa_anterior} readOnly />
-                </FloatingField>
-              ) : null}
             </>
           ) : (
             <>
@@ -872,7 +867,6 @@ function formFromItem(item) {
     dni: item.dni || "",
     razon_social: item.razon_social || "",
     cuit: item.cuit || "",
-    id_empresa_anterior: item.id_empresa_anterior || "",
     id_condicion_iva: item.id_condicion_iva
       ? String(item.id_condicion_iva)
       : "",
@@ -1485,7 +1479,6 @@ export default function Socios({ tipo = PERSON }) {
                     <InfoRow
                       title="Condición de IVA"
                       detail={itemInfo.condicion_iva || "SIN INFORMAR"}
-                      meta={`ID ANTERIOR ${itemInfo.id_empresa_anterior || "—"}`}
                     />
                   ) : (
                     <InfoRow
@@ -1678,6 +1671,7 @@ export default function Socios({ tipo = PERSON }) {
         open={Boolean(deleteModal)}
         operacion="eliminar"
         row={deleteModal?.item}
+        fixedHeight
         modalClassName="socios-delete-modal"
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
         message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."

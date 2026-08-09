@@ -50,4 +50,23 @@ final class Familias
         $id = positive_id(request_body()['id'] ?? null, 'familia');
         api_success(self::cambiarEstadoDatos($auth, $id, true), 'Familia reactivada correctamente.');
     }
+
+    public static function eliminarDefinitivo(): never
+    {
+        $auth = require_admin();
+        $body = request_body();
+        $id = positive_id($body['id'] ?? null, 'familia');
+        $confirmation = strtoupper(trim((string)($body['confirmacion'] ?? '')));
+        if ($confirmation !== 'ELIMINAR') {
+            api_error(
+                'Escribí ELIMINAR para confirmar la eliminación definitiva.',
+                'CONFIRMACION_ELIMINACION_INVALIDA',
+                422
+            );
+        }
+        api_success(
+            self::eliminarDefinitivoDatos($auth, $id),
+            'La familia fue eliminada definitivamente. Sus socios quedaron sin familia.'
+        );
+    }
 }
