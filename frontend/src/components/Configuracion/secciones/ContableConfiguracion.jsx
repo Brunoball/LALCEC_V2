@@ -22,6 +22,7 @@ import ModuleFeedback from "../../Global/ModuleFeedback";
 import { canWrite } from "../../_shared/auth/session";
 import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { contableApi } from "../../Contable/api/contableApi";
+import { useTableScrollbarCompensation } from "../hooks/useTableScrollbarCompensation";
 import "../configuracion.css";
 import "./ContableConfiguracion.css";
 
@@ -87,19 +88,21 @@ const initialLists = Object.keys(LIST_META).reduce((result, key) => {
   return result;
 }, {});
 
-function OptionList({ items, meta, writable, onEdit, onState, onDelete }) {
+function OptionList({ items, meta, writable, onEdit, onState, onDelete, bodyRef }) {
   if (!items.length) {
     return (
-      <div className="config-contableEmpty">
-        <span aria-hidden="true"><FontAwesomeIcon icon={meta.icon} /></span>
-        <strong>Sin registros</strong>
-        <p>{meta.empty}</p>
+      <div ref={bodyRef} className="config-contableTable__body">
+        <div className="config-contableEmpty">
+          <span aria-hidden="true"><FontAwesomeIcon icon={meta.icon} /></span>
+          <strong>Sin registros</strong>
+          <p>{meta.empty}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="config-contableTable__body">
+    <div ref={bodyRef} className="config-contableTable__body">
       {items.map((item) => {
         const active = Boolean(item.activo);
         const usageCount = Number(item.cantidad_usos || 0);
@@ -159,9 +162,9 @@ function OptionList({ items, meta, writable, onEdit, onState, onDelete }) {
   );
 }
 
-function ContableSkeleton() {
+function ContableSkeleton({ bodyRef }) {
   return (
-    <div className="config-contableTable__body" aria-hidden="true">
+    <div ref={bodyRef} className="config-contableTable__body" aria-hidden="true">
       {Array.from({ length: 6 }).map((_, index) => (
         <div className="config-contableTable__skeletonRow" key={index}>
           <span className="config-contableSkeleton config-contableSkeleton--name" />
@@ -203,6 +206,8 @@ export default function ContableConfiguracion() {
   const [form, setForm] = useState({ id_opcion: "", tipo: "PROVEEDOR", nombre: "" });
   const [stateModal, setStateModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(null);
+  const { bodyRef: tableBodyRef, hasVerticalScroll, scrollbarWidth } =
+    useTableScrollbarCompensation();
 
   const meta = LIST_META[activeType];
   const items = useMemo(() => lists[activeType] || [], [lists, activeType]);
@@ -424,10 +429,21 @@ export default function ContableConfiguracion() {
             </div>
           </div>
 
-          <div className="config-contableTable">
+          <div
+            className={`config-contableTable ${hasVerticalScroll ? "has-y-scroll" : ""}`.trim()}
+            style={{ "--config-table-scrollbar-width": `${scrollbarWidth}px` }}
+          >
             <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
-            {loading ? <ContableSkeleton /> : (
-              <OptionList items={filteredItems} meta={meta} writable={writable} onEdit={openEdit} onState={setStateModal} onDelete={setDeleteModal} />
+            {loading ? <ContableSkeleton bodyRef={tableBodyRef} /> : (
+              <OptionList
+                items={filteredItems}
+                meta={meta}
+                writable={writable}
+                onEdit={openEdit}
+                onState={setStateModal}
+                onDelete={setDeleteModal}
+                bodyRef={tableBodyRef}
+              />
             )}
           </div>
         </section>

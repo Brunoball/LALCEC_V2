@@ -1,6 +1,12 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
+const formatDashboardValue = (value) => {
+  if (typeof value !== "string") return value;
+
+  return value.replace(/([,.])00(?=\s*$)/, "");
+};
+
 export default function SummaryCards({
   title = "Resumen",
   ariaLabel,
@@ -47,7 +53,9 @@ export default function SummaryCards({
                   <span className="global-summaryCards__label">
                     {item.label}
                   </span>
-                  <b className="global-summaryCards__value">{item.value}</b>
+                  <b className="global-summaryCards__value">
+                    {formatDashboardValue(item.value)}
+                  </b>
                   {hasDetail ? (
                     <small className="global-summaryCards__detail">
                       {item.detail}

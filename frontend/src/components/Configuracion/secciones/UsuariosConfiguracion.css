@@ -222,6 +222,10 @@
   text-align: center;
 }
 
+.config-usersTable.has-y-scroll > .config-usersTable__head {
+  padding-right: calc(16px + var(--config-table-scrollbar-width, 0px));
+}
+
 .config-usersTable__head {
   min-height: 44px;
   padding: 0 16px;
@@ -241,7 +245,6 @@
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .config-usersTable__row {

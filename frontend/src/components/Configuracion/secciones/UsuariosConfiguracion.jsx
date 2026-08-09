@@ -24,6 +24,7 @@ import ModuleFeedback from "../../Global/ModuleFeedback";
 import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import { getSession, saveSession } from "../../_shared/auth/session";
 import { configuracionApi } from "../api/configuracionApi";
+import { useTableScrollbarCompensation } from "../hooks/useTableScrollbarCompensation";
 import "./UsuariosConfiguracion.css";
 
 const EMPTY_SUMMARY = { total: 0, activos: 0, bajas: 0, admins: 0 };
@@ -88,6 +89,8 @@ export default function UsuariosConfiguracion({ onBack }) {
   const [stateModal, setStateModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const { bodyRef: tableBodyRef, hasVerticalScroll, scrollbarWidth } =
+    useTableScrollbarCompensation();
 
   const handleModalToast = useCallback((type, message, duration) => {
     setFeedback({ type, message, duration });
@@ -348,10 +351,11 @@ export default function UsuariosConfiguracion({ onBack }) {
           </header>
 
           <div
-            className="config-usersTable"
+            className={`config-usersTable ${hasVerticalScroll ? "has-y-scroll" : ""}`.trim()}
             role="table"
             aria-label="Usuarios del sistema"
             aria-busy={loading}
+            style={{ "--config-table-scrollbar-width": `${scrollbarWidth}px` }}
           >
             {loading ? (
               <span
@@ -375,7 +379,7 @@ export default function UsuariosConfiguracion({ onBack }) {
                 Acciones
               </span>
             </div>
-            <div className="config-usersTable__body" role="rowgroup">
+            <div ref={tableBodyRef} className="config-usersTable__body" role="rowgroup">
               {loading ? (
                 <DataTableSkeleton
                   actionColumnIndex={5}

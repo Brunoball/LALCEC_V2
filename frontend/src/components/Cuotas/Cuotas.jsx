@@ -1608,13 +1608,25 @@ export default function Cuotas() {
       options: [
         {
           value: "DEUDORES",
-          label: "Deudores",
-          count: estadoTotales.DEUDORES,
+          label: (
+            <span className="cuotas-state-tabContent">
+              <span className="cuotas-state-tabText">Deudores</span>
+              {estadoTotales.DEUDORES != null ? (
+                <span className="cuotas-state-tabBadge">{estadoTotales.DEUDORES}</span>
+              ) : null}
+            </span>
+          ),
         },
         {
           value: "PAGADOS",
-          label: "Pagados",
-          count: estadoTotales.PAGADOS,
+          label: (
+            <span className="cuotas-state-tabContent">
+              <span className="cuotas-state-tabText">Pagados</span>
+              {estadoTotales.PAGADOS != null ? (
+                <span className="cuotas-state-tabBadge">{estadoTotales.PAGADOS}</span>
+              ) : null}
+            </span>
+          ),
         },
       ],
     },

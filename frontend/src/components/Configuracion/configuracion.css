@@ -369,7 +369,6 @@
   gap: 8px;
   padding: 14px 16px 16px;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .config-list__item {

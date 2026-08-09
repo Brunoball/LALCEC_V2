@@ -25,6 +25,7 @@ import { canWrite } from "../../_shared/auth/session";
 import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { configuracionApi } from "../api/configuracionApi";
 import { useConfiguracion } from "../hooks/useConfiguracion";
+import { useTableScrollbarCompensation } from "../hooks/useTableScrollbarCompensation";
 import "../configuracion.css";
 import "./CatalogosConfiguracion.css";
 
@@ -191,12 +192,16 @@ function CatalogStat({ icon, label, value, detail, tone }) {
 }
 
 function CatalogTable({ items, loading, meta, writable, onEdit, onState, onDelete }) {
+  const { bodyRef, hasVerticalScroll, scrollbarWidth } =
+    useTableScrollbarCompensation();
+
   return (
     <div
-      className="config-catalogTable"
+      className={`config-catalogTable ${hasVerticalScroll ? "has-y-scroll" : ""}`.trim()}
       role="table"
       aria-label={meta.title}
       aria-busy={loading}
+      style={{ "--config-table-scrollbar-width": `${scrollbarWidth}px` }}
     >
       {loading ? (
         <span className="mov-skeletonStatus" role="status" aria-live="polite">
@@ -216,7 +221,7 @@ function CatalogTable({ items, loading, meta, writable, onEdit, onState, onDelet
         </span>
       </div>
 
-      <div className="config-catalogTable__body" role="rowgroup">
+      <div ref={bodyRef} className="config-catalogTable__body" role="rowgroup">
         {loading ? (
           <DataTableSkeleton
             actionColumnIndex={3}

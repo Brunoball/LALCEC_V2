@@ -1678,7 +1678,6 @@ export default function Socios({ tipo = PERSON }) {
         open={Boolean(deleteModal)}
         operacion="eliminar"
         row={deleteModal?.item}
-        fixedHeight
         modalClassName="socios-delete-modal"
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
         message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."
