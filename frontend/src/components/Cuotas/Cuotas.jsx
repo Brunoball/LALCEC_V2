@@ -212,6 +212,11 @@ const defaultAmountOption = (principal) => {
   return options.find((option) => option.actual) || options[0] || null;
 };
 
+const currentBatchAmountOption = (item) => {
+  const options = Array.isArray(item?.opciones_monto) ? item.opciones_monto : [];
+  return options.find((option) => option?.actual) || options[0] || null;
+};
+
 const defaultMonthAmountState = (principal) => {
   const option = defaultAmountOption(principal);
   const fallback =
@@ -975,20 +980,35 @@ export default function Cuotas() {
       anio,
       mes,
       id_medio_pago: "",
-      pagos: selectedItems.map((item) => ({
-        id_socio: item.id_socio,
-        anio: item.anio,
-        mes: item.mes,
-        denominacion: item.denominacion,
-        documento: item.documento,
-        categoria: item.categoria,
-        familia: item.familia,
-        porcentaje_descuento_familiar: item.porcentaje_descuento_familiar,
-        monto_base: item.monto_base,
-        domicilio: item.domicilio || item.domicilio_2 || item.direccion || "",
-        cobrador: item.cobrador || "",
-        monto: String(item.monto_sugerido || ""),
-      })),
+      pagos: selectedItems.map((item) => {
+        const amountOptions = Array.isArray(item.opciones_monto)
+          ? item.opciones_monto
+          : [];
+        const currentOption = currentBatchAmountOption(item);
+        return {
+          id_socio: item.id_socio,
+          anio: item.anio,
+          mes: item.mes,
+          denominacion: item.denominacion,
+          documento: item.documento,
+          categoria: item.categoria,
+          familia: item.familia,
+          porcentaje_descuento_familiar: item.porcentaje_descuento_familiar,
+          monto_base: item.monto_base,
+          monto_actual_categoria: item.monto_actual_categoria,
+          opciones_monto: amountOptions,
+          opcion_monto_id: currentOption?.id || "actual",
+          domicilio: item.domicilio || item.domicilio_2 || item.direccion || "",
+          cobrador: item.cobrador || "",
+          // En selección múltiple el valor inicial es siempre la cuota actual.
+          monto: String(
+            currentOption?.monto ??
+              item.monto_actual_categoria ??
+              item.monto_sugerido ??
+              "",
+          ),
+        };
+      }),
     });
     setPaymentOpen(true);
     setMultiMode(false);
@@ -1241,15 +1261,24 @@ export default function Cuotas() {
     });
   };
 
-  const updateBatchAmount = (index, value) => {
-    const sanitizedValue = decimalInput(value);
+  const updateBatchAmountOption = (index, optionId) => {
     setPaymentForm((current) => ({
       ...current,
-      pagos: current.pagos.map((payment, paymentIndex) =>
-        paymentIndex === index
-          ? { ...payment, monto: sanitizedValue }
-          : payment,
-      ),
+      pagos: current.pagos.map((payment, paymentIndex) => {
+        if (paymentIndex !== index) return payment;
+        const options = Array.isArray(payment.opciones_monto)
+          ? payment.opciones_monto
+          : [];
+        const option = options.find(
+          (item) => String(item.id) === String(optionId),
+        );
+        if (!option) return payment;
+        return {
+          ...payment,
+          opcion_monto_id: String(option.id),
+          monto: String(option.monto ?? payment.monto ?? ""),
+        };
+      }),
     }));
   };
 
@@ -1934,7 +1963,7 @@ export default function Cuotas() {
         updateMonthAmountOption={updateMonthAmountOption}
         toggleMonthCustomAmount={toggleMonthCustomAmount}
         updateMonthCustomAmount={updateMonthCustomAmount}
-        updateBatchAmount={updateBatchAmount}
+        updateBatchAmountOption={updateBatchAmountOption}
       />
 
       <ModalComprobantePago

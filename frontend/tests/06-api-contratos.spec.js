@@ -539,7 +539,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     }
   });
 
-  test('usuarios valida formato, duplicados, autoprotección, baja, login deshabilitado e historial', async ({ request }) => {
+  test('usuarios valida formato, autoprotección, baja y eliminación definitiva aun con historial', async ({ request }) => {
     const user = userData();
     const currentSession = readAuthSession();
     let created;
@@ -716,12 +716,25 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       await closeApiSession(request, userSession);
       userSession = null;
 
-      await expectApiError(
-        request,
-        'usuarios_eliminar',
-        { method: 'POST', data: { id: created.id } },
-        { status: 409, code: 'USUARIO_CON_HISTORIAL' },
+      const usersWithHistory = await apiCall(request, 'usuarios_listar');
+      const userWithHistory = usersWithHistory.usuarios.find(
+        (item) => Number(item.id) === Number(created.id),
       );
+      expect(userWithHistory).toBeTruthy();
+      expect(Number(userWithHistory.cantidad_accesos)).toBeGreaterThan(0);
+      expect(userWithHistory.puede_eliminar).toBe(true);
+
+      const deleted = await apiCall(request, 'usuarios_eliminar', {
+        method: 'POST',
+        data: { id: created.id },
+      });
+      expect(Number(deleted.id)).toBe(Number(created.id));
+
+      const usersAfterDelete = await apiCall(request, 'usuarios_listar');
+      expect(
+        usersAfterDelete.usuarios.some((item) => Number(item.id) === Number(created.id)),
+      ).toBe(false);
+      created = null;
     } finally {
       await closeApiSession(request, userSession).catch(() => undefined);
       try {

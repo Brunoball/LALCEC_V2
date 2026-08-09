@@ -179,6 +179,25 @@ async function cleanupSocioByDocument(requestContext, { tipo, documento }) {
   return true;
 }
 
+async function cleanupSocioById(requestContext, id) {
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId) || numericId <= 0) return false;
+  const result = await apiResult(requestContext, 'socios_eliminar_definitivo', {
+    method: 'POST',
+    data: { id: numericId, confirmacion: 'ELIMINAR' },
+  });
+  if (!result.ok && result.status !== 404) {
+    const error = new Error(
+      result.body?.mensaje || `No se pudo limpiar el socio ${numericId}.`,
+    );
+    error.status = result.status;
+    error.code = result.body?.codigo;
+    error.body = result.body;
+    throw error;
+  }
+  return result.ok;
+}
+
 async function findUserByUsername(requestContext, username) {
   const response = await apiCall(requestContext, 'usuarios_listar');
   return (response.usuarios || []).find(
@@ -189,11 +208,6 @@ async function findUserByUsername(requestContext, username) {
 async function cleanupUserByUsername(requestContext, username) {
   const user = await findUserByUsername(requestContext, username);
   if (!user || user.sesion_actual) return false;
-  if (!user.puede_eliminar) {
-    throw new Error(
-      `No se puede limpiar el usuario ${username}: ya posee sesiones o auditoría de acceso.`,
-    );
-  }
   await apiCall(requestContext, 'usuarios_eliminar', {
     method: 'POST',
     data: { id: user.id },
@@ -320,6 +334,7 @@ module.exports = {
   cleanupFamilyByPrefix,
   cleanupLoginAuditByPrefix,
   cleanupSocioByDocument,
+  cleanupSocioById,
   cleanupUserByUsername,
   cleanupUsersByPrefix,
   closeApiSession,

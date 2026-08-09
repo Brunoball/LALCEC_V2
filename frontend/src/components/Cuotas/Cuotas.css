@@ -965,7 +965,7 @@
 
 .cuotas-batch-list article {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 150px;
+  grid-template-columns: 30px minmax(0, 1fr) 210px;
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
@@ -1021,7 +1021,8 @@
   text-transform: uppercase;
 }
 
-.cuotas-batch-list input {
+.cuotas-batch-list input,
+.cuotas-batch-list select {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
@@ -1042,7 +1043,8 @@ html[data-theme="oscuro"] .cuotas-context-loading,
 html[data-theme="oscuro"] .cuotas-no-family,
 html[data-theme="oscuro"] .cuotas-batch-list,
 html[data-theme="oscuro"] .cuotas-batch-list > header,
-html[data-theme="oscuro"] .cuotas-batch-list input {
+html[data-theme="oscuro"] .cuotas-batch-list input,
+html[data-theme="oscuro"] .cuotas-batch-list select {
   background: color-mix(in srgb, var(--balto-bg) 88%, #fff 12%);
 }
 

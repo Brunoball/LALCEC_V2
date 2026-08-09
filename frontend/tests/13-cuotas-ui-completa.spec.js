@@ -5,6 +5,7 @@ const {
   cleanupCategoriesByPrefix,
   cleanupFamilyByPrefix,
   cleanupSocioByDocument,
+  cleanupSocioById,
 } = require('./helpers/api.helper');
 const { createCompany, createFamily, createPerson } = require('./helpers/entities.helper');
 const { captureDownload, exportFromGlobalModal } = require('./helpers/download.helper');
@@ -14,6 +15,8 @@ const singlePerson = personData();
 const singleCompany = companyData();
 const batchPersonOne = personData();
 const batchPersonTwo = personData();
+const batchPersonNoDni = personData();
+let batchPersonNoDniId = null;
 const multiMonthPerson = personData();
 const paginationPerson = personData();
 const historicalPricePerson = personData();
@@ -196,6 +199,11 @@ test.describe('Cuotas completas desde la interfaz', () => {
 
     await cleanupCompany(request, singleCompany);
 
+    if (batchPersonNoDniId) {
+      await cleanupSocioById(request, batchPersonNoDniId).catch(() => false);
+      batchPersonNoDniId = null;
+    }
+
     for (const person of [
       singlePerson,
       batchPersonOne,
@@ -331,14 +339,15 @@ test.describe('Cuotas completas desde la interfaz', () => {
     ).toBeVisible();
   });
 
-  test('selecciona filas con mouse, teclado y checkbox, limpia, cancela y confirma un pago múltiple', async ({ page, request }) => {
-    const { category, medium } = await activeCategoryAndMedium(request);
+  test('selección múltiple ofrece monto actual e históricos, usa actual por defecto y registra el elegido', async ({ page, request }) => {
+    const historicalCategory = await createHistoricalCategory(request);
+    const { medium } = await activeCategoryAndMedium(request);
     await createPerson(request, batchPersonOne, {
-      id_categoria: category.id_categoria,
+      id_categoria: historicalCategory.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
     await createPerson(request, batchPersonTwo, {
-      id_categoria: category.id_categoria,
+      id_categoria: historicalCategory.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
 
@@ -382,6 +391,32 @@ test.describe('Cuotas completas desde la interfaz', () => {
     const dialog = page.getByRole('dialog', { name: 'Registrar pagos seleccionados' });
     await expect(dialog).toContainText(batchPersonOne.apellido);
     await expect(dialog).toContainText(batchPersonTwo.apellido);
+    await expect(dialog).toContainText(batchPersonOne.dni);
+    await expect(dialog).toContainText(batchPersonTwo.dni);
+
+    const firstAmount = dialog.getByLabel(
+      new RegExp(`Monto de .*${batchPersonOne.apellido}`, 'i'),
+    );
+    const secondAmount = dialog.getByLabel(
+      new RegExp(`Monto de .*${batchPersonTwo.apellido}`, 'i'),
+    );
+    await expect(firstAmount).toBeVisible();
+    await expect(secondAmount).toBeVisible();
+
+    for (const amountSelect of [firstAmount, secondAmount]) {
+      await expect(amountSelect.locator('option:checked')).toContainText(/2\.400,00/);
+      await expect(amountSelect.locator('option:checked')).toContainText(/actual/i);
+      await expect(amountSelect.locator('option').filter({ hasText: /1\.200,00/ })).toHaveCount(1);
+    }
+
+    const oldOption = firstAmount.locator('option').filter({ hasText: /1\.200,00/ }).first();
+    const oldValue = await oldOption.getAttribute('value');
+    expect(oldValue).toBeTruthy();
+    await firstAmount.selectOption(oldValue);
+    await expect(firstAmount.locator('option:checked')).toContainText(/1\.200,00/);
+    await expect(secondAmount.locator('option:checked')).toContainText(/2\.400,00/);
+    await expect(dialog.getByText(/\$\s*3\.600,00/).first()).toBeVisible();
+
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar 2 pagos' }).click();
 
@@ -389,6 +424,10 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(receipt.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
     await receipt.getByText('Cerrar', { exact: true }).click();
 
+    const expectedAmounts = new Map([
+      [batchPersonOne.dni, historicalCategory.oldAmount],
+      [batchPersonTwo.dni, historicalCategory.currentAmount],
+    ]);
     for (const target of [batchPersonOne, batchPersonTwo]) {
       const paid = await apiCall(request, 'cuotas_listar', {
         params: {
@@ -400,7 +439,43 @@ test.describe('Cuotas completas desde la interfaz', () => {
         },
       });
       expect(paid.items).toHaveLength(1);
+      expect(Number(paid.items[0].monto)).toBeCloseTo(expectedAmounts.get(target.dni), 2);
     }
+  });
+
+  test('selección múltiple omite DNI y separadores vacíos cuando el socio no tiene documento', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const created = await createPerson(request, batchPersonNoDni, {
+      dni: null,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    batchPersonNoDniId = Number(created.id_socio);
+
+    await page.goto('/cuotas');
+    const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await page.getByRole('button', { name: 'Selección múltiple' }).first().click();
+    await search.fill(batchPersonNoDni.apellido);
+
+    const row = page
+      .getByRole('table', { name: /Cuotas de socios adeudadas/i })
+      .getByRole('row')
+      .filter({ hasText: batchPersonNoDni.apellido });
+    await expect(row).toBeVisible();
+    await row.getByRole('checkbox', { name: /Seleccionar cuota de/i }).check();
+    await page.getByRole('button', { name: 'Continuar (1)', exact: true }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Registrar pagos seleccionados' });
+    const article = dialog.locator('article').filter({ hasText: batchPersonNoDni.apellido });
+    await expect(article).toBeVisible();
+    await expect(article).not.toContainText('— ·');
+    await expect(article).not.toContainText(/SIN DNI/i);
+    await expect(article).toContainText(category.nombre);
+    await expect(article).toContainText(`${currentMonth}/${currentYear}`);
+
+    const metadata = article.locator('div > span').first();
+    await expect(metadata).not.toHaveText(/^\s*·/);
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
   });
 
   test('selecciona todos los meses disponibles, los desmarca y registra dos períodos juntos', async ({ page, request }) => {

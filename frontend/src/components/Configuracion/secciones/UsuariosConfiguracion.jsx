@@ -462,8 +462,8 @@ export default function UsuariosConfiguracion({ onBack }) {
                         disabled={!user.puede_eliminar}
                         title={
                           user.puede_eliminar
-                            ? "Eliminar usuario"
-                            : "No se puede eliminar porque tiene historial"
+                            ? "Eliminar usuario definitivamente"
+                            : "No podés eliminar tu propia sesión"
                         }
                         aria-label={`Eliminar ${user.usuario}`}
                       >
@@ -724,8 +724,8 @@ export default function UsuariosConfiguracion({ onBack }) {
         operacion="eliminar"
         row={deleteModal}
         title="Eliminar usuario"
-        message="El usuario se eliminará definitivamente porque todavía no tiene historial de accesos."
-        warning="Esta acción no se puede deshacer."
+        message="El usuario se eliminará definitivamente. Sus sesiones se cerrarán y el historial existente se conservará sin vincularlo al usuario eliminado."
+        warning="Esta acción no se puede deshacer. Si solo querés impedir el acceso, usá Dar de baja."
         confirmLabel="Eliminar"
         loadingLabel="Eliminando..."
         loadingMessage="Eliminando usuario…"

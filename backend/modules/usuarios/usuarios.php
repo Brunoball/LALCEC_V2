@@ -88,7 +88,7 @@ final class Usuarios
                 'cantidad_sesiones' => $sessions,
                 'cantidad_accesos' => $accesses,
                 'puede_cambiar_estado' => !$current,
-                'puede_eliminar' => !$current && $sessions === 0 && $accesses === 0,
+                'puede_eliminar' => !$current,
             ];
         }
 
@@ -295,22 +295,20 @@ final class Usuarios
                 self::assertAnotherActiveAdmin($db, $id);
             }
 
-            $usage = $db->prepare(
-                'SELECT
-                    (SELECT COUNT(*) FROM sis_sesiones WHERE idUsuario = ?) AS sesiones,
-                    (SELECT COUNT(*) FROM sis_login_auditoria WHERE idUsuario = ?) AS accesos'
-            );
-            $usage->execute([$id, $id]);
-            $counts = $usage->fetch() ?: ['sesiones' => 0, 'accesos' => 0];
-            if ((int)$counts['sesiones'] > 0 || (int)$counts['accesos'] > 0) {
-                api_error(
-                    'El usuario tiene historial de accesos y no se puede eliminar. Podés darlo de baja para conservar la auditoría.',
-                    'USUARIO_CON_HISTORIAL',
-                    409
-                );
-            }
+            // Eliminar un usuario debe ser una baja definitiva real, incluso si ya
+            // inició sesión alguna vez. Conservamos los historiales funcionales,
+            // pero desligados del usuario eliminado; las sesiones sí se eliminan
+            // porque su FK impide borrar sis_usuarios mientras existan.
+            $db->prepare('DELETE FROM sis_sesiones WHERE idUsuario = ?')->execute([$id]);
+            $db->prepare('UPDATE sis_login_auditoria SET idUsuario = NULL WHERE idUsuario = ?')->execute([$id]);
+            $db->prepare('UPDATE socios_historial_estados SET id_usuario = NULL WHERE id_usuario = ?')->execute([$id]);
+            $db->prepare('UPDATE auditoria SET id_usuario_master = NULL WHERE id_usuario_master = ?')->execute([$id]);
 
-            $db->prepare('DELETE FROM sis_usuarios WHERE idUsuario = ?')->execute([$id]);
+            $delete = $db->prepare('DELETE FROM sis_usuarios WHERE idUsuario = ?');
+            $delete->execute([$id]);
+            if ($delete->rowCount() !== 1) {
+                api_error('El usuario ya no existe.', 'USUARIO_NO_ENCONTRADO', 404);
+            }
 
             self::audit($auth, 'ELIMINAR_USUARIO', $id, [
                 'usuario' => (string)$user['usuario'],

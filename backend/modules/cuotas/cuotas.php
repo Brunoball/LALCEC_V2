@@ -217,8 +217,16 @@ final class Cuotas
                 ? 0.0
                 : self::discountForCount($discountRules, $familyCount);
             $row['monto_base'] = $baseAmount;
+            $row['monto_actual_categoria'] = (float)($row['monto_actual'] ?? 0);
             $row['porcentaje_descuento_familiar'] = $discount;
             $row['monto_sugerido'] = self::discountedAmount($baseAmount, $discount);
+            $row['opciones_monto'] = $categoryId === null
+                ? []
+                : self::amountOptionsForCategory(
+                    $history[$categoryId] ?? [],
+                    (float)($row['monto_actual'] ?? 0),
+                    $discount
+                );
             $items[] = self::castRow($row, $anio, $mes);
         }
 
@@ -1158,8 +1166,10 @@ final class Cuotas
             'periodo' => self::monthName(isset($row['mes']) && $row['mes'] !== null ? (int)$row['mes'] : $month) . ' ' . (isset($row['anio']) && $row['anio'] !== null ? (int)$row['anio'] : $year),
             'fecha_pago' => $row['fecha_pago'] ?? null,
             'monto_base' => number_format((float)($row['monto_base'] ?? $row['monto_sugerido'] ?? 0), 2, '.', ''),
+            'monto_actual_categoria' => number_format((float)($row['monto_actual_categoria'] ?? $row['monto_actual'] ?? $row['monto_base'] ?? 0), 2, '.', ''),
             'porcentaje_descuento_familiar' => number_format((float)($row['porcentaje_descuento_familiar'] ?? 0), 2, '.', ''),
             'monto_sugerido' => number_format((float)($row['monto_sugerido'] ?? 0), 2, '.', ''),
+            'opciones_monto' => is_array($row['opciones_monto'] ?? null) ? $row['opciones_monto'] : [],
             'monto' => !isset($row['monto']) || $row['monto'] === null ? null : number_format((float)$row['monto'], 2, '.', ''),
             'id_medio_pago' => isset($row['id_medio_pago']) && $row['id_medio_pago'] !== null ? (int)$row['id_medio_pago'] : null,
             'medio_pago' => $row['medio_pago'] ?? null,

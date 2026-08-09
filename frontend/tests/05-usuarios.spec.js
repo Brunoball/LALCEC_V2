@@ -37,7 +37,7 @@ test.describe('Usuarios y roles', () => {
     }
   });
 
-  test('protege la sesión actual y cubre alta, edición, rol, baja, reactivación y eliminación', async ({ page, request }) => {
+  test('protege la sesión actual y ofrece baja o eliminación definitiva incluso con historial', async ({ page, request }) => {
     await cleanupUserByUsername(request, user.username).catch(() => false);
     await cleanupUserByUsername(request, user.usernameEdited).catch(() => false);
 
@@ -102,9 +102,23 @@ test.describe('Usuarios y roles', () => {
     await expect(row).toContainText(user.emailEdited);
     await expect(row).toContainText('Administrador');
 
-    await row
-      .getByRole('button', { name: `Dar de baja ${user.usernameEdited}` })
-      .click();
+    const disableButton = row.getByRole('button', {
+      name: `Dar de baja ${user.usernameEdited}`,
+    });
+    const deleteButton = row.getByRole('button', {
+      name: `Eliminar ${user.usernameEdited}`,
+    });
+    await expect(disableButton).toBeEnabled();
+    await expect(deleteButton).toBeEnabled();
+
+    await deleteButton.click();
+    let deleteDialog = page.getByRole('dialog', { name: 'Eliminar usuario' });
+    await expect(deleteDialog).toContainText(/se eliminará definitivamente/i);
+    await expect(deleteDialog).toContainText(/usá Dar de baja/i);
+    await deleteDialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(deleteDialog).toBeHidden();
+
+    await disableButton.click();
     let stateDialog = page.getByRole('dialog', { name: 'Dar de baja usuario' });
     await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
     await expectToast(page, 'Usuario dado de baja correctamente.');
@@ -121,10 +135,13 @@ test.describe('Usuarios y roles', () => {
 
     await page.getByRole('tab', { name: 'Activos' }).click();
     row = userRow(page, user.usernameEdited);
+    await expect(
+      row.getByRole('button', { name: `Dar de baja ${user.usernameEdited}` }),
+    ).toBeEnabled();
     await row
       .getByRole('button', { name: `Eliminar ${user.usernameEdited}` })
       .click();
-    const deleteDialog = page.getByRole('dialog', { name: 'Eliminar usuario' });
+    deleteDialog = page.getByRole('dialog', { name: 'Eliminar usuario' });
     await deleteDialog.getByRole('button', { name: 'Eliminar' }).click();
     await expectToast(page, 'Usuario eliminado correctamente.');
     await expect(userRow(page, user.usernameEdited)).toHaveCount(0);

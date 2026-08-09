@@ -130,7 +130,7 @@ export default function ModalPagoCuota({
   updateMonthAmountOption,
   toggleMonthCustomAmount,
   updateMonthCustomAmount,
-  updateBatchAmount,
+  updateBatchAmountOption,
 }) {
   const [familyExpanded, setFamilyExpanded] = useState(false);
   const [extraPaymentYears, setExtraPaymentYears] = useState([]);
@@ -711,45 +711,77 @@ export default function ModalPagoCuota({
               <strong>{money(paymentTotal)}</strong>
             </header>
             <div>
-              {paymentForm.pagos.map((payment, index) => (
-                <article
-                  key={`${payment.id_socio}-${payment.anio}-${payment.mes}`}
-                >
-                  <span className="cuotas-batch-list__index" aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <strong>{payment.denominacion}</strong>
-                    <span>
-                      {payment.documento || "—"} ·{" "}
-                      {payment.categoria || "SIN CATEGORÍA"} · {payment.mes}/
-                      {payment.anio}
+              {paymentForm.pagos.map((payment, index) => {
+                const metadata = [
+                  payment.documento || null,
+                  payment.categoria || "SIN CATEGORÍA",
+                  payment.mes && payment.anio
+                    ? `${payment.mes}/${payment.anio}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const amountOptions =
+                  Array.isArray(payment.opciones_monto) &&
+                  payment.opciones_monto.length
+                    ? payment.opciones_monto
+                    : [
+                        {
+                          id: payment.opcion_monto_id || "actual",
+                          actual: true,
+                          monto: payment.monto,
+                        },
+                      ];
+
+                return (
+                  <article
+                    key={`${payment.id_socio}-${payment.anio}-${payment.mes}`}
+                  >
+                    <span
+                      className="cuotas-batch-list__index"
+                      aria-hidden="true"
+                    >
+                      {index + 1}
                     </span>
-                    {payment.familia ? (
-                      <small>
-                        {payment.familia} ·{" "}
-                        {Number(
-                          payment.porcentaje_descuento_familiar || 0,
-                        ).toFixed(2)}
-                        % de descuento
-                      </small>
-                    ) : null}
-                  </div>
-                  <label>
-                    <span>Monto</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]{0,2}"
-                      value={payment.monto}
-                      onChange={(event) =>
-                        updateBatchAmount(index, event.target.value)
-                      }
-                      aria-label={`Monto de ${payment.denominacion}`}
-                    />
-                  </label>
-                </article>
-              ))}
+                    <div>
+                      <strong>{payment.denominacion}</strong>
+                      {metadata ? <span>{metadata}</span> : null}
+                      {payment.familia ? (
+                        <small>
+                          {payment.familia} ·{" "}
+                          {Number(
+                            payment.porcentaje_descuento_familiar || 0,
+                          ).toFixed(2)}
+                          % de descuento
+                        </small>
+                      ) : null}
+                    </div>
+                    <label>
+                      <span>Monto</span>
+                      <select
+                        value={payment.opcion_monto_id || amountOptions[0]?.id || ""}
+                        onChange={(event) =>
+                          updateBatchAmountOption(index, event.target.value)
+                        }
+                        aria-label={`Monto de ${payment.denominacion}`}
+                      >
+                        {amountOptions.map((option) => {
+                          const periodLabel = amountOptionPeriodLabel(option);
+                          const label = option.actual
+                            ? "Actual"
+                            : periodLabel.charAt(0).toUpperCase() +
+                              periodLabel.slice(1);
+                          return (
+                            <option key={option.id} value={option.id}>
+                              {money(option.monto)} · {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                  </article>
+                );
+              })}
             </div>
           </section>
         </>
