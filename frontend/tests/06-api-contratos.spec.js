@@ -74,6 +74,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['familias_obtener', 'GET', { params: { id: 1 } }],
       ['familias_guardar', 'POST', { data: {} }],
       ['familias_eliminar', 'POST', { data: {} }],
+      ['familias_eliminar_definitivo', 'POST', { data: {} }],
       ['familias_reactivar', 'POST', { data: {} }],
       ['categorias_listar', 'GET'],
       ['categorias_obtener', 'GET', { params: { id: 1 } }],
@@ -321,9 +322,11 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
   test('familias valida integrantes, titular, duplicados, conflictos y estados', async ({ request }) => {
     const memberA = personData();
     const memberB = personData();
+    const memberForDelete = personData();
     const family = familyData();
     let personA;
     let personB;
+    let personForDelete;
 
     try {
       await expectApiError(
@@ -347,6 +350,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
 
       personA = await createPerson(request, memberA);
       personB = await createPerson(request, memberB);
+      personForDelete = await createPerson(request, memberForDelete);
 
       const memberPayload = (person, titular) => ({
         id_socio: person.id_socio,
@@ -443,13 +447,96 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
         { method: 'POST', data: { id: saved.id_familia } },
         { status: 409, code: 'ESTADO_SIN_CAMBIOS' },
       );
+
+      // Reactivar conserva el historial, pero no reconstruye los vínculos. Se
+      // incorpora un tercer socio sin vínculo histórico para probar el borrado
+      // de una familia activa sin duplicar el par familia-socio conservado.
+      await apiCall(request, 'familias_guardar', {
+        method: 'POST',
+        data: {
+          id_familia: saved.id_familia,
+          nombre: family.nombre,
+          descripcion: family.descripcion,
+          integrantes: [memberPayload(personForDelete, true)],
+        },
+      });
+      await expectApiError(
+        request,
+        'familias_eliminar_definitivo',
+        {
+          method: 'POST',
+          data: { id: saved.id_familia, confirmacion: 'NO' },
+        },
+        { status: 422, code: 'CONFIRMACION_ELIMINACION_INVALIDA' },
+      );
+
+      const deletedActive = await apiCall(request, 'familias_eliminar_definitivo', {
+        method: 'POST',
+        data: { id: saved.id_familia, confirmacion: 'ELIMINAR' },
+      });
+      expect(deletedActive.id_familia).toBe(saved.id_familia);
+      expect(deletedActive.impacto_eliminacion).toEqual({
+        socios_sin_familia: 1,
+        vinculos_eliminados: 3,
+      });
+      await expectApiError(
+        request,
+        'familias_obtener',
+        { params: { id: saved.id_familia } },
+        { status: 404, code: 'FAMILIA_NO_ENCONTRADA' },
+      );
+
+      for (const person of [personA, personB, personForDelete]) {
+        const preserved = await apiCall(request, 'socios_obtener', {
+          params: { id: person.id_socio },
+        });
+        expect(preserved.item.id_socio).toBe(person.id_socio);
+        expect(preserved.item.id_familia).toBeNull();
+        expect(preserved.item.familia).toBeNull();
+      }
+
+      const inactiveFamily = await createFamily(
+        request,
+        {
+          ...family,
+          nombre: `${family.nombre} BAJA DEFINITIVA`,
+          descripcion: `${family.descripcion} BAJA DEFINITIVA`,
+        },
+        [personB],
+      );
+      await apiCall(request, 'familias_eliminar', {
+        method: 'POST',
+        data: {
+          id: inactiveFamily.id_familia,
+          fecha_baja: todayIso(),
+          motivo_baja: 'BAJA PREVIA A ELIMINACIÓN DEFINITIVA E2E',
+        },
+      });
+      const deletedInactive = await apiCall(request, 'familias_eliminar_definitivo', {
+        method: 'POST',
+        data: { id: inactiveFamily.id_familia, confirmacion: 'ELIMINAR' },
+      });
+      expect(deletedInactive.impacto_eliminacion).toEqual({
+        socios_sin_familia: 0,
+        vinculos_eliminados: 1,
+      });
+      await expectApiError(
+        request,
+        'familias_obtener',
+        { params: { id: inactiveFamily.id_familia } },
+        { status: 404, code: 'FAMILIA_NO_ENCONTRADA' },
+      );
+      const preservedAfterInactiveDelete = await apiCall(request, 'socios_obtener', {
+        params: { id: personB.id_socio },
+      });
+      expect(preservedAfterInactiveDelete.item.id_familia).toBeNull();
     } finally {
       try {
         cleanupFamilyByPrefix(family.prefix);
       } catch (_error) {
         // La familia puede no haberse creado.
       }
-      for (const target of [memberA, memberB]) {
+      for (const target of [memberA, memberB, memberForDelete]) {
         await cleanupSocioByDocument(request, {
           tipo: 'PERSONA',
           documento: target.dni,

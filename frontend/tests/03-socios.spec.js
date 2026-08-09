@@ -4,6 +4,7 @@ const {
   apiCall,
   cleanupFamilyByPrefix,
   cleanupSocioByDocument,
+  expectApiError,
 } = require('./helpers/api.helper');
 const { dismissPersistentToast, expectToast } = require('./helpers/auth.helper');
 const { todayIso } = require('./helpers/data.helper');
@@ -13,6 +14,7 @@ const company = companyData();
 const family = familyData();
 const familyMember = personData();
 const familyMemberRemoved = personData();
+const familyMemberForDelete = personData();
 
 function tableRow(page, tableName, text) {
   return page
@@ -52,6 +54,7 @@ test.describe('Socios, empresas y familias', () => {
       { tipo: 'EMPRESA', documento: company.cuit },
       { tipo: 'PERSONA', documento: familyMember.dni },
       { tipo: 'PERSONA', documento: familyMemberRemoved.dni },
+      { tipo: 'PERSONA', documento: familyMemberForDelete.dni },
     ]) {
       try {
         await cleanupSocioByDocument(request, target);
@@ -245,7 +248,7 @@ test.describe('Socios, empresas y familias', () => {
     await expect(tableRow(page, 'Listado de empresas', company.cuit)).toHaveCount(0);
   });
 
-  test('crea, consulta, edita, desvincula con historial, da de baja y reactiva una familia', async ({ page, request }) => {
+  test('cubre el ciclo completo y elimina una familia sin borrar sus socios', async ({ page, request }) => {
     cleanupFamilyByPrefix(family.prefix);
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
@@ -255,8 +258,12 @@ test.describe('Socios, empresas y familias', () => {
       tipo: 'PERSONA',
       documento: familyMemberRemoved.dni,
     });
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: familyMemberForDelete.dni,
+    });
 
-    await apiCall(request, 'socios_guardar', {
+    const createdMemberResponse = await apiCall(request, 'socios_guardar', {
       method: 'POST',
       data: {
         tipo_socio: 'PERSONA',
@@ -274,7 +281,7 @@ test.describe('Socios, empresas y familias', () => {
       },
     });
 
-    await apiCall(request, 'socios_guardar', {
+    const removedMemberResponse = await apiCall(request, 'socios_guardar', {
       method: 'POST',
       data: {
         tipo_socio: 'PERSONA',
@@ -289,6 +296,24 @@ test.describe('Socios, empresas y familias', () => {
         id_condicion_iva: null,
         enviar_recordatorio: true,
         observaciones: 'INTEGRANTE PARA DESVINCULACIÓN E2E',
+      },
+    });
+
+    const deleteMemberResponse = await apiCall(request, 'socios_guardar', {
+      method: 'POST',
+      data: {
+        tipo_socio: 'PERSONA',
+        apellido: familyMemberForDelete.apellido,
+        nombre: familyMemberForDelete.nombre,
+        dni: familyMemberForDelete.dni,
+        fecha_alta: todayIso(),
+        telefono: familyMemberForDelete.telefono,
+        email: familyMemberForDelete.email,
+        id_categoria: null,
+        id_medio_pago: null,
+        id_condicion_iva: null,
+        enviar_recordatorio: true,
+        observaciones: 'INTEGRANTE PARA ELIMINACIÓN DEFINITIVA E2E',
       },
     });
 
@@ -406,6 +431,90 @@ test.describe('Socios, empresas y familias', () => {
     await expect(row).toBeVisible();
     await expect(row.getByTitle('Dar de baja')).toBeVisible();
 
+    // La reactivación no restaura vínculos cerrados. Se incorpora un tercer socio,
+    // sin vínculo histórico con esta familia, para probar el borrado con miembros.
+    await row.getByTitle('Editar').click();
+    dialog = page.getByRole('dialog', { name: 'Editar familia' });
+    await dialog.getByRole('tab', { name: 'Integrantes' }).click();
+    await dialog
+      .getByLabel('Buscar socio por nombre, DNI o categoría')
+      .fill(familyMemberForDelete.dni);
+    await dialog
+      .getByRole('checkbox', { name: new RegExp(familyMemberForDelete.apellido, 'i') })
+      .check();
+    await dialog.getByRole('button', { name: /Agregar miembros \(1\)/ }).click();
+    const readdedMember = dialog.locator('.familias-selected-member').filter({
+      hasText: familyMemberForDelete.apellido,
+    });
+    await readdedMember.getByRole('radio', { name: 'Titular' }).check();
+    await readdedMember.getByPlaceholder('Parentesco').fill('TITULAR');
+    await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expectToast(page, 'Familia actualizada correctamente.');
+
+    row = tableRow(page, 'Listado de familias', family.nombreEditado);
+    await expect(row).toContainText(familyMemberForDelete.apellido);
+
+    const familiesBeforeDelete = await apiCall(request, 'familias_listar', {
+      params: { estado: 'activo', buscar: family.nombreEditado },
+    });
+    const familyBeforeDelete = (familiesBeforeDelete.items || []).find(
+      (item) => item.nombre === family.nombreEditado,
+    );
+    expect(familyBeforeDelete).toBeTruthy();
+
+    await row.getByTitle('Eliminar definitivamente la familia').click();
+    const deleteDialog = page.getByRole('dialog', {
+      name: 'Eliminar definitivamente la familia',
+    });
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteDialog).toContainText(
+      'Esta operación es irreversible, pero no eliminará ningún socio ni sus pagos.',
+    );
+    await expect(deleteDialog).toContainText('Socios que quedarán sin familia');
+    await expect(deleteDialog).toContainText('Vínculos familiares que se borrarán');
+    await expect(deleteDialog).toContainText('SE CONSERVAN');
+    await expect(
+      deleteDialog.locator('.gdel-row').filter({
+        hasText: 'Socios que quedarán sin familia',
+      }),
+    ).toContainText('1');
+    await expect(
+      deleteDialog.locator('.gdel-row').filter({
+        hasText: 'Vínculos familiares que se borrarán',
+      }),
+    ).toContainText('3');
+    await expect(
+      deleteDialog.getByRole('button', { name: 'Eliminar definitivamente' }),
+    ).toBeEnabled();
+    await deleteDialog
+      .getByRole('button', { name: 'Eliminar definitivamente' })
+      .click();
+    await expectToast(
+      page,
+      'La familia fue eliminada definitivamente. Sus socios quedaron sin familia.',
+    );
+    await expect(tableRow(page, 'Listado de familias', family.nombreEditado)).toHaveCount(0);
+
+    await expectApiError(
+      request,
+      'familias_obtener',
+      { params: { id: familyBeforeDelete.id_familia } },
+      { status: 404, code: 'FAMILIA_NO_ENCONTRADA' },
+    );
+
+    for (const created of [
+      createdMemberResponse.item,
+      removedMemberResponse.item,
+      deleteMemberResponse.item,
+    ]) {
+      const partner = await apiCall(request, 'socios_obtener', {
+        params: { id: created.id_socio },
+      });
+      expect(partner.item.id_socio).toBe(created.id_socio);
+      expect(partner.item.id_familia).toBeNull();
+      expect(partner.item.familia).toBeNull();
+    }
+
     cleanupFamilyByPrefix(family.prefix);
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
@@ -414,6 +523,10 @@ test.describe('Socios, empresas y familias', () => {
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
       documento: familyMemberRemoved.dni,
+    });
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: familyMemberForDelete.dni,
     });
   });
 });

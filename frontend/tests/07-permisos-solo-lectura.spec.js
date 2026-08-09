@@ -138,6 +138,10 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['socios_reactivar', { id: personItem.id_socio }],
         ['familias_guardar', { nombre: 'NO PERMITIDA', integrantes: [] }],
         ['familias_eliminar', { id: familyItem.id_familia }],
+        ['familias_eliminar_definitivo', {
+          id: familyItem.id_familia,
+          confirmacion: 'ELIMINAR',
+        }],
         ['familias_reactivar', { id: familyItem.id_familia }],
         ['categorias_guardar', { nombre: 'NO PERMITIDA', monto_actual: 1000, vigente_desde: '2026-08-04' }],
         ['categorias_eliminar', { id: categoryItem.id_categoria }],
