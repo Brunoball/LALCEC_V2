@@ -1102,7 +1102,6 @@ export default function Familias() {
         operacion="eliminar"
         row={deleteModal?.item}
         loading={Boolean(deleteModal?.loading)}
-        fixedHeight
         title="Eliminar definitivamente la familia"
         message="Confirmá la eliminación definitiva. Esta operación es irreversible, pero no eliminará ningún socio ni sus pagos."
         warning="Todos los integrantes vinculados quedarán sin familia y podrán incorporarse a otra."
