@@ -131,7 +131,7 @@
 
 .admin-dashboard__metrics {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
   gap: 10px;
 }
 
@@ -179,8 +179,8 @@
 }
 
 .admin-dashboard__metricIcon {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -192,6 +192,7 @@
 
 .admin-dashboard__metricBody {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -216,6 +217,31 @@
   letter-spacing: -0.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+/* Saldo del mes: la última tarjeta toma el ancho que necesita su contenido.
+   El importe conserva el mismo tamaño tipográfico y el icono no se desplaza
+   dentro de la tarjeta. */
+.admin-dashboard__metric.has-visible-value {
+  min-width: max-content;
+  justify-self: stretch;
+}
+
+.admin-dashboard__metric.has-visible-value .admin-dashboard__metricBody {
+  width: max-content;
+  min-width: max-content;
+  flex: 0 0 auto;
+}
+
+.admin-dashboard__metric.has-visible-value .admin-dashboard__metricBody strong {
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  text-overflow: clip;
 }
 
 .admin-dashboard__metricBody small {
@@ -529,6 +555,18 @@
 
   .admin-dashboard__metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-dashboard__metric.has-visible-value {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  .admin-dashboard__metric.has-visible-value .admin-dashboard__metricBody {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .admin-dashboard__chartColumns {

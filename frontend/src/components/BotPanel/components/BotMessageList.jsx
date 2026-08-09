@@ -50,6 +50,29 @@ const BotMessageList = ({
       const showImg = hasMedia && isImageMime(mime);
       const showPdf = hasMedia && isPdfMime(mime);
 
+      // Algunos mensajes de documentos llegan con una leyenda técnica tipo
+      // "[pdf]archivo.pdf" además del adjunto. WhatsApp no muestra ese texto
+      // duplicado, así que lo ocultamos únicamente cuando coincide con el archivo.
+      const rawText = String(m.text || "").trim();
+      const mediaName = String(m.media_name || "").trim();
+      const pdfMarkerMatch = rawText.match(/^\[pdf\]\s*(.+)$/i);
+      const hidePdfMarker =
+        showPdf &&
+        pdfMarkerMatch &&
+        (!mediaName || pdfMarkerMatch[1].trim().toLowerCase() === mediaName.toLowerCase());
+      const visibleText = hidePdfMarker ? "" : m.text;
+
+      const pdfPreviewUrl = showPdf
+        ? `${m.media_url}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`
+        : "";
+
+      const openPdf = () =>
+        openViewer({
+          url: m.media_url,
+          mime,
+          name: m.media_name || "documento.pdf",
+        });
+
       return (
         <React.Fragment key={m.id}>
           {showDateSeparator ? (
@@ -95,30 +118,54 @@ const BotMessageList = ({
                       />
                     </button>
                   ) : showPdf ? (
-                    <button
-                      type="button"
+                    <div
                       className="wp-doc-card"
-                      onClick={() =>
-                        openViewer({
-                          url: m.media_url,
-                          mime,
-                          name: m.media_name || "documento.pdf",
-                        })
-                      }
+                      role="button"
+                      tabIndex={0}
+                      onClick={openPdf}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openPdf();
+                        }
+                      }}
                       title="Ver PDF"
+                      aria-label={`Abrir ${m.media_name || "Documento PDF"}`}
                     >
-                      <div className="wp-doc-ico">
-                        <FontAwesomeIcon icon={faFilePdf} />
-                      </div>
-                      <div className="wp-doc-meta">
-                        <div className="wp-doc-name">
-                          {m.media_name || "Documento PDF"}
+                      <div className="wp-doc-preview" aria-hidden="true">
+                        <div className="wp-doc-preview-fallback">
+                          <div className="wp-doc-preview-sheet">
+                            <span className="wp-doc-preview-line wp-doc-preview-line--title" />
+                            <span className="wp-doc-preview-line" />
+                            <span className="wp-doc-preview-line" />
+                            <span className="wp-doc-preview-line wp-doc-preview-line--short" />
+                          </div>
                         </div>
-                        <div className="wp-doc-sub">
-                          PDF {m.media_size ? `• ${fmtBytes(m.media_size)}` : ""}
+                        <iframe
+                          className="wp-doc-preview-frame"
+                          src={pdfPreviewUrl}
+                          title=""
+                          loading="lazy"
+                          scrolling="no"
+                          tabIndex={-1}
+                        />
+                        <span className="wp-doc-preview-badge">PDF</span>
+                      </div>
+
+                      <div className="wp-doc-info">
+                        <div className="wp-doc-ico">
+                          <FontAwesomeIcon icon={faFilePdf} />
+                        </div>
+                        <div className="wp-doc-meta">
+                          <div className="wp-doc-name">
+                            {m.media_name || "Documento PDF"}
+                          </div>
+                          <div className="wp-doc-sub">
+                            PDF {m.media_size ? `• ${fmtBytes(m.media_size)}` : ""}
+                          </div>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ) : (
                     <a href={m.media_url} target="_blank" rel="noreferrer">
                       📎 {m.media_name || "Archivo"}{" "}
@@ -128,7 +175,7 @@ const BotMessageList = ({
                 </div>
               ) : null}
 
-              {m.text ? <div className="wp-bubble-text">{m.text}</div> : null}
+              {visibleText ? <div className="wp-bubble-text">{visibleText}</div> : null}
 
               <div className="wp-bubble-time">
                 {fmtHora(m.ts)} • {m.emisor}

@@ -19,7 +19,8 @@ const money = (value) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(Number(value || 0));
 
 const EMPTY = {
@@ -36,9 +37,11 @@ const EMPTY = {
   fuentes: {},
 };
 
-function MetricCard({ icon, title, value, detail, tone = "default" }) {
+function MetricCard({ icon, title, value, detail, tone = "default", keepValueVisible = false }) {
   return (
-    <article className={`admin-dashboard__metric is-${tone}`}>
+    <article
+      className={`admin-dashboard__metric is-${tone}${keepValueVisible ? " has-visible-value" : ""}`}
+    >
       <div className="admin-dashboard__metricIcon">
         <FontAwesomeIcon icon={icon} />
       </div>
@@ -244,6 +247,7 @@ export default function Dashboard() {
             value={money(contable.saldo_mes)}
             detail={`${Number(cuotas.cobros_registrados_mes || 0)} cobros registrados`}
             tone={balance < 0 ? "danger" : "balance"}
+            keepValueVisible
           />
         </section>
 
