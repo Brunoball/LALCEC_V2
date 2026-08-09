@@ -50,13 +50,6 @@ const NAV_ITEMS = [
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
   {
-    key: "bot-whatsapp",
-    label: "Bot WhatsApp",
-    path: BOT_PANEL_ROUTE,
-    icon: faRobot,
-    external: true,
-  },
-  {
     key: "categorias",
     label: "Categorías",
     path: "/categorias",
@@ -86,6 +79,13 @@ const NAV_ITEMS = [
       { key: "contable-egresos", label: "Egresos", path: "/contable/egresos" },
       { key: "contable-resumen", label: "Resumen", path: "/contable/resumen" },
     ],
+  },
+  {
+    key: "bot-whatsapp",
+    label: "Bot WhatsApp",
+    path: BOT_PANEL_ROUTE,
+    icon: faRobot,
+    external: true,
   },
 ];
 

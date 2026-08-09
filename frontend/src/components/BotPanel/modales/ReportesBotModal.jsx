@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowTrendUp,
@@ -110,6 +110,8 @@ const ReportesBotModal = ({ open, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const periodMenuRef = useRef(null);
+  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
 
   useModalEscapeStack(open, onClose);
 
@@ -143,6 +145,45 @@ const ReportesBotModal = ({ open, onClose }) => {
       : [];
     return [...new Set([current, period, ...raw].filter(Boolean))].sort().reverse();
   }, [data, now, period]);
+
+  const togglePeriodMenu = useCallback(() => {
+    if (loading) return;
+    setPeriodMenuOpen((prev) => !prev);
+  }, [loading]);
+
+  const handlePeriodSelect = useCallback((nextPeriod) => {
+    setPeriod(nextPeriod);
+    setPeriodMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!periodMenuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (periodMenuRef.current?.contains(event.target)) return;
+      setPeriodMenuOpen(false);
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setPeriodMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [periodMenuOpen]);
+
+  useEffect(() => {
+    if (!open) setPeriodMenuOpen(false);
+  }, [open]);
 
   if (!open) return null;
 
@@ -189,19 +230,45 @@ const ReportesBotModal = ({ open, onClose }) => {
           </div>
 
           <div className="wp-report-head-actions">
-            <label className="wp-report-period">
-              <FontAwesomeIcon icon={faCalendarDays} />
-              <select
-                value={period}
-                onChange={(event) => setPeriod(event.target.value)}
+            <div
+              className={`wp-report-period ${periodMenuOpen ? "is-open" : ""}`}
+              ref={periodMenuRef}
+            >
+              <button
+                type="button"
+                className="wp-report-period-trigger"
+                onClick={togglePeriodMenu}
                 aria-label="Período del reporte"
+                aria-haspopup="listbox"
+                aria-expanded={periodMenuOpen}
                 disabled={loading}
               >
-                {periodOptions.map((item) => (
-                  <option key={item} value={item}>{periodLabel(item)}</option>
-                ))}
-              </select>
-            </label>
+                <span className="wp-report-period-trigger-inner">
+                  <span className="wp-report-period-icon" aria-hidden="true">
+                    <FontAwesomeIcon icon={faCalendarDays} />
+                  </span>
+                  <span className="wp-report-period-value">{periodLabel(period)}</span>
+                  <span className="wp-report-period-chevron" aria-hidden="true" />
+                </span>
+              </button>
+
+              {periodMenuOpen ? (
+                <div className="wp-report-period-menu" role="listbox" aria-label="Opciones de período">
+                  {periodOptions.map((item) => (
+                    <button
+                      type="button"
+                      key={item}
+                      className={`wp-report-period-option ${item === period ? "is-selected" : ""}`}
+                      onClick={() => handlePeriodSelect(item)}
+                      role="option"
+                      aria-selected={item === period}
+                    >
+                      {periodLabel(item)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <button
               type="button"
