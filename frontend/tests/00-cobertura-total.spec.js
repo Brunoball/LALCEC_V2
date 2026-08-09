@@ -58,8 +58,10 @@ function frontendApiActions() {
 
 
 function botFrontendEndpoints() {
-  const botRoot = path.join(SRC_ROOT, 'components', 'BotPanel');
-  const botFiles = walk(botRoot, (file) => /\.(?:js|jsx)$/i.test(file));
+  // El contador verde/rojo del botón del bot vive en Principal, fuera de BotPanel.
+  // Escanear todo src evita que panel_unread_total (u otro uso futuro del API del bot)
+  // quede invisible para el contrato de cobertura.
+  const botFiles = walk(SRC_ROOT, (file) => /\.(?:js|jsx)$/i.test(file));
   const source = botFiles.map(read).join('\n');
   return [...new Set(
     [...source.matchAll(/bot(?:Panel|Management)(?:Get|Post|FormPost)\s*\(\s*["']([^"']+)/g)]
@@ -69,11 +71,22 @@ function botFrontendEndpoints() {
 
 function applicationRoutes() {
   const appSource = read(path.join(SRC_ROOT, 'App.js'));
-  return [...new Set(
-    [...appSource.matchAll(/<Route\s+path="([^"]+)"/g)]
-      .map((match) => match[1])
-      .filter((route) => route !== '*'),
-  )].sort();
+  const routes = [...appSource.matchAll(/<Route\s+path="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((route) => route !== '*');
+
+  // El Panel Bot usa una constante en App.js, por eso no entra en el regex literal.
+  // Resolverla desde config evita que /panel-bot quede fuera de la cobertura de navegación.
+  if (appSource.includes('path={BOT_PANEL_ROUTE}')) {
+    const configPath = path.join(SRC_ROOT, 'config', 'config.jsx');
+    if (fs.existsSync(configPath)) {
+      const configSource = read(configPath);
+      const match = configSource.match(/export const BOT_PANEL_ROUTE\s*=\s*["']([^"']+)/);
+      if (match?.[1]) routes.push(match[1]);
+    }
+  }
+
+  return [...new Set(routes)].sort();
 }
 
 const REQUIRED_UI_ACTION_MARKERS = [
@@ -134,7 +147,13 @@ const REQUIRED_UI_ACTION_MARKERS = [
   // Panel Bot WhatsApp.
   'Panel Bot WhatsApp',
   'Buscar por nombre, número, mensaje…',
-  'Ver alertas y errores del bot',
+  'Abrir reportes del bot',
+  'Reportes del Bot',
+  'Período del reporte',
+  'Resumen',
+  'Actividad',
+  'Pagos',
+  'Costos WhatsApp',
   'Filtrar por etiqueta',
   'Modo Bot',
   'Modo Manual',
@@ -150,12 +169,15 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Adjuntar imagen/PDF',
   'Emojis',
   'Enviar',
-  'Marcar revisado',
-  'Eliminar alerta',
-  'Aprobar comprobante',
-  'Rechazar',
+  'Mensajes de prioridad alta',
+  'Consultas atendidas',
+  'mensajes normales sin leer',
+  'mensajes de atención personalizada sin leer',
+  'Ventana 24 horas',
 ];
 
+// Alcance intencional: sistema administrativo completo + Panel Bot.
+// La lógica conversacional interna del chatbot se valida manualmente fuera de Playwright.
 test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
   test('el arranque del frontend no vuelve a envolver la aplicación en React.StrictMode', () => {
     const indexSource = read(path.join(SRC_ROOT, 'index.js'));
@@ -179,7 +201,8 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(cuotasSource).toContain('React.memo(function CuotasTableRows');
     expect(cuotasSource).toContain('cuotasApi.contextosPago');
     expect(cuotasApiSource).toContain('cuotas_contextos_pago');
-    expect(cuotasModalCss).toContain('width: min(100%, 190px)');
+    expect(cuotasModalCss).toContain('.cuotas-modal--payment.entity-modal');
+    expect(cuotasModalCss).toContain('width: min(920px, 100%)');
   });
 
   test('cada acción registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {

@@ -172,10 +172,10 @@ async function expectReceiptPopup(page, trigger) {
   await trigger();
   const popup = await popupPromise;
   await popup.waitForLoadState('domcontentloaded');
-  await expect(
-    popup.getByRole('region', { name: 'Comprobante de pago' }),
-  ).toBeVisible();
-  await expect(popup.locator('body')).toContainText(/Estado:\s*PAGADO/i);
+  // El comprobante actual es un div accesible por aria-label; no declara role="region".
+  const receipt = popup.locator('.gcuotas-comprobante[aria-label="Comprobante de pago"]');
+  await expect(receipt).toBeVisible();
+  await expect(receipt).toContainText(/Estado:\s*PAGADO/i);
   await popup.close();
 }
 

@@ -35,7 +35,9 @@ async function permanentDeleteCurrentPartner(page, row) {
   await expectToast(page, /eliminados definitivamente/i);
 }
 
-test.describe.configure({ mode: 'serial' });
+// Cada caso usa datos propios y cleanup independiente. Un crash nativo de Chromium/Windows
+// (0xC0000409) se reintenta una sola vez en un worker limpio sin saltear el resto.
+test.describe.configure({ retries: 1 });
 
 test.describe('Socios, empresas y familias', () => {
   test.afterEach(async ({ request }) => {
@@ -82,7 +84,17 @@ test.describe('Socios, empresas y familias', () => {
     await dialog.getByRole('textbox', { name: 'Domicilio', exact: true }).fill('CALLE PLAYWRIGHT');
     await dialog.getByLabel('Número').fill('123');
     await dialog.getByLabel('Localidad').fill('SAN FRANCISCO');
-    await dialog.getByLabel('Teléfono').fill(person.telefono);
+    const reminderCheckbox = dialog.getByRole('checkbox', { name: /Enviar recordatorios/i });
+    await expect(reminderCheckbox).toBeDisabled();
+    const phoneInput = dialog.getByRole('textbox', { name: 'Teléfono', exact: true });
+    await phoneInput.fill('123');
+    await expect(reminderCheckbox).toBeDisabled();
+
+    const formattedPhone = `+54 9 ${person.telefono.slice(0, 3)}-${person.telefono.slice(3)}`;
+    await phoneInput.fill(formattedPhone);
+    await phoneInput.blur();
+    await expect(phoneInput).toHaveValue(person.telefono);
+    await expect(reminderCheckbox).toBeEnabled();
     await dialog.getByLabel('Correo').fill(person.email);
     await dialog.getByLabel('Domicilio alternativo').fill('SEDE ALTERNATIVA PLAYWRIGHT');
     const categorySelect = dialog.getByLabel('Categoría');
@@ -96,9 +108,7 @@ test.describe('Socios, empresas y familias', () => {
       await usualPaymentSelect.selectOption({ index: 1 });
     }
     await dialog.getByLabel('Observaciones').fill('ALTA AUTOMÁTICA DE PLAYWRIGHT');
-    await dialog
-      .getByRole('checkbox', { name: /Enviar recordatorios/i })
-      .uncheck();
+    await reminderCheckbox.uncheck();
     await dialog.getByRole('button', { name: 'Crear socio' }).click();
     await expectToast(page, 'Registro creado correctamente.');
 
@@ -132,10 +142,13 @@ test.describe('Socios, empresas y familias', () => {
     dialog = page.getByRole('dialog', { name: 'Editar socio' });
     await dialog.getByLabel('Nombre *').fill(person.nombreEditado);
     await dialog.getByRole('tab', { name: 'Contacto y membresía' }).click();
-    await dialog.getByLabel('Teléfono').fill(`${person.telefono}9`);
-    await dialog
-      .getByRole('checkbox', { name: /Enviar recordatorios/i })
-      .check();
+    const editReminderCheckbox = dialog.getByRole('checkbox', { name: /Enviar recordatorios/i });
+    const editPhoneInput = dialog.getByRole('textbox', { name: 'Teléfono', exact: true });
+    await editPhoneInput.fill(`0${person.telefono.slice(0, 3)} 15 ${person.telefono.slice(3)}`);
+    await editPhoneInput.blur();
+    await expect(editPhoneInput).toHaveValue(person.telefono);
+    await expect(editReminderCheckbox).toBeEnabled();
+    await editReminderCheckbox.check();
     await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
     await expectToast(page, 'Registro actualizado correctamente.');
 
@@ -187,7 +200,7 @@ test.describe('Socios, empresas y familias', () => {
     }
     await dialog.getByRole('tab', { name: 'Contacto y membresía' }).click();
     await dialog.getByRole('textbox', { name: 'Domicilio', exact: true }).fill('AVENIDA E2E 456');
-    await dialog.getByLabel('Teléfono').fill(company.telefono);
+    await dialog.getByRole('textbox', { name: 'Teléfono', exact: true }).fill(company.telefono);
     await dialog.getByLabel('Correo').fill(company.email);
     await dialog.getByRole('button', { name: 'Crear empresa' }).click();
     await expectToast(page, 'Registro creado correctamente.');
