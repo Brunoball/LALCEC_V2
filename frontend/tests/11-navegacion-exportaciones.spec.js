@@ -41,7 +41,9 @@ async function exportBothFormats(page, button) {
   });
 }
 
-test.describe.configure({ mode: 'serial' });
+// Los recorridos son independientes. Si Chromium/Windows termina el worker de forma
+// nativa durante una exportación, reintenta solo ese caso una vez en un worker limpio.
+test.describe.configure({ retries: 1 });
 
 test.describe('Navegación, responsive, paginación y exportaciones', () => {
   test.afterEach(async ({ request }) => {
