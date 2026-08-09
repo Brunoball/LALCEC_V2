@@ -126,6 +126,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['cuotas_registrar_pagos', { pagos: [{ id_socio: personItem.id_socio }] }],
         ['cuotas_eliminar_pago', { id_pago: 1 }],
         ['contable_opcion_guardar', { tipo: 'PROVEEDOR', nombre: 'NO PERMITIDO' }],
+        ['contable_opcion_cambiar_estado', { id_opcion: 1, activo: false }],
         ['contable_opcion_eliminar', { id_opcion: 1 }],
         ['contable_ingreso_guardar', { fecha: '2026-08-05', importe: 100 }],
         ['contable_ingreso_eliminar', { id_ingreso: 1 }],
@@ -145,7 +146,9 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['descuentos_familiares_eliminar', { id: 1 }],
         ['configuracion_lista_guardar', { lista: 'medios_pago', nombre: 'NO PERMITIDO' }],
         ['configuracion_lista_eliminar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
+        ['configuracion_lista_baja', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['configuracion_lista_reactivar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
+        ['configuracion_lista_eliminar_definitivo', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['usuarios_guardar', { usuario: 'no_permitido' }],
         ['usuarios_cambiar_estado', { id: userItem.id, activo: false }],
         ['usuarios_eliminar', { id: userItem.id }],
@@ -257,7 +260,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
       await expect(page.getByRole('heading', { name: 'Configuración contable' })).toBeVisible();
       await expect(page.getByRole('button', { name: /Nueva persona o proveedor/i })).toHaveCount(0);
       await expect(page.getByRole('tab', { name: 'Personas / proveedores' })).toBeVisible();
-      await expect(page.locator('.config-list__actions button')).toHaveCount(0);
+      await expect(page.locator('.config-contableActions button')).toHaveCount(0);
 
       await page.goto('/configuracion/usuarios');
       await expect(page).toHaveURL(/\/configuracion$/);

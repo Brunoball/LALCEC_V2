@@ -4,11 +4,13 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowDown,
   faArrowLeft,
+  faArrowRotateLeft,
   faArrowUp,
   faCalculator,
   faCircleCheck,
   faList,
   faPen,
+  faPowerOff,
   faTag,
   faTrashCan,
   faUser,
@@ -36,6 +38,7 @@ const LIST_META = {
     detail: "Se comparte entre otros ingresos y egresos.",
     icon: faUser,
     empty: "Todavía no hay personas o proveedores configurados.",
+    deletedFieldLabel: "persona / proveedor",
   },
   CATEGORIA_INGRESO: {
     label: "categoría de ingreso",
@@ -45,6 +48,7 @@ const LIST_META = {
     detail: "Ejemplos: donaciones, eventos o campañas.",
     icon: faArrowUp,
     empty: "Todavía no hay categorías de ingresos configuradas.",
+    deletedFieldLabel: "categoría",
   },
   CONCEPTO_INGRESO: {
     label: "concepto de ingreso",
@@ -54,6 +58,7 @@ const LIST_META = {
     detail: "Permiten detallar el origen de cada ingreso manual.",
     icon: faList,
     empty: "Todavía no hay conceptos de ingresos configurados.",
+    deletedFieldLabel: "concepto",
   },
   CATEGORIA_EGRESO: {
     label: "categoría de egreso",
@@ -63,6 +68,7 @@ const LIST_META = {
     detail: "Ejemplos: servicios, insumos o mantenimiento.",
     icon: faArrowDown,
     empty: "Todavía no hay categorías de egresos configuradas.",
+    deletedFieldLabel: "categoría",
   },
   CONCEPTO_EGRESO: {
     label: "concepto de egreso",
@@ -72,6 +78,7 @@ const LIST_META = {
     detail: "Permiten identificar rápidamente para qué se realizó el gasto.",
     icon: faTag,
     empty: "Todavía no hay conceptos de egresos configurados.",
+    deletedFieldLabel: "concepto",
   },
 };
 
@@ -80,7 +87,7 @@ const initialLists = Object.keys(LIST_META).reduce((result, key) => {
   return result;
 }, {});
 
-function OptionList({ items, meta, writable, onEdit, onDelete }) {
+function OptionList({ items, meta, writable, onEdit, onState, onDelete }) {
   if (!items.length) {
     return (
       <div className="config-contableEmpty">
@@ -93,35 +100,61 @@ function OptionList({ items, meta, writable, onEdit, onDelete }) {
 
   return (
     <div className="config-contableTable__body">
-      {items.map((item) => (
-        <article className="config-contableTable__row" key={item.id_opcion}>
-          <div className="config-contableIdentity">
-            <span className="config-contableIdentity__icon" aria-hidden="true">
-              <FontAwesomeIcon icon={meta.icon} />
-            </span>
-            <div>
-              <strong>{item.nombre}</strong>
-              <small>{meta.title}</small>
+      {items.map((item) => {
+        const active = Boolean(item.activo);
+        const usageCount = Number(item.cantidad_usos || 0);
+        return (
+          <article
+            className={`config-contableTable__row ${active ? "" : "is-inactive"}`.trim()}
+            key={item.id_opcion}
+          >
+            <div className="config-contableIdentity">
+              <span className="config-contableIdentity__icon" aria-hidden="true">
+                <FontAwesomeIcon icon={meta.icon} />
+              </span>
+              <div>
+                <strong>{item.nombre}</strong>
+                <small>{meta.title}</small>
+              </div>
             </div>
-          </div>
-          <span className="config-contableStatus">
-            <FontAwesomeIcon icon={faCircleCheck} /> Disponible
-          </span>
-          <span className="config-contableUsage">Selectores de Contabilidad</span>
-          <div className="config-contableActions mov-actionsInline">
-            {writable ? (
-              <>
-                <button type="button" className="mov-iconBtn" onClick={() => onEdit(item)} title={`Editar ${meta.label}`} aria-label={`Editar ${item.nombre}`}>
-                  <FontAwesomeIcon icon={faPen} />
-                </button>
-                <button type="button" className="mov-iconBtn mov-iconBtn--danger" onClick={() => onDelete(item)} title={`Eliminar ${meta.label}`} aria-label={`Eliminar ${item.nombre}`}>
-                  <FontAwesomeIcon icon={faTrashCan} />
-                </button>
-              </>
-            ) : <span className="config-contableReadOnly">Solo lectura</span>}
-          </div>
-        </article>
-      ))}
+            <span className={`config-contableStatus ${active ? "is-active" : "is-inactive"}`}>
+              <FontAwesomeIcon icon={active ? faCircleCheck : faPowerOff} />
+              {active ? "Disponible" : "Baja"}
+            </span>
+            <span className="config-contableUsage">
+              <strong>{usageCount}</strong>{" "}
+              {usageCount === 1 ? "movimiento histórico" : "movimientos históricos"}
+            </span>
+            <div className="config-contableActions mov-actionsInline">
+              {writable ? (
+                <>
+                  <button type="button" className="mov-iconBtn" onClick={() => onEdit(item)} title={`Editar ${meta.label}`} aria-label={`Editar ${item.nombre}`}>
+                    <FontAwesomeIcon icon={faPen} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`mov-iconBtn ${active ? "mov-iconBtn--danger" : ""}`.trim()}
+                    onClick={() => onState(item)}
+                    title={active ? "Dar de baja" : "Reactivar"}
+                    aria-label={`${active ? "Dar de baja" : "Reactivar"} ${item.nombre}`}
+                  >
+                    <FontAwesomeIcon icon={active ? faPowerOff : faArrowRotateLeft} />
+                  </button>
+                  <button
+                    type="button"
+                    className="mov-iconBtn mov-iconBtn--danger"
+                    onClick={() => onDelete(item)}
+                    title="Eliminar definitivamente"
+                    aria-label={`Eliminar definitivamente ${item.nombre}`}
+                  >
+                    <FontAwesomeIcon icon={faTrashCan} />
+                  </button>
+                </>
+              ) : <span className="config-contableReadOnly">Solo lectura</span>}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -168,6 +201,7 @@ export default function ContableConfiguracion() {
   const [feedback, setFeedback] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ id_opcion: "", tipo: "PROVEEDOR", nombre: "" });
+  const [stateModal, setStateModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(null);
 
   const meta = LIST_META[activeType];
@@ -188,6 +222,9 @@ export default function ContableConfiguracion() {
     [lists],
   );
 
+  const activeCount = items.filter((item) => Boolean(item.activo)).length;
+  const inactiveCount = items.length - activeCount;
+
   const stats = [
     {
       icon: faCalculator,
@@ -197,24 +234,24 @@ export default function ContableConfiguracion() {
       tone: "total",
     },
     {
-      icon: meta.icon,
-      label: upper(meta.title),
-      value: items.length,
-      detail: "Opciones en la lista seleccionada",
+      icon: faCircleCheck,
+      label: "ACTIVAS",
+      value: activeCount,
+      detail: "Disponibles en nuevas operaciones",
       tone: "active",
     },
     {
-      icon: faCircleCheck,
-      label: "MOSTRANDO",
-      value: filteredItems.length,
-      detail: search.trim() ? "Coincidencias de la búsqueda" : "Opciones disponibles",
+      icon: faPowerOff,
+      label: "BAJAS",
+      value: inactiveCount,
+      detail: "Fuera de nuevas operaciones",
       tone: "visible",
     },
     {
       icon: faList,
-      label: "LISTAS",
-      value: Object.keys(LIST_META).length,
-      detail: "Catálogos de Contabilidad",
+      label: "MOSTRANDO",
+      value: filteredItems.length,
+      detail: search.trim() ? "Coincidencias de la búsqueda" : upper(meta.title),
       tone: "lists",
     },
   ];
@@ -288,6 +325,21 @@ export default function ContableConfiguracion() {
         type: "error",
         message: error.message || `No se pudo guardar la ${meta.label}.`,
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmState = async () => {
+    if (!stateModal) return { ok: false };
+    setSaving(true);
+    try {
+      const response = await contableApi.cambiarEstadoOpcion(
+        stateModal.id_opcion,
+        !stateModal.activo,
+      );
+      await loadOptions();
+      return response;
     } finally {
       setSaving(false);
     }
@@ -375,7 +427,7 @@ export default function ContableConfiguracion() {
           <div className="config-contableTable">
             <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
             {loading ? <ContableSkeleton /> : (
-              <OptionList items={filteredItems} meta={meta} writable={writable} onEdit={openEdit} onDelete={setDeleteModal} />
+              <OptionList items={filteredItems} meta={meta} writable={writable} onEdit={openEdit} onState={setStateModal} onDelete={setDeleteModal} />
             )}
           </div>
         </section>
@@ -410,12 +462,53 @@ export default function ContableConfiguracion() {
       </CrudModal>
 
       <ModalEliminarGlobal
+        open={Boolean(stateModal)}
+        operacion={stateModal?.activo ? "baja" : "alta"}
+        row={stateModal}
+        title={stateModal?.activo ? `Dar de baja ${meta.label}` : `Reactivar ${meta.label}`}
+        message={
+          stateModal?.activo
+            ? "La opción dejará de aparecer para nuevas operaciones, pero los movimientos ya registrados conservarán su información."
+            : "La opción volverá a estar disponible en los formularios de Contabilidad."
+        }
+        warning={
+          stateModal?.activo
+            ? "La baja es reversible y no elimina ningún ingreso o egreso histórico."
+            : ""
+        }
+        confirmLabel={stateModal?.activo ? "Dar de baja" : "Reactivar"}
+        loadingLabel={stateModal?.activo ? "Dando de baja..." : "Reactivando..."}
+        loadingMessage="Actualizando opción…"
+        successMessage={stateModal?.activo ? "Opción dada de baja correctamente." : "Opción reactivada correctamente."}
+        errorMessage="No se pudo actualizar el estado de la opción contable."
+        details={stateModal ? [
+          { label: "Opción", value: stateModal.nombre },
+          { label: "Lista", value: meta.title },
+          { label: "Movimientos históricos", value: Number(stateModal.cantidad_usos || 0) },
+        ] : []}
+        onClose={() => setStateModal(null)}
+        onConfirm={confirmState}
+        onToast={handleModalToast}
+        loading={saving}
+      />
+
+      <ModalEliminarGlobal
         open={Boolean(deleteModal)}
         operacion="eliminar"
         row={deleteModal}
         title={`Eliminar ${meta.label}`}
-        message="La opción se eliminará definitivamente de la configuración y dejará de aparecer en los selectores."
-        warning="Los ingresos y egresos ya registrados conservan el nombre que tenían guardado. Esta acción no se puede deshacer."
+        message={
+          Number(deleteModal?.cantidad_usos || 0) > 0
+            ? Number(deleteModal?.cantidad_usos || 0) === 1
+              ? `La opción se eliminará definitivamente. El movimiento asociado se conservará, pero quedará sin ${meta.deletedFieldLabel}.`
+              : `La opción se eliminará definitivamente. Los ${Number(deleteModal?.cantidad_usos || 0)} movimientos asociados se conservarán, pero quedarán sin ${meta.deletedFieldLabel}.`
+            : "La opción se eliminará definitivamente de la configuración."
+        }
+        warning={
+          Number(deleteModal?.cantidad_usos || 0) > 0
+            ? `Esta acción no se puede deshacer. Al confirmar, esos movimientos quedarán con el campo ${meta.deletedFieldLabel} vacío y sin información; los movimientos no se eliminarán.`
+            : "Esta acción no se puede deshacer."
+        }
         confirmLabel="Eliminar"
         loadingLabel="Eliminando..."
         loadingMessage="Eliminando opción…"
@@ -424,6 +517,7 @@ export default function ContableConfiguracion() {
         details={deleteModal ? [
           { label: "Opción", value: deleteModal.nombre },
           { label: "Lista", value: meta.title },
+          { label: "Movimientos históricos", value: Number(deleteModal.cantidad_usos || 0) },
         ] : []}
         onClose={() => setDeleteModal(null)}
         onConfirm={confirmDelete}

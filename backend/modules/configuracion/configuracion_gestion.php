@@ -76,6 +76,103 @@ trait ConfiguracionGestion
         }
     }
 
+
+    private static function establecerEstadoItemDatos(array $auth, array $body, bool $activo): array
+    {
+        $db = $auth['db'];
+        $definition = configuracion_lista_definicion($body['lista'] ?? null);
+        $id = positive_id($body['id'] ?? null, $definition['etiqueta']);
+
+        return transaction($db, static function () use ($db, $auth, $definition, $id, $activo): array {
+            $table = $definition['tabla'];
+            $idField = $definition['id_campo'];
+            $before = configuracion_item($db, $definition, $id, true);
+            if (!$before) {
+                api_error('La opción solicitada no existe.', 'OPCION_NO_ENCONTRADA', 404);
+            }
+
+            $db->prepare(
+                "UPDATE {$table}
+                 SET activo = ?, actualizado_en = NOW()
+                 WHERE {$idField} = ?"
+            )->execute([$activo ? 1 : 0, $id]);
+
+            $after = configuracion_item($db, $definition, $id);
+            $action = ($activo ? 'REACTIVAR_' : 'DAR_BAJA_') . $definition['entidad'];
+            $description = $activo
+                ? "Se reactivó {$definition['etiqueta']} {$before['nombre']}."
+                : "Se dio de baja {$definition['etiqueta']} {$before['nombre']}.";
+
+            audit_change(
+                $db,
+                $auth,
+                'CONFIGURACION',
+                $action,
+                $table,
+                $id,
+                $description,
+                $before,
+                $after
+            );
+
+            return [
+                'lista' => $definition['lista'],
+                'id' => $id,
+                'activo' => $activo,
+                'eliminado_definitivo' => false,
+                'item' => $after,
+            ];
+        });
+    }
+
+    private static function eliminarDefinitivoItemDatos(array $auth, array $body): array
+    {
+        $db = $auth['db'];
+        $definition = configuracion_lista_definicion($body['lista'] ?? null);
+        $id = positive_id($body['id'] ?? null, $definition['etiqueta']);
+
+        // ALTER TABLE hace commit implícito en MySQL/MariaDB, por eso la
+        // preparación de columnas nullable se realiza antes de la transacción.
+        configuracion_preparar_referencias_nullable($db, $definition);
+
+        return transaction($db, static function () use ($db, $auth, $definition, $id): array {
+            $table = $definition['tabla'];
+            $idField = $definition['id_campo'];
+            $before = configuracion_item($db, $definition, $id, true);
+            if (!$before) {
+                api_error('La opción solicitada no existe.', 'OPCION_NO_ENCONTRADA', 404);
+            }
+
+            $usageCount = configuracion_cantidad_usos($db, $definition, $id);
+            // Desvinculamos primero los hijos. Las FK pueden conservar RESTRICT:
+            // al momento del DELETE ya no existe ninguna referencia al catálogo.
+            $unlinkedCount = configuracion_desvincular_referencias($db, $definition, $id);
+            $db->prepare("DELETE FROM {$table} WHERE {$idField} = ?")->execute([$id]);
+
+            audit_change(
+                $db,
+                $auth,
+                'CONFIGURACION',
+                'ELIMINAR_' . $definition['entidad'],
+                $table,
+                $id,
+                "Se eliminó definitivamente {$definition['etiqueta']} {$before['nombre']} y {$unlinkedCount} registros asociados quedaron sin esa referencia.",
+                $before,
+                null
+            );
+
+            return [
+                'lista' => $definition['lista'],
+                'id' => $id,
+                'activo' => false,
+                'eliminado_definitivo' => true,
+                'cantidad_usos' => $usageCount,
+                'registros_desvinculados' => $unlinkedCount,
+                'item' => null,
+            ];
+        });
+    }
+
     private static function cambiarEstadoItemDatos(array $auth, array $body, bool $reactivate): array
     {
         $db = $auth['db'];

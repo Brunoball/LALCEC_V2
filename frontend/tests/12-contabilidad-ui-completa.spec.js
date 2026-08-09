@@ -547,7 +547,7 @@ test.describe('Contabilidad completa desde la interfaz', () => {
       const yearSelect = page.getByLabel('Año');
       await expect(yearSelect.locator(`option[value="${previousYear}"]`)).toHaveCount(1);
       await yearSelect.selectOption(String(previousYear));
-      await page.getByLabel('Mes').selectOption(String(month));
+      await page.getByLabel('Mes', { exact: true }).selectOption(String(month));
       await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(accountingYearPerson.dni);
 
       const row = rowByText(page, 'Listado de ingresos', accountingYearPerson.apellido);
@@ -572,6 +572,8 @@ test.describe('Contabilidad completa desde la interfaz', () => {
   test('cambia entre resumen anual y mensual y aplica todos sus filtros', async ({ page }) => {
     await page.goto('/contable/resumen');
     await expect(page.getByRole('tab', { name: 'Anual' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByLabel('Año')).toBeVisible();
+    await expect(page.getByLabel('Mes', { exact: true })).toHaveCount(0);
     await expect(
       page.getByRole('group', {
         name: 'Gráfico de barras de ingresos y egresos por mes',
@@ -596,8 +598,29 @@ test.describe('Contabilidad completa desde la interfaz', () => {
 
     const yearSelect = page.getByLabel('Año');
     await yearSelect.selectOption(await yearSelect.inputValue());
-    const monthSelect = page.getByLabel('Mes');
-    await monthSelect.selectOption(String(month));
-    await expect(monthSelect).toHaveValue(String(month));
+    const monthSelect = page.getByLabel('Mes', { exact: true });
+    await expect(monthSelect).toBeVisible();
+
+    const otherMonth = month === 1 ? 2 : 1;
+    const summaryRequest = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.searchParams.get('action') === 'contable_resumen' &&
+        Number(url.searchParams.get('mes')) === otherMonth &&
+        response.ok()
+      );
+    });
+    await monthSelect.selectOption(String(otherMonth));
+    const response = await summaryRequest;
+    const body = await response.json();
+
+    expect(body.resumen?.mes_seleccionado).toBe(otherMonth);
+    expect(body.resumen?.totales_mes).toEqual(expect.objectContaining({
+      mes: otherMonth,
+      ingresos: expect.any(String),
+      egresos: expect.any(String),
+      resultado: expect.any(String),
+    }));
+    await expect(monthSelect).toHaveValue(String(otherMonth));
   });
 });

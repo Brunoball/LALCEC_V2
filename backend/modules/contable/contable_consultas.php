@@ -90,9 +90,24 @@ trait ContableConsultas
         }
 
         $income = $totalPartner + $totalOther;
+        $selectedPartner = $partnerByMonth[$selectedMonth] ?? 0;
+        $selectedOther = $otherByMonth[$selectedMonth] ?? 0;
+        $selectedExpenses = $expensesByMonth[$selectedMonth] ?? 0;
+        $selectedIncome = $selectedPartner + $selectedOther;
+
         return [
             'anio' => $year,
             'mes_seleccionado' => $selectedMonth,
+            'totales_mes' => [
+                'mes' => $selectedMonth,
+                'nombre' => self::nombreMes($selectedMonth),
+                'ingresos_socios' => self::importeDesdeCentavos($selectedPartner),
+                'otros_ingresos' => self::importeDesdeCentavos($selectedOther),
+                'ingresos' => self::importeDesdeCentavos($selectedIncome),
+                'egresos' => self::importeDesdeCentavos($selectedExpenses),
+                'resultado' => self::importeDesdeCentavos($selectedIncome - $selectedExpenses),
+                'pagos_estimados' => $estimatedByMonth[$selectedMonth] ?? 0,
+            ],
             'totales' => [
                 'ingresos_socios' => self::importeDesdeCentavos($totalPartner),
                 'otros_ingresos' => self::importeDesdeCentavos($totalOther),
@@ -297,7 +312,7 @@ trait ContableConsultas
         foreach ($statement->fetchAll() as $row) {
             $amountCents = self::centavos($row['monto_calculado'] ?? 0);
             $isEstimated = (bool)$row['monto_estimado'];
-            $categoryName = (string)$row['categoria'];
+            $categoryName = $row['categoria'] === null ? null : (string)$row['categoria'];
             $items[] = [
                 'clave' => 'PAGO-' . (int)$row['id_pago'],
                 'origen' => 'CUOTA_SOCIO',
@@ -319,9 +334,10 @@ trait ContableConsultas
             ];
             $total += $amountCents;
             if ($isEstimated) $estimated++;
-            if (!isset($categories[$categoryName])) $categories[$categoryName] = ['registros' => 0, 'total' => 0];
-            $categories[$categoryName]['registros']++;
-            $categories[$categoryName]['total'] += $amountCents;
+            $summaryCategory = $categoryName === null || trim($categoryName) === '' ? 'SIN CATEGORÍA' : $categoryName;
+            if (!isset($categories[$summaryCategory])) $categories[$summaryCategory] = ['registros' => 0, 'total' => 0];
+            $categories[$summaryCategory]['registros']++;
+            $categories[$summaryCategory]['total'] += $amountCents;
         }
 
         return [
@@ -408,18 +424,18 @@ trait ContableConsultas
         $categories = [];
         foreach ($statement->fetchAll() as $row) {
             $amountCents = self::centavos($row['importe'] ?? 0);
-            $categoryName = (string)$row['categoria'];
+            $categoryName = $row['categoria'] === null ? null : (string)$row['categoria'];
             $item = [
                 $idColumn => (int)$row[$idColumn],
                 'fecha' => (string)$row['fecha'],
-                'id_medio_pago' => (int)$row['id_medio_pago'],
+                'id_medio_pago' => $row['id_medio_pago'] === null ? null : (int)$row['id_medio_pago'],
                 'id_proveedor' => $row['id_proveedor'] === null ? null : (int)$row['id_proveedor'],
                 'id_categoria' => $row['id_categoria'] === null ? null : (int)$row['id_categoria'],
                 'id_concepto' => $row['id_concepto'] === null ? null : (int)$row['id_concepto'],
                 'medio' => (string)$row['medio'],
-                'proveedor' => (string)$row['proveedor'],
+                'proveedor' => $row['proveedor'] === null ? null : (string)$row['proveedor'],
                 'categoria' => $categoryName,
-                'concepto' => (string)$row['concepto'],
+                'concepto' => $row['concepto'] === null ? null : (string)$row['concepto'],
                 'detalle' => $row['detalle'] === null ? '' : (string)$row['detalle'],
                 'importe' => self::importeDesdeCentavos($amountCents),
                 'creado_en' => (string)$row['creado_en'],
@@ -433,9 +449,10 @@ trait ContableConsultas
             }
             $items[] = $item;
             $total += $amountCents;
-            if (!isset($categories[$categoryName])) $categories[$categoryName] = ['registros' => 0, 'total' => 0];
-            $categories[$categoryName]['registros']++;
-            $categories[$categoryName]['total'] += $amountCents;
+            $summaryCategory = $categoryName === null || trim($categoryName) === '' ? 'SIN CATEGORÍA' : $categoryName;
+            if (!isset($categories[$summaryCategory])) $categories[$summaryCategory] = ['registros' => 0, 'total' => 0];
+            $categories[$summaryCategory]['registros']++;
+            $categories[$summaryCategory]['total'] += $amountCents;
         }
 
         return [

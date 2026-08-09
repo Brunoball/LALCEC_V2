@@ -178,11 +178,17 @@ function OptionSelect({
       >
         <option value="">SELECCIONE...</option>
         <option value="__ADD__">＋ AGREGAR NUEVA OPCIÓN</option>
-        {(options || []).map((option) => (
-          <option key={option.id_opcion} value={option.id_opcion}>
-            {option.nombre}
-          </option>
-        ))}
+        {(options || [])
+          .filter(
+            (option) =>
+              option.activo !== false || String(option.id_opcion) === String(value),
+          )
+          .map((option) => (
+            <option key={option.id_opcion} value={option.id_opcion}>
+              {option.nombre}
+              {option.activo === false ? " (INACTIVA)" : ""}
+            </option>
+          ))}
       </select>
     </FloatingField>
   );
@@ -311,7 +317,8 @@ function SummaryView({ summary, loading, mode }) {
   const selectedMonth = (summary?.meses || []).find(
     (item) => Number(item.mes) === Number(summary?.mes_seleccionado),
   );
-  const visibleTotals = mode === "monthly" ? selectedMonth || {} : totals;
+  const visibleTotals =
+    mode === "monthly" ? summary?.totales_mes || selectedMonth || {} : totals;
   const income = Number(visibleTotals.ingresos || 0);
   const expenses = Number(visibleTotals.egresos || 0);
   const result = Number(visibleTotals.resultado || income - expenses);
@@ -729,7 +736,7 @@ export default function ContableModule({ view = "summary" }) {
         ? {
             id_ingreso: String(item.id_ingreso),
             fecha: item.fecha,
-            id_medio_pago: String(item.id_medio_pago),
+            id_medio_pago: item.id_medio_pago ? String(item.id_medio_pago) : "",
             id_proveedor: item.id_proveedor ? String(item.id_proveedor) : "",
             id_categoria: item.id_categoria ? String(item.id_categoria) : "",
             id_concepto: item.id_concepto ? String(item.id_concepto) : "",
@@ -777,7 +784,7 @@ export default function ContableModule({ view = "summary" }) {
         ? {
             id_egreso: String(item.id_egreso),
             fecha: item.fecha,
-            id_medio_pago: String(item.id_medio_pago),
+            id_medio_pago: item.id_medio_pago ? String(item.id_medio_pago) : "",
             id_proveedor: item.id_proveedor ? String(item.id_proveedor) : "",
             id_categoria: item.id_categoria ? String(item.id_categoria) : "",
             id_concepto: item.id_concepto ? String(item.id_concepto) : "",
@@ -1127,7 +1134,8 @@ export default function ContableModule({ view = "summary" }) {
               { value: "monthly", label: "Mensual" },
             ],
           },
-          ...periodFilters,
+          periodFilters[0],
+          ...(summaryMode === "monthly" ? [periodFilters[1]] : []),
         ]
       : view === "income"
         ? [
@@ -1191,7 +1199,9 @@ export default function ContableModule({ view = "summary" }) {
     (item) => Number(item.mes) === Number(summary?.mes_seleccionado),
   );
   const summaryVisibleTotals =
-    summaryMode === "monthly" ? selectedSummaryMonth || {} : summary?.totales || {};
+    summaryMode === "monthly"
+      ? summary?.totales_mes || selectedSummaryMonth || {}
+      : summary?.totales || {};
   const summaryEstimatedPayments = Number(
     summaryVisibleTotals.pagos_estimados || 0,
   );
@@ -1350,15 +1360,15 @@ export default function ContableModule({ view = "summary" }) {
                       key={item.id_ingreso}
                     >
                       <div className="mov-gridCell entity-main-cell">
-                        <strong>{item.proveedor}</strong>
-                        <small>Categoría: {item.categoria || "Sin categoría"}</small>
+                        <strong>{item.proveedor || "—"}</strong>
+                        <small>Categoría: {item.categoria || "—"}</small>
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>
                       <div className="mov-gridCell entity-main-cell">
-                        <strong>{item.concepto}</strong>
+                        <strong>{item.concepto || "—"}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
                       </div>
                       <div className="mov-gridCell is-right is-strong contable-money-cell">
@@ -1405,8 +1415,8 @@ export default function ContableModule({ view = "summary" }) {
                       key={item.id_egreso}
                     >
                       <div className="mov-gridCell entity-main-cell">
-                        <strong>{item.proveedor}</strong>
-                        <small>Categoría: {item.categoria || "Sin categoría"}</small>
+                        <strong>{item.proveedor || "—"}</strong>
+                        <small>Categoría: {item.categoria || "—"}</small>
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
@@ -1415,7 +1425,7 @@ export default function ContableModule({ view = "summary" }) {
                         {item.numero_comprobante || "—"}
                       </div>
                       <div className="mov-gridCell entity-main-cell">
-                        <strong>{item.concepto}</strong>
+                        <strong>{item.concepto || "—"}</strong>
                         {item.detalle ? <small>{item.detalle}</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">{item.medio}</div>

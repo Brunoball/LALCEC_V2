@@ -33,51 +33,83 @@ function rowByText(page, tableName, text) {
 
 test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
 
-  test('elimina físicamente una opción usada sin romper el movimiento guardado', async ({ request }) => {
+  test('elimina definitivamente las cinco opciones contables usadas y conserva los movimientos con esos campos en null', async ({ request }) => {
     const suffix = uniqueSuffix();
     const date = todayIso();
     const [year, month] = date.split('-').map(Number);
-    const providerName = `PW E2E PROVEEDOR BORRABLE ${suffix}`;
-    const detail = `PW E2E HISTORICO ${suffix}`;
-    let providerId = null;
+    const incomeDetail = `PW E2E HISTORICO INGRESO ${suffix}`;
+    const expenseDetail = `PW E2E HISTORICO EGRESO ${suffix}`;
+    const optionDefinitions = [
+      { key: 'provider', type: 'PROVEEDOR', name: `PW E2E PROVEEDOR BORRABLE ${suffix}`, expectedUses: 2 },
+      { key: 'incomeCategory', type: 'CATEGORIA_INGRESO', name: `PW E2E CAT ING BORRABLE ${suffix}`, expectedUses: 1 },
+      { key: 'incomeConcept', type: 'CONCEPTO_INGRESO', name: `PW E2E CON ING BORRABLE ${suffix}`, expectedUses: 1 },
+      { key: 'expenseCategory', type: 'CATEGORIA_EGRESO', name: `PW E2E CAT EGR BORRABLE ${suffix}`, expectedUses: 1 },
+      { key: 'expenseConcept', type: 'CONCEPTO_EGRESO', name: `PW E2E CON EGR BORRABLE ${suffix}`, expectedUses: 1 },
+    ];
+    const options = {};
     let incomeId = null;
+    let expenseId = null;
 
     try {
       const catalogs = await apiCall(request, 'contable_catalogos');
       const mean = catalogs.medios_pago?.[0];
-      const incomeCategory = firstOption(catalogs, 'CATEGORIA_INGRESO');
-      const incomeConcept = firstOption(catalogs, 'CONCEPTO_INGRESO');
-      expect(mean).toBeTruthy();
+      expect(mean, 'Debe existir al menos un medio de pago activo').toBeTruthy();
 
-      const createdProvider = await apiCall(request, 'contable_opcion_guardar', {
-        method: 'POST',
-        data: { tipo: 'PROVEEDOR', nombre: providerName },
-      });
-      providerId = Number(createdProvider.item.id_opcion);
+      for (const definition of optionDefinitions) {
+        const created = await apiCall(request, 'contable_opcion_guardar', {
+          method: 'POST',
+          data: { tipo: definition.type, nombre: definition.name },
+        });
+        options[definition.key] = Number(created.item.id_opcion);
+        expect(options[definition.key]).toBeGreaterThan(0);
+      }
 
       const savedIncome = await apiCall(request, 'contable_ingreso_guardar', {
         method: 'POST',
         data: {
           fecha: date,
           id_medio_pago: mean.id_medio_pago,
-          id_proveedor: providerId,
-          id_categoria: incomeCategory.id_opcion,
-          id_concepto: incomeConcept.id_opcion,
+          id_proveedor: options.provider,
+          id_categoria: options.incomeCategory,
+          id_concepto: options.incomeConcept,
           importe: 150.25,
-          detalle: detail,
+          detalle: incomeDetail,
         },
       });
       incomeId = Number(savedIncome.id_ingreso);
 
-      const removed = await apiCall(request, 'contable_opcion_eliminar', {
+      const savedExpense = await apiCall(request, 'contable_egreso_guardar', {
         method: 'POST',
-        data: { id_opcion: providerId },
+        data: {
+          fecha: date,
+          id_medio_pago: mean.id_medio_pago,
+          id_proveedor: options.provider,
+          id_categoria: options.expenseCategory,
+          id_concepto: options.expenseConcept,
+          numero_comprobante: `NULL-${suffix}`,
+          importe: 75.5,
+          detalle: expenseDetail,
+        },
       });
-      expect(removed.eliminado_definitivo).toBe(true);
-      providerId = null;
+      expenseId = Number(savedExpense.id_egreso);
+
+      for (const definition of optionDefinitions) {
+        const removed = await apiCall(request, 'contable_opcion_eliminar', {
+          method: 'POST',
+          data: { id_opcion: options[definition.key] },
+        });
+        expect(removed.eliminado_definitivo).toBe(true);
+        expect(removed.cantidad_usos).toBe(definition.expectedUses);
+        expect(removed.registros_desvinculados).toBe(definition.expectedUses);
+        options[definition.key] = null;
+      }
 
       const configured = await apiCall(request, 'contable_opciones_configuracion');
-      expect((configured.listas?.PROVEEDOR || []).some((item) => item.nombre === providerName)).toBe(false);
+      for (const definition of optionDefinitions) {
+        expect(
+          (configured.listas?.[definition.type] || []).some((item) => item.nombre === definition.name),
+        ).toBe(false);
+      }
 
       const incomes = await apiCall(request, 'contable_ingresos_listar', {
         params: { anio: year, mes: month, buscar: suffix },
@@ -85,8 +117,29 @@ test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
       expect(incomes.items).toEqual(expect.arrayContaining([
         expect.objectContaining({
           id_ingreso: incomeId,
-          proveedor: providerName,
-          detalle: detail,
+          id_proveedor: null,
+          id_categoria: null,
+          id_concepto: null,
+          proveedor: null,
+          categoria: null,
+          concepto: null,
+          detalle: incomeDetail,
+        }),
+      ]));
+
+      const expenses = await apiCall(request, 'contable_egresos_listar', {
+        params: { anio: year, mes: month, buscar: suffix },
+      });
+      expect(expenses.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id_egreso: expenseId,
+          id_proveedor: null,
+          id_categoria: null,
+          id_concepto: null,
+          proveedor: null,
+          categoria: null,
+          concepto: null,
+          detalle: expenseDetail,
         }),
       ]));
     } finally {
@@ -96,14 +149,131 @@ test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
           data: { id_ingreso: incomeId },
         }).catch(() => undefined);
       }
-      if (providerId) {
+      if (expenseId) {
+        await apiCall(request, 'contable_egreso_eliminar', {
+          method: 'POST',
+          data: { id_egreso: expenseId },
+        }).catch(() => undefined);
+      }
+      for (const id of Object.values(options)) {
+        if (!id) continue;
         await apiCall(request, 'contable_opcion_eliminar', {
           method: 'POST',
-          data: { id_opcion: providerId },
+          data: { id_opcion: id },
         }).catch(() => undefined);
       }
     }
   });
+
+  test('elimina un medio de pago usado por ingresos y egresos y deja los movimientos sin medio', async ({ request }) => {
+    const suffix = uniqueSuffix();
+    const date = todayIso();
+    const [year, month] = date.split('-').map(Number);
+    const mediumName = `PW E2E MEDIO CONTABLE ${suffix}`;
+    const incomeDetail = `PW E2E MEDIO NULL ING ${suffix}`;
+    const expenseDetail = `PW E2E MEDIO NULL EGR ${suffix}`;
+    let mediumId = null;
+    let incomeId = null;
+    let expenseId = null;
+
+    try {
+      const catalogs = await apiCall(request, 'contable_catalogos');
+      const provider = firstOption(catalogs, 'PROVEEDOR');
+      const incomeCategory = firstOption(catalogs, 'CATEGORIA_INGRESO');
+      const incomeConcept = firstOption(catalogs, 'CONCEPTO_INGRESO');
+      const expenseCategory = firstOption(catalogs, 'CATEGORIA_EGRESO');
+      const expenseConcept = firstOption(catalogs, 'CONCEPTO_EGRESO');
+
+      const createdMedium = await apiCall(request, 'configuracion_lista_guardar', {
+        method: 'POST',
+        data: { lista: 'medios_pago', nombre: mediumName },
+      });
+      mediumId = Number(createdMedium.item.id_medio_pago);
+      expect(mediumId).toBeGreaterThan(0);
+
+      const savedIncome = await apiCall(request, 'contable_ingreso_guardar', {
+        method: 'POST',
+        data: {
+          fecha: date,
+          id_medio_pago: mediumId,
+          id_proveedor: provider.id_opcion,
+          id_categoria: incomeCategory.id_opcion,
+          id_concepto: incomeConcept.id_opcion,
+          importe: 210.5,
+          detalle: incomeDetail,
+        },
+      });
+      incomeId = Number(savedIncome.id_ingreso);
+
+      const savedExpense = await apiCall(request, 'contable_egreso_guardar', {
+        method: 'POST',
+        data: {
+          fecha: date,
+          id_medio_pago: mediumId,
+          id_proveedor: provider.id_opcion,
+          id_categoria: expenseCategory.id_opcion,
+          id_concepto: expenseConcept.id_opcion,
+          numero_comprobante: `MEDIO-${suffix}`,
+          importe: 110.25,
+          detalle: expenseDetail,
+        },
+      });
+      expenseId = Number(savedExpense.id_egreso);
+
+      const removed = await apiCall(request, 'configuracion_lista_eliminar_definitivo', {
+        method: 'POST',
+        data: { lista: 'medios_pago', id: mediumId },
+      });
+      expect(removed.eliminado_definitivo).toBe(true);
+      expect(removed.cantidad_usos).toBe(2);
+      expect(removed.registros_desvinculados).toBe(2);
+      mediumId = null;
+
+      const incomes = await apiCall(request, 'contable_ingresos_listar', {
+        params: { anio: year, mes: month, buscar: suffix },
+      });
+      expect(incomes.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id_ingreso: incomeId,
+          id_medio_pago: null,
+          medio: 'SIN ESPECIFICAR',
+          detalle: incomeDetail,
+        }),
+      ]));
+
+      const expenses = await apiCall(request, 'contable_egresos_listar', {
+        params: { anio: year, mes: month, buscar: suffix },
+      });
+      expect(expenses.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id_egreso: expenseId,
+          id_medio_pago: null,
+          medio: 'SIN ESPECIFICAR',
+          detalle: expenseDetail,
+        }),
+      ]));
+    } finally {
+      if (incomeId) {
+        await apiCall(request, 'contable_ingreso_eliminar', {
+          method: 'POST',
+          data: { id_ingreso: incomeId },
+        }).catch(() => undefined);
+      }
+      if (expenseId) {
+        await apiCall(request, 'contable_egreso_eliminar', {
+          method: 'POST',
+          data: { id_egreso: expenseId },
+        }).catch(() => undefined);
+      }
+      if (mediumId) {
+        await apiCall(request, 'configuracion_lista_eliminar_definitivo', {
+          method: 'POST',
+          data: { lista: 'medios_pago', id: mediumId },
+        }).catch(() => undefined);
+      }
+    }
+  });
+
   test('integra todos los submódulos y refleja los movimientos en el resumen', async ({ page, request }) => {
     const suffix = uniqueSuffix();
     const date = todayIso();
@@ -215,6 +385,16 @@ test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
       }));
       const currentMonth = summary.meses.find((item) => Number(item.mes) === month);
       expect(currentMonth).toBeTruthy();
+      expect(summary.mes_seleccionado).toBe(month);
+      expect(summary.totales_mes).toEqual(expect.objectContaining({
+        mes: month,
+        ingresos_socios: currentMonth.ingresos_socios,
+        otros_ingresos: currentMonth.otros_ingresos,
+        ingresos: currentMonth.ingresos,
+        egresos: currentMonth.egresos,
+        resultado: currentMonth.resultado,
+        pagos_estimados: currentMonth.pagos_estimados,
+      }));
       expect(Number(currentMonth.otros_ingresos)).toBeGreaterThanOrEqual(incomeAmount);
       expect(Number(currentMonth.egresos)).toBeGreaterThanOrEqual(expenseAmount);
       expect(Number(currentMonth.resultado)).toBeCloseTo(

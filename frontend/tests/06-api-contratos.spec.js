@@ -57,6 +57,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['contable_egresos_listar', 'GET'],
       ['contable_egreso_archivo', 'GET', { params: { id: 1 } }],
       ['contable_opcion_guardar', 'POST', { data: {} }],
+      ['contable_opcion_cambiar_estado', 'POST', { data: {} }],
       ['contable_opcion_eliminar', 'POST', { data: {} }],
       ['contable_ingreso_guardar', 'POST', { data: {} }],
       ['contable_ingreso_eliminar', 'POST', { data: {} }],
@@ -86,7 +87,9 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['configuracion_obtener', 'GET'],
       ['configuracion_lista_guardar', 'POST', { data: {} }],
       ['configuracion_lista_eliminar', 'POST', { data: {} }],
+      ['configuracion_lista_baja', 'POST', { data: {} }],
       ['configuracion_lista_reactivar', 'POST', { data: {} }],
+      ['configuracion_lista_eliminar_definitivo', 'POST', { data: {} }],
       ['usuarios_listar', 'GET'],
       ['usuarios_guardar', 'POST', { data: {} }],
       ['usuarios_cambiar_estado', 'POST', { data: {} }],
@@ -142,6 +145,12 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       'contable_opcion_guardar',
       { method: 'POST', data: { tipo: 'TIPO_INEXISTENTE', nombre: 'PRUEBA' } },
       { status: 422, code: 'TIPO_OPCION_INVALIDO' },
+    );
+    await expectApiError(
+      request,
+      'contable_opcion_cambiar_estado',
+      { method: 'POST', data: { id_opcion: 1, activo: 'tal vez' } },
+      { status: 422, code: 'ESTADO_OPCION_INVALIDO' },
     );
     await expectApiError(
       request,
@@ -449,7 +458,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     }
   });
 
-  test('los dos catálogos validan altas, duplicados, baja física, baja lógica y reactivación', async ({ request }) => {
+  test('los dos catálogos validan altas, duplicados, baja, reactivación y eliminación definitiva con desvinculación', async ({ request }) => {
     const suffix = uniqueSuffix();
     const definitions = [
       {
@@ -494,36 +503,60 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           { status: 409, code: 'NOMBRE_DUPLICADO' },
         );
 
-        const removed = await apiCall(request, 'configuracion_lista_eliminar', {
+        // Conservamos también la ruta histórica configuracion_lista_eliminar como
+        // contrato de compatibilidad: hoy equivale a eliminación definitiva.
+        const removedUnused = await apiCall(request, 'configuracion_lista_eliminar', {
           method: 'POST',
           data: { lista: definition.list, id: unused[definition.idField] },
         });
-        expect(removed.eliminado_definitivo).toBe(true);
+        expect(removedUnused.eliminado_definitivo).toBe(true);
+        expect(removedUnused.cantidad_usos).toBe(0);
+        expect(removedUnused.registros_desvinculados).toBe(0);
         expect(await findCatalogByName(request, definition.list, definition.name)).toBeNull();
 
         const used = await createCatalog(request, definition.list, definition.usedName);
+        let owner;
         if (definition.type === 'PERSONA') {
-          await createPerson(request, definition.owner, {
+          owner = await createPerson(request, definition.owner, {
             id_medio_pago: used[definition.idField],
           });
         } else {
-          await createCompany(request, definition.owner, {
+          owner = await createCompany(request, definition.owner, {
             id_condicion_iva: used[definition.idField],
           });
         }
 
-        const disabled = await apiCall(request, 'configuracion_lista_eliminar', {
+        const disabled = await apiCall(request, 'configuracion_lista_baja', {
           method: 'POST',
           data: { lista: definition.list, id: used[definition.idField] },
         });
         expect(disabled.eliminado_definitivo).toBe(false);
         expect(disabled.item.activo).toBe(false);
 
+        const stillLinkedWhileInactive = await apiCall(request, 'socios_obtener', {
+          params: { id: owner.id_socio },
+        });
+        expect(stillLinkedWhileInactive.item[definition.idField]).toBe(used[definition.idField]);
+
         const reactivated = await apiCall(request, 'configuracion_lista_reactivar', {
           method: 'POST',
           data: { lista: definition.list, id: used[definition.idField] },
         });
         expect(reactivated.item.activo).toBe(true);
+
+        const removedUsed = await apiCall(request, 'configuracion_lista_eliminar_definitivo', {
+          method: 'POST',
+          data: { lista: definition.list, id: used[definition.idField] },
+        });
+        expect(removedUsed.eliminado_definitivo).toBe(true);
+        expect(removedUsed.cantidad_usos).toBeGreaterThanOrEqual(1);
+        expect(removedUsed.registros_desvinculados).toBeGreaterThanOrEqual(1);
+        expect(await findCatalogByName(request, definition.list, definition.usedName)).toBeNull();
+
+        const ownerAfterDelete = await apiCall(request, 'socios_obtener', {
+          params: { id: owner.id_socio },
+        });
+        expect(ownerAfterDelete.item[definition.idField]).toBeNull();
       }
     } finally {
       for (const definition of definitions) {

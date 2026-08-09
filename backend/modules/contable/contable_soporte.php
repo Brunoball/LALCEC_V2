@@ -45,7 +45,7 @@ trait ContableSoporte
     protected static function opcion(PDO $db, int $id, string $expectedType): array
     {
         $statement = $db->prepare(
-            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
+            'SELECT id_opcion, tipo, nombre, activo, creado_en, actualizado_en
              FROM contable_opciones
              WHERE id_opcion = ?
              LIMIT 1'
@@ -59,6 +59,7 @@ trait ContableSoporte
             'id_opcion' => (int)$row['id_opcion'],
             'tipo' => (string)$row['tipo'],
             'nombre' => (string)$row['nombre'],
+            'activo' => (bool)$row['activo'],
             'creado_en' => (string)$row['creado_en'],
             'actualizado_en' => (string)$row['actualizado_en'],
         ];
@@ -155,7 +156,7 @@ trait ContableSoporte
     {
         $suffix = $lock ? ' FOR UPDATE' : '';
         $statement = $db->prepare(
-            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
+            'SELECT id_opcion, tipo, nombre, activo, creado_en, actualizado_en
              FROM contable_opciones
              WHERE id_opcion = ?' . $suffix
         );
@@ -167,6 +168,7 @@ trait ContableSoporte
             'id_opcion' => (int)$row['id_opcion'],
             'tipo' => (string)$row['tipo'],
             'nombre' => (string)$row['nombre'],
+            'activo' => (bool)$row['activo'],
             'creado_en' => (string)$row['creado_en'],
             'actualizado_en' => (string)$row['actualizado_en'],
         ];
@@ -175,9 +177,9 @@ trait ContableSoporte
     protected static function opcionesConfiguracionDatos(PDO $db): array
     {
         $rows = $db->query(
-            'SELECT id_opcion, tipo, nombre, creado_en, actualizado_en
+            'SELECT id_opcion, tipo, nombre, activo, creado_en, actualizado_en
              FROM contable_opciones
-             ORDER BY tipo ASC, nombre ASC, id_opcion ASC'
+             ORDER BY tipo ASC, activo DESC, nombre ASC, id_opcion ASC'
         )->fetchAll();
 
         $lists = [];
@@ -185,29 +187,67 @@ trait ContableSoporte
         foreach (self::TIPOS_OPCION as $type) {
             $lists[$type] = [];
             $summary[$type . '_total'] = 0;
+            $summary[$type . '_activos'] = 0;
+            $summary[$type . '_inactivos'] = 0;
         }
 
         foreach ($rows as $row) {
             $type = (string)$row['tipo'];
+            $active = (bool)$row['activo'];
+            $usageCount = self::cantidadUsosOpcion($db, $type, (string)$row['nombre']);
             $lists[$type][] = [
                 'id_opcion' => (int)$row['id_opcion'],
                 'tipo' => $type,
                 'nombre' => (string)$row['nombre'],
+                'activo' => $active,
+                'cantidad_usos' => $usageCount,
                 'creado_en' => (string)$row['creado_en'],
                 'actualizado_en' => (string)$row['actualizado_en'],
             ];
             $summary[$type . '_total']++;
+            $summary[$type . ($active ? '_activos' : '_inactivos')]++;
         }
 
         return ['listas' => $lists, 'resumen' => $summary];
     }
 
+    protected static function cantidadUsosOpcion(PDO $db, string $type, string $name): int
+    {
+        $queries = match ($type) {
+            'PROVEEDOR' => [
+                ['SELECT COUNT(*) FROM contable_ingresos WHERE proveedor = ?', $name],
+                ['SELECT COUNT(*) FROM contable_egresos WHERE proveedor = ?', $name],
+            ],
+            'CATEGORIA_INGRESO' => [
+                ['SELECT COUNT(*) FROM contable_ingresos WHERE categoria = ?', $name],
+            ],
+            'CONCEPTO_INGRESO' => [
+                ['SELECT COUNT(*) FROM contable_ingresos WHERE concepto = ?', $name],
+            ],
+            'CATEGORIA_EGRESO' => [
+                ['SELECT COUNT(*) FROM contable_egresos WHERE categoria = ?', $name],
+            ],
+            'CONCEPTO_EGRESO' => [
+                ['SELECT COUNT(*) FROM contable_egresos WHERE concepto = ?', $name],
+            ],
+            default => [],
+        };
+
+        $total = 0;
+        foreach ($queries as [$sql, $value]) {
+            $statement = $db->prepare($sql);
+            $statement->execute([$value]);
+            $total += (int)$statement->fetchColumn();
+        }
+        return $total;
+    }
+
     protected static function catalogosBase(PDO $db): array
     {
         $options = $db->query(
-            'SELECT id_opcion, tipo, nombre
+            'SELECT id_opcion, tipo, nombre, activo
              FROM contable_opciones
-             ORDER BY tipo, nombre'
+             ORDER BY tipo, activo DESC, nombre'
         )->fetchAll();
         $grouped = [];
         foreach (self::TIPOS_OPCION as $type) $grouped[$type] = [];
@@ -215,6 +255,7 @@ trait ContableSoporte
             $grouped[(string)$option['tipo']][] = [
                 'id_opcion' => (int)$option['id_opcion'],
                 'nombre' => (string)$option['nombre'],
+                'activo' => (bool)$option['activo'],
             ];
         }
 

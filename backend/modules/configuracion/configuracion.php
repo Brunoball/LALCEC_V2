@@ -34,13 +34,22 @@ final class Configuracion
     public static function eliminarItem(): never
     {
         $auth = require_admin();
-        $result = self::cambiarEstadoItemDatos($auth, request_body(), false);
-        api_success(
-            $result,
-            !empty($result['eliminado_definitivo'])
-                ? 'La opción se eliminó definitivamente.'
-                : 'La opción se dio de baja porque posee registros asociados.'
-        );
+        $result = self::eliminarDefinitivoItemDatos($auth, request_body());
+        api_success($result, 'La opción se eliminó definitivamente.');
+    }
+
+    public static function darBajaItem(): never
+    {
+        $auth = require_admin();
+        $result = self::establecerEstadoItemDatos($auth, request_body(), false);
+        api_success($result, 'La opción se dio de baja correctamente.');
+    }
+
+    public static function eliminarDefinitivoItem(): never
+    {
+        $auth = require_admin();
+        $result = self::eliminarDefinitivoItemDatos($auth, request_body());
+        api_success($result, 'La opción se eliminó definitivamente.');
     }
 
     public static function reactivarItem(): never

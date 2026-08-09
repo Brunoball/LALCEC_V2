@@ -10,6 +10,7 @@ import {
   faGear,
   faMoneyBillTransfer,
   faPen,
+  faPowerOff,
   faSliders,
   faTrashCan,
   faUsers,
@@ -44,6 +45,7 @@ const CATALOG_META = {
     inactivePlural: "inactivos",
     empty: "Todavía no hay medios de pago configurados.",
     maxLength: 100,
+    deletedFieldLabel: "medio de pago",
   },
   condiciones_iva: {
     label: "condición frente al IVA",
@@ -58,6 +60,7 @@ const CATALOG_META = {
     inactivePlural: "inactivas",
     empty: "Todavía no hay condiciones frente al IVA configuradas.",
     maxLength: 100,
+    deletedFieldLabel: "condición frente al IVA",
   },
 };
 
@@ -187,7 +190,7 @@ function CatalogStat({ icon, label, value, detail, tone }) {
   );
 }
 
-function CatalogTable({ items, loading, meta, writable, onEdit, onState }) {
+function CatalogTable({ items, loading, meta, writable, onEdit, onState, onDelete }) {
   return (
     <div
       className="config-catalogTable"
@@ -226,7 +229,7 @@ function CatalogTable({ items, loading, meta, writable, onEdit, onState }) {
             const id = item[meta.idField];
             const usageCount = Number(item.cantidad_usos || 0);
             const active = Boolean(item.activo);
-            const stateAction = active ? "eliminar" : "reactivar";
+            const stateAction = active ? "baja" : "reactivar";
 
             return (
               <div
@@ -288,18 +291,25 @@ function CatalogTable({ items, loading, meta, writable, onEdit, onState }) {
                         type="button"
                         className={`mov-iconBtn ${active ? "mov-iconBtn--danger" : ""}`.trim()}
                         onClick={() => onState(item, stateAction)}
-                        title={
-                          active
-                            ? usageCount
-                              ? "Dar de baja"
-                              : "Eliminar"
-                            : "Reactivar"
-                        }
-                        aria-label={`${active ? (usageCount ? "Dar de baja" : "Eliminar") : "Reactivar"} ${item.nombre}`}
+                        title={active ? "Dar de baja" : "Reactivar"}
+                        aria-label={`${active ? "Dar de baja" : "Reactivar"} ${item.nombre}`}
                       >
                         <FontAwesomeIcon
-                          icon={active ? faTrashCan : faArrowRotateLeft}
+                          icon={active ? faPowerOff : faArrowRotateLeft}
                         />
+                      </button>
+                      <button
+                        type="button"
+                        className="mov-iconBtn mov-iconBtn--danger"
+                        onClick={() => onDelete(item)}
+                        title={
+                          usageCount > 0
+                            ? "Eliminar definitivamente; los registros asociados quedarán sin esta información"
+                            : "Eliminar definitivamente"
+                        }
+                        aria-label={`Eliminar definitivamente ${item.nombre}`}
+                      >
+                        <FontAwesomeIcon icon={faTrashCan} />
                       </button>
                     </>
                   ) : (
@@ -330,6 +340,7 @@ function CatalogsPanel() {
   const [form, setForm] = useState(emptyForm());
   const [formOpen, setFormOpen] = useState(false);
   const [stateModal, setStateModal] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -439,7 +450,23 @@ function CatalogsPanel() {
       const response =
         stateModal.action === "reactivar"
           ? await configuracionApi.reactivarItem(activeList, id)
-          : await configuracionApi.eliminarItem(activeList, id);
+          : await configuracionApi.darBajaItem(activeList, id);
+      void cargar();
+      return response;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModal) return { ok: false };
+    setSaving(true);
+    try {
+      const id = deleteModal[meta.idField];
+      const response = await configuracionApi.eliminarDefinitivoItem(
+        activeList,
+        id,
+      );
       void cargar();
       return response;
     } finally {
@@ -448,8 +475,6 @@ function CatalogsPanel() {
   };
 
   const usageCount = Number(stateModal?.item?.cantidad_usos || 0);
-  const definitiveDelete =
-    stateModal?.action === "eliminar" && usageCount === 0;
 
   return (
     <>
@@ -537,6 +562,7 @@ function CatalogsPanel() {
             writable={writable}
             onEdit={openEdit}
             onState={(item, action) => setStateModal({ item, action })}
+            onDelete={setDeleteModal}
           />
         </section>
       </ModulePage>
@@ -599,58 +625,38 @@ function CatalogsPanel() {
 
       <ModalEliminarGlobal
         open={Boolean(stateModal)}
-        operacion={
-          stateModal?.action === "reactivar"
-            ? "alta"
-            : definitiveDelete
-              ? "eliminar"
-              : "baja"
-        }
+        operacion={stateModal?.action === "reactivar" ? "alta" : "baja"}
         row={stateModal?.item || null}
         title={
           stateModal?.action === "reactivar"
             ? `Reactivar ${meta.label}`
-            : definitiveDelete
-              ? `Eliminar ${meta.label}`
-              : `Dar de baja ${meta.label}`
+            : `Dar de baja ${meta.label}`
         }
         message={
           stateModal?.action === "reactivar"
-            ? "La opción volverá a aparecer en los formularios del sistema."
-            : definitiveDelete
-              ? "La opción no fue utilizada y se eliminará definitivamente."
-              : "La opción posee registros asociados. Se dará de baja para conservar el historial y dejará de aparecer en nuevas operaciones."
+            ? "La opción volverá a estar disponible en nuevas operaciones."
+            : "La opción dejará de aparecer en nuevas operaciones, pero los registros existentes conservarán su información."
         }
         warning={
-          definitiveDelete
-            ? "Esta acción no se puede deshacer."
-            : "Los registros existentes conservarán esta opción asociada."
+          stateModal?.action === "reactivar"
+            ? ""
+            : "Dar de baja no elimina el historial y se puede revertir en cualquier momento."
         }
         confirmLabel={
-          stateModal?.action === "reactivar"
-            ? "Reactivar"
-            : definitiveDelete
-              ? "Eliminar"
-              : "Dar de baja"
+          stateModal?.action === "reactivar" ? "Reactivar" : "Dar de baja"
         }
         loadingLabel={
           stateModal?.action === "reactivar"
             ? "Reactivando..."
-            : "Procesando..."
+            : "Dando de baja..."
         }
-        loadingMessage={
-          stateModal?.action === "reactivar"
-            ? "Reactivando opción…"
-            : "Actualizando opción…"
-        }
+        loadingMessage="Actualizando opción…"
         successMessage={
           stateModal?.action === "reactivar"
             ? "Opción reactivada correctamente."
-            : definitiveDelete
-              ? "Opción eliminada correctamente."
-              : "Opción dada de baja correctamente."
+            : "Opción dada de baja correctamente."
         }
-        errorMessage="No se pudo actualizar la opción."
+        errorMessage="No se pudo actualizar el estado de la opción."
         details={
           stateModal
             ? [
@@ -662,6 +668,46 @@ function CatalogsPanel() {
         }
         onClose={() => setStateModal(null)}
         onConfirm={confirmState}
+        onToast={handleModalToast}
+        loading={saving}
+      />
+
+      <ModalEliminarGlobal
+        open={Boolean(deleteModal)}
+        operacion="eliminar"
+        row={deleteModal}
+        title={`Eliminar ${meta.label}`}
+        message={
+          Number(deleteModal?.cantidad_usos || 0) > 0
+            ? Number(deleteModal?.cantidad_usos || 0) === 1
+              ? `La opción se eliminará definitivamente. El registro asociado se conservará, pero quedará sin ${meta.deletedFieldLabel}.`
+              : `La opción se eliminará definitivamente. Los ${Number(deleteModal?.cantidad_usos || 0)} registros asociados se conservarán, pero quedarán sin ${meta.deletedFieldLabel}.`
+            : "La opción se eliminará definitivamente de la configuración."
+        }
+        warning={
+          Number(deleteModal?.cantidad_usos || 0) > 0
+            ? `Esta acción no se puede deshacer. Al confirmar, esos registros quedarán con el campo ${meta.deletedFieldLabel} vacío y sin información.`
+            : "Esta acción no se puede deshacer."
+        }
+        confirmLabel="Eliminar"
+        loadingLabel="Eliminando..."
+        loadingMessage="Eliminando opción…"
+        successMessage="Opción eliminada definitivamente."
+        errorMessage="No se pudo eliminar definitivamente la opción."
+        details={
+          deleteModal
+            ? [
+                { label: "Opción", value: deleteModal.nombre },
+                { label: "Sección", value: meta.title },
+                {
+                  label: "Registros asociados",
+                  value: Number(deleteModal.cantidad_usos || 0),
+                },
+              ]
+            : []
+        }
+        onClose={() => setDeleteModal(null)}
+        onConfirm={confirmDelete}
         onToast={handleModalToast}
         loading={saving}
       />

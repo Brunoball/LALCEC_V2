@@ -227,13 +227,7 @@ async function cleanupCatalogByName(requestContext, listName, itemName) {
     (row) => String(row.nombre).toUpperCase() === String(itemName).toUpperCase(),
   );
   if (!item) return false;
-  if (!item.activo) {
-    await apiCall(requestContext, 'configuracion_lista_reactivar', {
-      method: 'POST',
-      data: { lista: listName, id: item[idField] },
-    });
-  }
-  await apiCall(requestContext, 'configuracion_lista_eliminar', {
+  await apiCall(requestContext, 'configuracion_lista_eliminar_definitivo', {
     method: 'POST',
     data: { lista: listName, id: item[idField] },
   });

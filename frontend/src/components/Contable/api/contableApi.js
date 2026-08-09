@@ -13,6 +13,11 @@ export const contableApi = {
   ingresos: (params) => apiGet("contable_ingresos_listar", params),
   egresos: (params) => apiGet("contable_egresos_listar", params),
   guardarOpcion: (payload) => apiPost("contable_opcion_guardar", payload),
+  cambiarEstadoOpcion: (idOpcion, activo) =>
+    apiPost("contable_opcion_cambiar_estado", {
+      id_opcion: idOpcion,
+      activo,
+    }),
   eliminarOpcion: (idOpcion) =>
     apiPost("contable_opcion_eliminar", { id_opcion: idOpcion }),
   guardarIngreso: (payload) => apiPost("contable_ingreso_guardar", payload),

@@ -69,6 +69,19 @@ final class Contable
         );
     }
 
+    public static function cambiarEstadoOpcion(): never
+    {
+        $auth = require_admin();
+        ensure_contable_schema($auth['db']);
+        $result = self::cambiarEstadoOpcionDatos($auth, request_body());
+        api_success(
+            $result,
+            !empty($result['activo'])
+                ? 'La opción se reactivó correctamente.'
+                : 'La opción se dio de baja correctamente.'
+        );
+    }
+
     public static function eliminarOpcion(): never
     {
         $auth = require_admin();

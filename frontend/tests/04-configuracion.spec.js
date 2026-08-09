@@ -1,5 +1,6 @@
 const { test, expect } = require('./fixtures/auth.fixture');
 const {
+  apiCall,
   cleanupCatalogByName,
   cleanupContableOptionByName,
   cleanupSocioByDocument,
@@ -136,7 +137,7 @@ test.describe('Configuración general', () => {
       return;
     }
 
-    if (title === 'da de baja y reactiva desde la UI los catálogos generales que ya están en uso') {
+    if (title === 'da de baja, reactiva y elimina definitivamente catálogos usados dejando la relación en null') {
       for (const definition of usedCatalogs) {
         try {
           await cleanupSocioByDocument(request, {
@@ -244,7 +245,7 @@ test.describe('Configuración general', () => {
       await search.fill(catalog.edited);
       row = catalogTableRow(page, catalog.tab, catalog.edited);
       await expect(row).toBeVisible();
-      await row.getByRole('button', { name: `Eliminar ${catalog.edited}` }).click();
+      await row.getByRole('button', { name: `Eliminar definitivamente ${catalog.edited}` }).click();
 
       const deleteDialog = page.getByRole('dialog').filter({
         hasText: new RegExp(`Eliminar ${catalog.label}`, 'i'),
@@ -256,7 +257,7 @@ test.describe('Configuración general', () => {
     }
   });
 
-  test('da de baja y reactiva desde la UI los catálogos generales que ya están en uso', async ({ page, request }) => {
+  test('da de baja, reactiva y elimina definitivamente catálogos usados dejando la relación en null', async ({ page, request }) => {
     for (const definition of usedCatalogs) {
       await cleanupSocioByDocument(request, {
         tipo: definition.type,
@@ -267,12 +268,13 @@ test.describe('Configuración general', () => {
       await cleanupCatalogByName(request, definition.list, definition.name).catch(() => false);
 
       const catalog = await createCatalog(request, definition.list, definition.name);
+      let ownerRecord;
       if (definition.type === 'PERSONA') {
-        await createPerson(request, definition.owner, {
+        ownerRecord = await createPerson(request, definition.owner, {
           id_medio_pago: catalog[definition.idField],
         });
       } else {
-        await createCompany(request, definition.owner, {
+        ownerRecord = await createCompany(request, definition.owner, {
           id_condicion_iva: catalog[definition.idField],
         });
       }
@@ -286,11 +288,12 @@ test.describe('Configuración general', () => {
       const usageCell = row.locator('.config-catalogUsage');
       await expect(usageCell.getByText('1', { exact: true })).toBeVisible();
       await expect(usageCell.getByText('registro asociado', { exact: true })).toBeVisible();
+
       await row.getByRole('button', { name: `Dar de baja ${definition.name}` }).click();
       let stateDialog = page.getByRole('dialog', { name: `Dar de baja ${definition.label}` });
-      await expect(stateDialog).toContainText(/registros existentes conservarán esta opción asociada/i);
+      await expect(stateDialog).toContainText(/dar de baja no elimina el historial y se puede revertir en cualquier momento/i);
       await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
-      await expectToast(page, /se dio de baja.*registros asociados/i);
+      await expectToast(page, /opción se dio de baja correctamente/i);
 
       await search.fill(definition.name);
       row = catalogTableRow(page, definition.tab, definition.name);
@@ -298,11 +301,25 @@ test.describe('Configuración general', () => {
       await row.getByRole('button', { name: `Reactivar ${definition.name}` }).click();
       stateDialog = page.getByRole('dialog', { name: `Reactivar ${definition.label}` });
       await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
-      await expectToast(page, /se reactivó correctamente/i);
+      await expectToast(page, /opción se reactivó correctamente/i);
 
       await search.fill(definition.name);
       row = catalogTableRow(page, definition.tab, definition.name);
       await expect(row).toContainText('Activo');
+
+      await row.getByRole('button', { name: `Eliminar definitivamente ${definition.name}` }).click();
+      const deleteDialog = page.getByRole('dialog', { name: `Eliminar ${definition.label}` });
+      await expect(deleteDialog).toContainText(/registro asociado se conservará/i);
+      await expect(deleteDialog).toContainText(/quedará sin/i);
+      await expect(deleteDialog).toContainText(/vacío y sin información/i);
+      await deleteDialog.getByRole('button', { name: 'Eliminar' }).click();
+      await expectToast(page, /opción se eliminó definitivamente/i);
+      await expect(catalogTableRow(page, definition.tab, definition.name)).toHaveCount(0);
+
+      const ownerAfterDelete = await apiCall(request, 'socios_obtener', {
+        params: { id: ownerRecord.id_socio },
+      });
+      expect(ownerAfterDelete.item[definition.idField]).toBeNull();
     }
   });
 
@@ -333,7 +350,7 @@ test.describe('Configuración general', () => {
       await search.fill(list.original);
       let row = contableOptionCard(page, list.original);
       await expect(row.getByText('Disponible', { exact: true })).toBeVisible();
-      await expect(row.getByText('Selectores de Contabilidad', { exact: true })).toBeVisible();
+      await expect(row.getByText('0 movimientos históricos', { exact: true })).toBeVisible();
 
       await row.getByRole('button', { name: `Editar ${list.original}` }).click();
       dialog = page.getByRole('dialog', { name: `Editar ${list.label}` });
@@ -344,7 +361,25 @@ test.describe('Configuración general', () => {
       await search.fill(list.edited);
       row = contableOptionCard(page, list.edited);
       await expect(row).toBeVisible();
-      await row.getByRole('button', { name: `Eliminar ${list.edited}` }).click();
+
+      await row.getByRole('button', { name: `Dar de baja ${list.edited}` }).click();
+      let stateDialog = page.getByRole('dialog', { name: `Dar de baja ${list.label}` });
+      await expect(stateDialog).toContainText(/la baja es reversible y no elimina ningún ingreso o egreso histórico/i);
+      await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
+      await expectToast(page, /la opción se dio de baja correctamente/i);
+
+      await search.fill(list.edited);
+      row = contableOptionCard(page, list.edited);
+      await expect(row.getByText('Baja', { exact: true })).toBeVisible();
+      await row.getByRole('button', { name: `Reactivar ${list.edited}` }).click();
+      stateDialog = page.getByRole('dialog', { name: `Reactivar ${list.label}` });
+      await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
+      await expectToast(page, /la opción se reactivó correctamente/i);
+
+      await search.fill(list.edited);
+      row = contableOptionCard(page, list.edited);
+      await expect(row.getByText('Disponible', { exact: true })).toBeVisible();
+      await row.getByRole('button', { name: `Eliminar definitivamente ${list.edited}` }).click();
       const deleteDialog = page.getByRole('dialog').filter({
         hasText: new RegExp(`Eliminar ${list.label}`, 'i'),
       });

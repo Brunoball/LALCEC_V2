@@ -12,6 +12,7 @@ function register_contable_routes(Router $router): void
     $router->register('contable_ingresos_listar', 'GET', [Contable::class, 'listarIngresos'], true);
     $router->register('contable_egresos_listar', 'GET', [Contable::class, 'listarEgresos'], true);
     $router->register('contable_opcion_guardar', 'POST', [Contable::class, 'guardarOpcion'], true);
+    $router->register('contable_opcion_cambiar_estado', 'POST', [Contable::class, 'cambiarEstadoOpcion'], true);
     $router->register('contable_opcion_eliminar', 'POST', [Contable::class, 'eliminarOpcion'], true);
     $router->register('contable_ingreso_guardar', 'POST', [Contable::class, 'guardarIngreso'], true);
     $router->register('contable_ingreso_eliminar', 'POST', [Contable::class, 'eliminarIngreso'], true);
