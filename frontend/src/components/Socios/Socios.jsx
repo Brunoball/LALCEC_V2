@@ -4,6 +4,7 @@ import {
   faAddressBook,
   faBell,
   faBuilding,
+  faCalendarDays,
   faCheck,
   faCircleInfo,
   faClockRotateLeft,
@@ -158,8 +159,11 @@ const COMPANY_EXPORT_COLUMNS = [
   { label: "Empresa", key: "denominacion" },
   { label: "CUIT", value: (item) => item.cuit || "—" },
   {
-    label: "Condición IVA",
-    value: (item) => item.condicion_iva || "SIN INFORMAR",
+    label: "Domicilio",
+    value: (item) =>
+      [item.localidad, item.domicilio, item.numero_domicilio]
+        .filter(Boolean)
+        .join(" · ") || "SIN DOMICILIO",
   },
   { label: "Categoría", value: (item) => item.categoria || "SIN CATEGORÍA" },
   { label: "Fecha de alta", value: (item) => formatDate(item.fecha_alta) },
@@ -206,6 +210,7 @@ function paginationItems(currentPage, totalPages) {
 const SociosRows = memo(function SociosRows({
   items,
   isCompany,
+  categoryAmounts,
   writable,
   onHistory,
   onEdit,
@@ -220,35 +225,30 @@ const SociosRows = memo(function SociosRows({
     >
       <div className="mov-gridCell entity-main-cell">
         <strong>{item.denominacion}</strong>
-        {!isCompany ? (
-          <small>
-            {[item.localidad, item.domicilio, item.numero_domicilio]
-              .filter(Boolean)
-              .join(" · ") || "SIN DOMICILIO"}
-          </small>
-        ) : null}
+        <small>
+          {[item.localidad, item.domicilio, item.numero_domicilio]
+            .filter(Boolean)
+            .join(" · ") || "SIN DOMICILIO"}
+        </small>
       </div>
       <div className="mov-gridCell is-strong">
         {isCompany ? item.cuit || "—" : item.dni || "—"}
       </div>
-      <div className="mov-gridCell">
-        {isCompany ? (
-          item.condicion_iva || "—"
-        ) : item.categoria ? (
-          <span className="mov-categoryChip">{item.categoria}</span>
+      <div className="mov-gridCell socios-category-cell">
+        {item.categoria ? (
+          <>
+            <span className="mov-categoryChip">{item.categoria}</span>
+            <small className="socios-category-amount">
+              {formatMoney(
+                item.monto_cuota ??
+                  categoryAmounts?.[String(item.id_categoria)],
+              )}
+            </small>
+          </>
         ) : (
           "—"
         )}
       </div>
-      {isCompany ? (
-        <div className="mov-gridCell">
-          {item.categoria ? (
-            <span className="mov-categoryChip">{item.categoria}</span>
-          ) : (
-            "—"
-          )}
-        </div>
-      ) : null}
       <div className="mov-gridCell entity-main-cell">
         <span>{item.telefono || "—"}</span>
         <small>{item.email || ""}</small>
@@ -315,6 +315,60 @@ const SociosRows = memo(function SociosRows({
   ));
 });
 
+function PaymentYearSelector({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event) => {
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
+
+  return (
+    <div className="socios-payment-year-chip" ref={containerRef}>
+      <button
+        type="button"
+        className={open ? "is-open" : ""}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Año ${value}`}
+      >
+        <FontAwesomeIcon icon={faCalendarDays} />
+        <span>{value}</span>
+        <i aria-hidden="true" />
+      </button>
+
+      {open ? (
+        <div className="socios-payment-year-chip__menu" role="listbox">
+          {options.map((year) => {
+            const selected = Number(year) === Number(value);
+            return (
+              <button
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={selected ? "is-selected" : ""}
+                key={year}
+                onClick={() => {
+                  onChange(year);
+                  setOpen(false);
+                }}
+              >
+                {year}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PaymentCalendar({ payments = [], item }) {
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -372,18 +426,11 @@ function PaymentCalendar({ payments = [], item }) {
       <div className="socios-payments-toolbar">
         <div className="socios-payments-control">
           <strong>Año</strong>
-          <div className="socios-payments-years">
-            {years.map((year) => (
-              <button
-                type="button"
-                key={year}
-                className={year === selectedYear ? "is-active" : ""}
-                onClick={() => setSelectedYear(year)}
-              >
-                {year}
-              </button>
-            ))}
-          </div>
+          <PaymentYearSelector
+            value={selectedYear}
+            options={years}
+            onChange={setSelectedYear}
+          />
         </div>
         <div className="socios-payments-control">
           <strong>Estado</strong>
@@ -921,6 +968,16 @@ export default function Socios({ tipo = PERSON }) {
   );
   const { items, catalogos, paginacion, loading, error, cargar } =
     useSocios(filters);
+  const categoryAmounts = useMemo(
+    () =>
+      Object.fromEntries(
+        (catalogos.categorias || []).map((item) => [
+          String(item.id_categoria),
+          item.monto_cuota,
+        ]),
+      ),
+    [catalogos.categorias],
+  );
 
   const refreshKeepingTableScroll = useCallback(async () => {
     pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
@@ -1243,7 +1300,6 @@ export default function Socios({ tipo = PERSON }) {
               ? [
                   "Empresa",
                   "CUIT",
-                  "Condición IVA",
                   "Categoría",
                   "Contacto",
                   "Recordatorio",
@@ -1269,6 +1325,7 @@ export default function Socios({ tipo = PERSON }) {
           <SociosRows
             items={items}
             isCompany={isCompany}
+            categoryAmounts={categoryAmounts}
             writable={writable}
             onHistory={openHistory}
             onEdit={openEdit}

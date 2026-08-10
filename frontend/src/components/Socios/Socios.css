@@ -11,13 +11,12 @@
 
 .socios-grid--empresa {
   grid-template-columns:
-    minmax(0, 1.75fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.25fr)
-    minmax(0, 0.55fr)
-    minmax(0, 1.15fr)
+    minmax(0, 2.1fr)
+    minmax(0, 0.8fr)
+    minmax(0, 1fr)
+    minmax(0, 1.1fr)
     minmax(0, 0.75fr)
-    minmax(0, 0.9fr);
+    minmax(0, 0.82fr);
 }
 
 .socios-grid {
@@ -98,11 +97,26 @@
 .socios-grid--persona > :nth-child(6),
 .socios-grid--empresa > :nth-child(2),
 .socios-grid--empresa > :nth-child(3),
-.socios-grid--empresa > :nth-child(4),
-.socios-grid--empresa > :nth-child(6),
-.socios-grid--empresa > :nth-child(7) {
+.socios-grid--empresa > :nth-child(5),
+.socios-grid--empresa > :nth-child(6) {
   justify-content: center;
   text-align: center;
+}
+
+
+.socios-category-cell {
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.socios-category-amount {
+  display: block;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .entity-wrap-text {
@@ -164,6 +178,16 @@
   font-size: 11px;
 }
 
+/* En las fichas de Socios/Empresas el contenido de las tarjetas nunca se corta. */
+.socios-info-modal .entity-info-summary__item span,
+.socios-info-modal .entity-info-summary__item strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Estado de pagos estilo calendario. */
 .socios-payments-card {
   display: grid;
@@ -204,29 +228,97 @@
   font-weight: 700;
 }
 
-.socios-payments-years {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+.socios-payment-year-chip {
+  position: relative;
 }
 
-.socios-payments-years button {
-  min-width: 45px;
-  height: 27px;
-  padding: 0 9px;
-  border: 1px solid var(--border-color);
+.socios-payment-year-chip > button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid
+    color-mix(in srgb, var(--entity-modal-action) 32%, var(--border-color));
   border-radius: 999px;
-  color: var(--entity-modal-text);
+  color: var(--entity-modal-action);
+  background: color-mix(in srgb, var(--entity-modal-action) 5%, #fff);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 760;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.socios-payment-year-chip > button:hover,
+.socios-payment-year-chip > button.is-open {
+  border-color: var(--entity-modal-action);
+  background: color-mix(in srgb, var(--entity-modal-action) 10%, #fff);
+  box-shadow: 0 5px 15px -12px rgb(15 23 42 / 0.8);
+}
+
+.socios-payment-year-chip > button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--entity-modal-action) 18%, transparent);
+}
+
+.socios-payment-year-chip > button i {
+  width: 0;
+  height: 0;
+  border-top: 4px solid currentColor;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+  transition: transform 150ms ease;
+}
+
+.socios-payment-year-chip > button.is-open i {
+  transform: rotate(180deg);
+}
+
+.socios-payment-year-chip__menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 30;
+  width: 94px;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   background: #fff;
-  font-size: 11px;
-  font-weight: 650;
+  box-shadow: 0 16px 32px -18px rgb(15 23 42 / 0.62);
+}
+
+.socios-payment-year-chip__menu > button {
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--entity-modal-ink);
+  background: var(--surface-color);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 740;
   cursor: pointer;
 }
 
-.socios-payments-years button.is-active {
-  color: var(--entity-modal-action);
-  border-color: color-mix(in srgb, var(--entity-modal-action) 45%, #fff);
-  background: color-mix(in srgb, var(--entity-modal-action) 7%, #fff);
+.socios-payment-year-chip__menu > button:hover,
+.socios-payment-year-chip__menu > button.is-selected {
+  border-color: color-mix(
+    in srgb,
+    var(--entity-modal-action) 30%,
+    transparent
+  );
+  color: #fff;
+  background: var(--entity-modal-action);
 }
 
 .socios-payment-status {

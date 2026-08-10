@@ -136,7 +136,7 @@
 .entity-info-summary__item strong {
   overflow: hidden;
   color: var(--entity-modal-ink);
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;

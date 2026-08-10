@@ -386,10 +386,10 @@
 }
 
 .socios-info-modal .entity-info-summary__item > svg {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  padding: 10px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 7px;
   border: 1px solid
     color-mix(in srgb, var(--socios-info-card-tone) 28%, transparent);
   border-radius: var(--blue-inst-radius, 12px);
@@ -413,7 +413,6 @@
 
 .socios-info-modal .entity-info-summary__item strong {
   color: var(--entity-modal-ink);
-  font-size: clamp(15px, 1.6vw, 19px);
   line-height: 1.05;
   letter-spacing: -0.025em;
 }
