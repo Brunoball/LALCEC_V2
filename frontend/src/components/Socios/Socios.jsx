@@ -234,7 +234,7 @@ const SociosRows = memo(function SociosRows({
       <div className="mov-gridCell is-strong">
         {isCompany ? item.cuit || "—" : item.dni || "—"}
       </div>
-      <div className="mov-gridCell socios-category-cell">
+      <div className="mov-gridCell socios-category-cell socios-category-cell--inline">
         {item.categoria ? (
           <>
             <span className="mov-categoryChip">{item.categoria}</span>

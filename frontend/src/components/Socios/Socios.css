@@ -3,7 +3,7 @@
   grid-template-columns:
     minmax(0, 2.1fr)
     minmax(0, 0.65fr)
-    minmax(0, 0.55fr)
+    minmax(0, 0.72fr)
     minmax(0, 1.1fr)
     minmax(0, 0.75fr)
     minmax(0, 0.82fr);
@@ -117,6 +117,35 @@
   font-weight: 700;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+.socios-category-cell--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.socios-category-cell--inline .mov-categoryChip {
+  flex-shrink: 0;
+}
+
+.socios-category-cell--inline .socios-category-amount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-500, #f97316) 10%, #ffffff);
+  color: var(--primary-700, #c2410c);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-500, #f97316) 20%, transparent);
 }
 
 .entity-wrap-text {
