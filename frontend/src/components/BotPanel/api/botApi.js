@@ -1,4 +1,5 @@
 import { BOT_URL } from "../../../config/config";
+import { clearSession, getSession } from "../../_shared/auth/session";
 
 const BOT_SECTIONS = Object.freeze({
   panel: "endpoints",
@@ -54,12 +55,14 @@ const request = async (
   endpoint,
   { method = "GET", params, body, formData, signal } = {},
 ) => {
+  const session = getSession();
   const response = await fetch(buildBotUrl(section, endpoint, params), {
     method,
     signal,
     cache: "no-store",
     headers: {
       Accept: "application/json",
+      ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -67,6 +70,10 @@ const request = async (
   });
 
   const data = await parseResponse(response);
+
+  if (response.status === 401) {
+    clearSession();
+  }
 
   if (!response.ok || !data?.success) {
     const error = new Error(

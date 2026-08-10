@@ -2,7 +2,7 @@ const withoutTrailingSlash = (value) =>
   String(value || "").trim().replace(/\/+$/, "");
 
 const BASE_URL = withoutTrailingSlash(
-  process.env.REACT_APP_API_URL || "http://localhost:3001/routes",
+  process.env.REACT_APP_API_URL || "https://lalcec.3devsnet.com/api/routes",
 );
 
 // Ruta interna del frontend para abrir el panel del bot.
@@ -18,3 +18,7 @@ export const BOT_URL = withoutTrailingSlash(
 export default BASE_URL;
 
 // php -c "C:\\php\\php.ini" -S localhost:3001
+// npx playwright test --project=chromium --workers=1 --reporter=list
+
+//https://lalcec.3devsnet.com/api/routes
+//http://localhost:3001/routes

@@ -27,7 +27,54 @@ function ProtectedLayout() {
 }
 
 function ProtectedPage({ children }) {
-  return isAuthenticated() ? children : <Navigate to="/" replace />;
+  if (isAuthenticated()) return children;
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: "24px",
+        background: "#f5f7fb",
+        color: "#1f2937",
+      }}
+    >
+      <section
+        style={{
+          width: "min(100%, 460px)",
+          padding: "36px",
+          borderRadius: "18px",
+          background: "#ffffff",
+          boxShadow: "0 18px 50px rgba(15, 23, 42, 0.12)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: "42px", marginBottom: "14px" }}>🔒</div>
+        <h1 style={{ margin: "0 0 12px", fontSize: "24px" }}>
+          No tenés acceso para acceder al panel
+        </h1>
+        <p style={{ margin: "0 0 24px", color: "#64748b", lineHeight: 1.5 }}>
+          Iniciá sesión en el sistema LALCEC para abrir el Panel Bot.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.replace("/")}
+          style={{
+            border: 0,
+            borderRadius: "10px",
+            padding: "12px 18px",
+            background: "#f47b20",
+            color: "#ffffff",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Ir al inicio de sesión
+        </button>
+      </section>
+    </main>
+  );
 }
 
 export default function App() {
