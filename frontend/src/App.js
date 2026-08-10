@@ -16,7 +16,7 @@ import Usuarios from "./components/Configuracion/secciones/Usuarios";
 import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
 import ContableConfiguracion from "./components/Configuracion/secciones/ContableConfiguracion";
 import BotPanel from "./components/BotPanel/BotPanel";
-import { BOT_PANEL_ROUTE } from "./config/config";
+import { BOT_PANEL_ROUTE, isLocalFrontendRuntime } from "./config/config";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   isAuthenticated,
@@ -27,7 +27,10 @@ function ProtectedLayout() {
 }
 
 function ProtectedPage({ children }) {
-  if (isAuthenticated()) return children;
+  // En desarrollo local se permite abrir el Panel Bot aunque BOT_URL apunte
+  // a la instalación de Hostinger. En cualquier dominio real (producción),
+  // el acceso directo a /panel-bot continúa exigiendo una sesión válida.
+  if (isLocalFrontendRuntime() || isAuthenticated()) return children;
 
   return (
     <main

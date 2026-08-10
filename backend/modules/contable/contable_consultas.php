@@ -254,11 +254,19 @@ trait ContableConsultas
         $search = self::textoBusqueda($filters['buscar'] ?? '');
         $categoryId = self::idOpcional($filters['categoria'] ?? null, 'categoría');
         $meanId = self::idOpcional($filters['medio'] ?? null, 'medio de pago');
+        $partnerType = strtoupper(trim((string)($filters['tipo'] ?? '')));
+        if ($partnerType !== '' && !in_array($partnerType, ['PERSONA', 'EMPRESA'], true)) {
+            api_error('El tipo de socio indicado no es válido.', 'TIPO_SOCIO_INVALIDO', 422);
+        }
         [$start, $end] = self::rangoMes($year, $month);
         $paymentAmount = self::importePagoSql();
 
         $where = ['p.fecha_pago >= ?', 'p.fecha_pago < ?'];
         $params = [$start, $end];
+        if ($partnerType !== '') {
+            $where[] = 's.tipo_socio = ?';
+            $params[] = $partnerType;
+        }
         if ($categoryId !== null) {
             $where[] = 's.id_categoria = ?';
             $params[] = $categoryId;
@@ -315,12 +323,15 @@ trait ContableConsultas
             $categoryName = $row['categoria'] === null ? null : (string)$row['categoria'];
             $items[] = [
                 'clave' => 'PAGO-' . (int)$row['id_pago'],
-                'origen' => 'CUOTA_SOCIO',
+                'origen' => $row['tipo_socio'] === 'EMPRESA' ? 'CUOTA_EMPRESA' : 'CUOTA_SOCIO',
                 'id_registro' => (int)$row['id_pago'],
                 'id_pago' => (int)$row['id_pago'],
                 'id_socio' => (int)$row['id_socio'],
                 'fecha' => (string)$row['fecha_pago'],
                 'socio' => (string)$row['socio'],
+                'tipo_socio' => (string)$row['tipo_socio'],
+                'documento' => $row['documento'] === null ? '—' : (string)$row['documento'],
+                // Se conserva `dni` por compatibilidad con exportaciones/clientes anteriores.
                 'dni' => $row['documento'] === null ? '—' : (string)$row['documento'],
                 'categoria' => $categoryName,
                 'id_categoria' => $row['id_categoria'] === null ? null : (int)$row['id_categoria'],

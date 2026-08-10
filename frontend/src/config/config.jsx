@@ -2,8 +2,22 @@ const withoutTrailingSlash = (value) =>
   String(value || "").trim().replace(/\/+$/, "");
 
 const BASE_URL = withoutTrailingSlash(
-  process.env.REACT_APP_API_URL || "http://localhost:3001/routes",
+  process.env.REACT_APP_API_URL || "https://lalcec.3devsnet.com/api/routes",
 );
+
+export const isLocalFrontendRuntime = () => {
+  if (typeof window === "undefined") return false;
+
+  const hostname = String(window.location.hostname || "").trim().toLowerCase();
+  return (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+};
 
 // Ruta interna del frontend para abrir el panel del bot.
 export const BOT_PANEL_ROUTE = "/panel-bot";
