@@ -2,7 +2,7 @@ const withoutTrailingSlash = (value) =>
   String(value || "").trim().replace(/\/+$/, "");
 
 const BASE_URL = withoutTrailingSlash(
-  process.env.REACT_APP_API_URL || "https://lalcec.3devsnet.com/api/routes",
+  process.env.REACT_APP_API_URL || "http://localhost:3001/routes",
 );
 
 // Ruta interna del frontend para abrir el panel del bot.

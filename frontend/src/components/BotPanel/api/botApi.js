@@ -1,5 +1,5 @@
 import { BOT_URL } from "../../../config/config";
-import { clearSession, getSession } from "../../_shared/auth/session";
+import { getSession } from "../../_shared/auth/session";
 
 const BOT_SECTIONS = Object.freeze({
   panel: "endpoints",
@@ -70,10 +70,6 @@ const request = async (
   });
 
   const data = await parseResponse(response);
-
-  if (response.status === 401) {
-    clearSession();
-  }
 
   if (!response.ok || !data?.success) {
     const error = new Error(
