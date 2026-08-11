@@ -33,7 +33,11 @@ import {
   toTs,
 } from "./utils/botPanelUtils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRobot } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCircleCheck,
+  faRobot,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
 
 import "./BotPanel.css";
 import notificationSound from "./notificacion/notificacion.mp3";
@@ -64,6 +68,38 @@ const BotPanel = () => {
 
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState("bot");
+
+  // Toast local del panel para confirmar acciones de gestión exitosas.
+  const [successToast, setSuccessToast] = useState(null);
+  const successToastTimerRef = useRef(null);
+
+  const showSuccessToast = useCallback((message) => {
+    if (!message) return;
+
+    if (successToastTimerRef.current) {
+      window.clearTimeout(successToastTimerRef.current);
+    }
+
+    setSuccessToast({ id: Date.now(), message });
+    successToastTimerRef.current = window.setTimeout(() => {
+      setSuccessToast(null);
+      successToastTimerRef.current = null;
+    }, 3200);
+  }, []);
+
+  const closeSuccessToast = useCallback(() => {
+    if (successToastTimerRef.current) {
+      window.clearTimeout(successToastTimerRef.current);
+      successToastTimerRef.current = null;
+    }
+    setSuccessToast(null);
+  }, []);
+
+  useEffect(() => () => {
+    if (successToastTimerRef.current) {
+      window.clearTimeout(successToastTimerRef.current);
+    }
+  }, []);
 
   const msgEndRef = useRef(null);
   const messagesRef = useRef(null);
@@ -482,6 +518,11 @@ const BotPanel = () => {
           modo: nextMode,
         });
         await fetchChats(true);
+        showSuccessToast(
+          nextMode === "manual"
+            ? "Modo manual activado correctamente"
+            : "Modo bot activado correctamente"
+        );
       } catch (err) {
         setMensajes((prev) => [
           ...prev,
@@ -498,7 +539,7 @@ const BotPanel = () => {
         ]);
       }
     },
-    [fetchChats]
+    [fetchChats, showSuccessToast]
   );
 
   useEffect(() => {
@@ -1041,6 +1082,7 @@ const BotPanel = () => {
       const data = await markUnread(waId);
 
       if (Number(data?.unread || 0) > 0) {
+        showSuccessToast("Chat marcado como no leído");
         setChats((prev) =>
           prev.map((c) =>
             c.id === waId
@@ -1069,7 +1111,8 @@ const BotPanel = () => {
 
     setErrorMsgs("");
     try {
-      await markSeen(waId);
+      await botPanelGet("panel_mark_seen", { wa_id: waId });
+      showSuccessToast("Chat marcado como leído");
       setChats((prev) =>
         prev.map((c) =>
           c.id === waId
@@ -1097,6 +1140,7 @@ const BotPanel = () => {
       });
       setModalEditOpen(false);
       await fetchChats(true);
+      showSuccessToast("Nombre actualizado correctamente");
     } catch (e) {
       setModalEditError(e?.message || "No se pudo guardar el nombre");
     } finally {
@@ -1114,6 +1158,11 @@ const BotPanel = () => {
       });
       setModalTagOpen(false);
       await fetchChats(true);
+      showSuccessToast(
+        etiquetaId == null
+          ? "Etiqueta quitada correctamente"
+          : "Etiqueta asignada correctamente"
+      );
     } catch (e) {
       setModalTagError(e?.message || "No se pudo guardar la etiqueta");
     } finally {
@@ -1145,6 +1194,7 @@ const BotPanel = () => {
       }
 
       await fetchChats(true);
+      showSuccessToast("Chat vaciado correctamente");
     } catch (e) {
       setModalVaciarError(e?.message || "No se pudo vaciar el chat");
     } finally {
@@ -1169,6 +1219,7 @@ const BotPanel = () => {
       }
 
       await fetchChats(true);
+      showSuccessToast("Contacto eliminado correctamente");
     } catch (e) {
       setModalEliminarError(e?.message || "No se pudo eliminar el contacto");
     } finally {
@@ -1215,6 +1266,24 @@ const BotPanel = () => {
   return (
     <div className="wp-shell">
       <audio ref={audioUrgentRef} preload="auto" src={notificationSound} />
+
+      {successToast ? (
+        <div className="bp-success-toast" role="status" aria-live="polite">
+          <span className="bp-success-toast__icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faCircleCheck} />
+          </span>
+          <span className="bp-success-toast__message">{successToast.message}</span>
+          <button
+            type="button"
+            className="bp-success-toast__close"
+            onClick={closeSuccessToast}
+            aria-label="Cerrar notificación"
+            title="Cerrar"
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        </div>
+      ) : null}
 
       <BotSidebar
         activeTagFilterLabel={activeTagFilterLabel}
@@ -1346,6 +1415,7 @@ const BotPanel = () => {
         onSave={saveEtiqueta}
         onRefreshEtiquetas={fetchEtiquetas}
         onLabelsChanged={refreshEtiquetasYChats}
+        onSuccess={showSuccessToast}
       />
 
       <ConfirmActionModal

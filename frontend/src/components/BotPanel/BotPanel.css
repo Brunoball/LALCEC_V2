@@ -2389,3 +2389,105 @@
   border-color:rgba(217,119,6,.28);
   box-shadow:0 0 0 3px rgba(251,191,36,.16);
 }
+
+
+/* ======================================================
+   TOAST DE ÉXITO · ACCIONES DEL PANEL DEL BOT
+====================================================== */
+.bp-success-toast{
+  position:fixed;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:2147483000;
+  width:min(440px, calc(100vw - 32px));
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 12px 12px 14px;
+  border:1px solid rgba(34,197,94,.34);
+  border-radius:14px;
+  background:rgba(15,23,42,.96);
+  color:#f8fafc;
+  box-shadow:0 18px 45px rgba(0,0,0,.30);
+  backdrop-filter:blur(14px);
+  animation:bp-success-toast-in .18s ease-out;
+}
+
+.bp-success-toast__icon{
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:rgba(34,197,94,.16);
+  color:#4ade80;
+  font-size:16px;
+}
+
+.bp-success-toast__message{
+  min-width:0;
+  flex:1;
+  font-size:13px;
+  line-height:1.35;
+  font-weight:750;
+}
+
+.bp-success-toast__close{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#94a3b8;
+  cursor:pointer;
+}
+
+.bp-success-toast__close:hover{
+  background:rgba(148,163,184,.12);
+  color:#f8fafc;
+}
+
+:root[data-botpanel-theme="light"] .bp-success-toast{
+  background:rgba(255,255,255,.98);
+  color:#172033;
+  border-color:rgba(22,163,74,.24);
+  box-shadow:0 18px 45px rgba(15,23,42,.18);
+}
+
+:root[data-botpanel-theme="light"] .bp-success-toast__icon{
+  background:#dcfce7;
+  color:#16a34a;
+}
+
+:root[data-botpanel-theme="light"] .bp-success-toast__close{
+  color:#64748b;
+}
+
+:root[data-botpanel-theme="light"] .bp-success-toast__close:hover{
+  background:#f1f5f9;
+  color:#172033;
+}
+
+@keyframes bp-success-toast-in{
+  from{
+    opacity:0;
+    transform:translate(-50%, -10px) scale(.98);
+  }
+  to{
+    opacity:1;
+    transform:translate(-50%, 0) scale(1);
+  }
+}
+
+@media (max-width:640px){
+  .bp-success-toast{
+    top:12px;
+    width:calc(100vw - 24px);
+  }
+}

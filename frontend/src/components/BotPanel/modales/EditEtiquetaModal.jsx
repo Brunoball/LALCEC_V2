@@ -20,6 +20,7 @@ const EditEtiquetaModal = ({
   onSave,
   onRefreshEtiquetas,
   onLabelsChanged,
+  onSuccess,
 }) => {
   const cancelRef = useRef(null);
 
@@ -101,6 +102,7 @@ const EditEtiquetaModal = ({
       await refreshLabels();
       setSelectedId(String(newId));
       setNuevoNombre("");
+      onSuccess?.("Etiqueta creada correctamente");
     } catch (e) {
       setCreateErr(e?.message || "No se pudo crear la etiqueta");
     } finally {
@@ -140,6 +142,7 @@ const EditEtiquetaModal = ({
       await refreshLabels();
       setEditingId(null);
       setEditingNombre("");
+      onSuccess?.("Etiqueta actualizada correctamente");
     } catch (e) {
       setEditErr(e?.message || "No se pudo editar la etiqueta");
     } finally {
@@ -183,6 +186,7 @@ const EditEtiquetaModal = ({
       if (Number(editingId || 0) === id) cancelEdit();
       setPendingDeleteEtiqueta(null);
       await refreshLabels();
+      onSuccess?.("Etiqueta eliminada correctamente");
     } catch (e) {
       setDeleteErr(e?.message || "No se pudo eliminar la etiqueta");
     } finally {

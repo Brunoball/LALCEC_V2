@@ -36,6 +36,10 @@ import {
   EntityTabs,
   FloatingField,
 } from "../Global/Formularios/TabbedForm";
+import {
+  decimalInput,
+  preventInvalidDecimalKey,
+} from "../Global/Formularios/inputSanitizers";
 import { canWrite } from "../_shared/auth/session";
 import { contableApi } from "./api/contableApi";
 import "./Contable.css";
@@ -99,18 +103,6 @@ const localDate = () => {
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
 const upperWithoutDigits = (value) => upper(String(value ?? "").replace(/[0-9]/g, ""));
-
-const decimalInput = (value, maxIntegerDigits = 12, maxDecimals = 2) => {
-  const normalized = String(value ?? "")
-    .replace(/,/g, ".")
-    .replace(/[^\d.]/g, "");
-  const [rawInteger = "", ...decimalParts] = normalized.split(".");
-  const integer = rawInteger.slice(0, maxIntegerDigits);
-  if (!decimalParts.length) return integer;
-
-  const decimals = decimalParts.join("").slice(0, maxDecimals);
-  return `${integer || "0"}.${decimals}`;
-};
 
 const sanitizeOptionName = (type, value) =>
   type === "PROVEEDOR" ? upper(value) : upperWithoutDigits(value);
@@ -1718,6 +1710,7 @@ export default function ContableModule({ view = "summary" }) {
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"
+                onKeyDown={preventInvalidDecimalKey}
                 required
                 value={incomeForm.importe}
                 placeholder=" "
@@ -1891,6 +1884,7 @@ export default function ContableModule({ view = "summary" }) {
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
+                  onKeyDown={preventInvalidDecimalKey}
                   required
                   value={expenseForm.importe}
                   placeholder=" "

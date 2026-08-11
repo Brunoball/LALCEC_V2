@@ -6,6 +6,38 @@ import GlobalLoader from "../GlobalLoader";
 import useAnimatedModalSize from "./useAnimatedModalSize";
 import "../Global_css/Global_Modals.css";
 
+const openModalStack = [];
+
+function registerOpenModal(modalId) {
+  const existingIndex = openModalStack.indexOf(modalId);
+  if (existingIndex !== -1) openModalStack.splice(existingIndex, 1);
+  openModalStack.push(modalId);
+}
+
+function unregisterOpenModal(modalId) {
+  const index = openModalStack.lastIndexOf(modalId);
+  if (index !== -1) openModalStack.splice(index, 1);
+}
+
+function isTopOpenModal(modalId) {
+  return openModalStack[openModalStack.length - 1] === modalId;
+}
+
+function uppercaseModalTextField(event) {
+  const field = event.target;
+  const isTextarea = field instanceof HTMLTextAreaElement;
+  const isTextInput =
+    field instanceof HTMLInputElement &&
+    (field.type === "text" || field.type === "search");
+
+  if ((!isTextarea && !isTextInput) || field.dataset.preserveCase === "true") {
+    return;
+  }
+
+  const upperValue = field.value.toLocaleUpperCase("es-AR");
+  if (field.value !== upperValue) field.value = upperValue;
+}
+
 function openDatePickerFromInput(event) {
   const input = event.target;
   if (
@@ -48,19 +80,40 @@ export default function CrudModal({
   closeOnBackdrop = true,
 }) {
   const modalRef = useRef(null);
+  const modalIdRef = useRef(Symbol("crud-modal"));
+  const onCloseRef = useRef(onClose);
+  const savingRef = useRef(saving);
+  onCloseRef.current = onClose;
+  savingRef.current = saving;
   useAnimatedModalSize(modalRef, open);
 
   useEffect(() => {
     if (!open) return undefined;
+
+    const modalId = modalIdRef.current;
     const previous = document.body.style.overflow;
-    const onKey = (event) => event.key === "Escape" && !saving && onClose?.();
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      document.removeEventListener("keydown", onKey);
+    registerOpenModal(modalId);
+
+    const onKey = (event) => {
+      if (event.key !== "Escape" || !isTopOpenModal(modalId)) return;
+
+      // El Escape pertenece exclusivamente al modal visible en primer plano.
+      // Aunque esté guardando y no pueda cerrarse, nunca debe llegar al modal de atrás.
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+
+      if (!savingRef.current) onCloseRef.current?.();
     };
-  }, [open, onClose, saving]);
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      unregisterOpenModal(modalId);
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
 
   if (!open) return null;
   return createPortal(
@@ -92,7 +145,11 @@ export default function CrudModal({
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </header>
-        <form onSubmit={onSubmit} onClick={openDatePickerFromInput}>
+        <form
+          onSubmit={onSubmit}
+          onClick={openDatePickerFromInput}
+          onInputCapture={uppercaseModalTextField}
+        >
           <div
             className={`entity-modal__body ${loading ? "is-loading" : ""}`.trim()}
             aria-busy={loading}

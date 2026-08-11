@@ -267,6 +267,7 @@ function bot_panel_proxy_execute(): never
             CURLOPT_TIMEOUT => 45,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_HTTPHEADER => $headers,
+            
         ];
 
         if ($remoteMethod === 'POST') {
