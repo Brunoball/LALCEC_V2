@@ -24,11 +24,13 @@
   margin-left: auto;
   justify-self: end;
   justify-content: end;
+  /* Conserva los tamaños normales mientras hay lugar. Cuando la barra lateral
+     reduce el ancho disponible, primero ceden Búsqueda, Año y Mes. */
   grid-template-columns:
     minmax(330px, 360px)
-    minmax(220px, 250px)
-    120px
-    120px;
+    minmax(120px, 250px)
+    minmax(82px, 120px)
+    minmax(92px, 120px);
 }
 
 .cuotas-head-filters .module-filter--tabs {
@@ -497,13 +499,24 @@
   }
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 981px) and (max-width: 1180px) {
+  /* En escritorio angosto seguimos en una sola fila: se comprimen las cajas,
+     no el contenido ni las tipografías. */
   .cuotas-header-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .cuotas-head-filters {
-    flex-basis: 760px;
+    flex-basis: auto;
+    grid-template-columns:
+      minmax(300px, 330px)
+      minmax(100px, 220px)
+      minmax(78px, 105px)
+      minmax(88px, 110px);
+  }
+
+  .cuotas-head-filters .module-filter--tabs {
+    min-width: 300px;
   }
 }
 
