@@ -20,6 +20,98 @@ function clean_text(mixed $value, int $maxLength = 255, bool $uppercase = true):
     return function_exists('mb_substr') ? mb_substr($text, 0, $maxLength, 'UTF-8') : substr($text, 0, $maxLength);
 }
 
+/**
+ * Convierte una búsqueda libre en términos comparables. Los signos y la
+ * puntuación actúan como separadores, por lo que "ACEBAL, EDITH" produce los
+ * términos "ACEBAL" y "EDITH". Se eliminan duplicados sin alterar el orden.
+ */
+function search_terms(mixed $value, int $maxLength = 160, int $maxTerms = 12): array
+{
+    $text = clean_text($value, max(1, $maxLength), false);
+    $text = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $text) ?? '';
+    $text = clean_text($text, max(1, $maxLength), false);
+    if ($text === '') return [];
+
+    $parts = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $terms = [];
+    $seen = [];
+    $limit = max(1, $maxTerms);
+
+    foreach ($parts as $part) {
+        $key = function_exists('mb_strtolower')
+            ? mb_strtolower($part, 'UTF-8')
+            : strtolower($part);
+        if (isset($seen[$key])) continue;
+
+        $seen[$key] = true;
+        $terms[] = $part;
+        if (count($terms) >= $limit) break;
+    }
+
+    return $terms;
+}
+
+/**
+ * Genera un filtro de búsqueda reutilizable.
+ *
+ * Cada plantilla debe contener {param}. Las plantillas se unen con OR para
+ * cada término y los términos se unen con AND. Con prefijo se generan
+ * parámetros PDO nombrados; con null se generan parámetros posicionales.
+ * Las plantillas son SQL definido por el servidor y nunca deben provenir del
+ * usuario.
+ *
+ * @return array{sql: string, params: array, terms: array}
+ */
+function build_search_filter(
+    mixed $value,
+    array $conditionTemplates,
+    int $maxLength = 160,
+    ?string $parameterPrefix = 'buscar',
+    int $maxTerms = 12
+): array {
+    $terms = search_terms($value, $maxLength, $maxTerms);
+    if ($terms === []) return ['sql' => '', 'params' => [], 'terms' => []];
+
+    $templates = [];
+    foreach ($conditionTemplates as $template) {
+        $template = trim((string)$template);
+        if ($template === '') continue;
+        if (!str_contains($template, '{param}')) {
+            throw new InvalidArgumentException('La plantilla de búsqueda debe incluir {param}.');
+        }
+        $templates[] = $template;
+    }
+    if ($templates === []) return ['sql' => '', 'params' => [], 'terms' => $terms];
+
+    $named = $parameterPrefix !== null;
+    $prefix = $named
+        ? (preg_replace('/[^A-Za-z0-9_]/', '_', $parameterPrefix) ?: 'buscar')
+        : '';
+    $termClauses = [];
+    $params = [];
+
+    foreach ($terms as $termIndex => $term) {
+        $alternatives = [];
+        foreach ($templates as $templateIndex => $template) {
+            if ($named) {
+                $key = "{$prefix}_{$termIndex}_{$templateIndex}";
+                $alternatives[] = str_replace('{param}', ':' . $key, $template);
+                $params[$key] = '%' . $term . '%';
+            } else {
+                $alternatives[] = str_replace('{param}', '?', $template);
+                $params[] = '%' . $term . '%';
+            }
+        }
+        $termClauses[] = '(' . implode(' OR ', $alternatives) . ')';
+    }
+
+    return [
+        'sql' => '(' . implode(' AND ', $termClauses) . ')',
+        'params' => $params,
+        'terms' => $terms,
+    ];
+}
+
 function optional_text(mixed $value, int $maxLength = 255, bool $uppercase = true): ?string
 {
     $text = clean_text($value, $maxLength, $uppercase);

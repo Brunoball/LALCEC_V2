@@ -221,6 +221,19 @@ test.describe('Cuotas de socios y empresas', () => {
       expect(debt.items[0].id_socio).toBe(target.item.id_socio);
       expect(debt.items[0].periodo).toContain(String(currentYear));
 
+      const tokenizedDebt = await apiCall(request, 'cuotas_listar', {
+        params: {
+          tipo: target.tipo,
+          estado: 'DEUDORES',
+          anio: currentYear,
+          mes: currentMonth,
+          buscar: target.tipo === 'EMPRESA'
+            ? `${company.suffix.toLowerCase()}, empresa`
+            : `${person.nombre.toLowerCase()}, ${person.apellido.toLowerCase()}`,
+        },
+      });
+      expect(tokenizedDebt.items.map((item) => item.id_socio)).toContain(target.item.id_socio);
+
       const payment = await apiCall(request, 'cuotas_registrar_pago', {
         method: 'POST',
         data: {

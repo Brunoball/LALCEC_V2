@@ -5,7 +5,6 @@ trait CategoriasConsultas
 {
     private static function listarDatos(PDO $db, array $filters): array
     {
-        $search = clean_text($filters['buscar'] ?? '', 120, false);
         $status = trim((string)($filters['estado'] ?? ''));
         if (!in_array($status, ['', 'activo', 'inactivo'], true)) {
             api_error('El estado solicitado no es válido.', 'FILTRO_INVALIDO');
@@ -13,11 +12,15 @@ trait CategoriasConsultas
 
         $where = [];
         $params = [];
-        if ($search !== '') {
-            $where[] = '(c.nombre LIKE :buscar_nombre OR COALESCE(c.descripcion, \'\') LIKE :buscar_descripcion)';
-            $term = '%' . $search . '%';
-            $params['buscar_nombre'] = $term;
-            $params['buscar_descripcion'] = $term;
+        $searchFilter = build_search_filter(
+            $filters['buscar'] ?? '',
+            ["CONCAT_WS(' ', c.nombre, c.descripcion) LIKE {param}"],
+            120,
+            'buscar_categoria'
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            $params = array_merge($params, $searchFilter['params']);
         }
         if ($status === 'activo') $where[] = 'c.activo = 1';
         if ($status === 'inactivo') $where[] = 'c.activo = 0';

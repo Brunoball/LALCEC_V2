@@ -62,6 +62,95 @@ function normalizeBotEndpoint(endpoint) {
   return /\.php$/i.test(clean) ? clean : `${clean}.php`;
 }
 
+function botCandidateRequest(candidate) {
+  if (candidate && typeof candidate.request === 'function') {
+    return candidate.request();
+  }
+  if (candidate && typeof candidate.postData === 'function') {
+    return candidate;
+  }
+  return null;
+}
+
+function botCandidateUrl(candidate) {
+  if (typeof candidate === 'string') return candidate;
+  if (candidate instanceof URL) return candidate.toString();
+  if (candidate && typeof candidate.url === 'function') return candidate.url();
+  return String(candidate || '');
+}
+
+function multipartField(postData, field) {
+  const escaped = String(field).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(postData || '').match(
+    new RegExp(`name="${escaped}"\\r?\\n\\r?\\n([^\\r\\n]*)`),
+  );
+  return match?.[1] || '';
+}
+
+function botProxyPayload(candidate) {
+  const request = botCandidateRequest(candidate);
+  if (!request) return null;
+
+  let url;
+  try {
+    url = new URL(request.url());
+  } catch (_error) {
+    return null;
+  }
+  if (url.searchParams.get('action') !== 'bot_panel_proxy') return null;
+
+  try {
+    const payload = request.postDataJSON();
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      return payload;
+    }
+  } catch (_error) {
+    // Los envíos de archivos usan multipart/form-data y se leen debajo.
+  }
+
+  const postData = request.postData() || '';
+  const paramsRaw = multipartField(postData, '__bot_proxy_params');
+  let params = {};
+  try {
+    params = paramsRaw ? JSON.parse(paramsRaw) : {};
+  } catch (_error) {
+    params = {};
+  }
+
+  return {
+    section: multipartField(postData, '__bot_proxy_section'),
+    endpoint: multipartField(postData, '__bot_proxy_endpoint'),
+    method: multipartField(postData, '__bot_proxy_method') || 'POST',
+    params,
+    multipart: postData,
+  };
+}
+
+function botRequestBody(candidate) {
+  const payload = botProxyPayload(candidate);
+  if (payload) return payload.body ?? payload.multipart ?? null;
+
+  const request = botCandidateRequest(candidate);
+  if (!request) return null;
+  try {
+    return request.postDataJSON();
+  } catch (_error) {
+    return request.postData();
+  }
+}
+
+function botRequestParams(candidate) {
+  const payload = botProxyPayload(candidate);
+  if (payload) return payload.params || {};
+
+  try {
+    const url = new URL(botCandidateUrl(candidate));
+    return Object.fromEntries(url.searchParams.entries());
+  } catch (_error) {
+    return {};
+  }
+}
+
 function botApiUrl(section, endpoint, params = {}) {
   const folders = {
     panel: 'endpoints',
@@ -124,6 +213,7 @@ async function botApiResult(requestContext, section, endpoint, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const url = botApiUrl(section, endpoint, options.params);
   const safeRead = isSafeBotReadMethod(method);
+  const localDevKey = String(process.env.PW_BOT_LOCAL_DEV_KEY || '').trim();
 
   // Las lecturas contra Hostinger pueden sufrir cortes transitorios (por ejemplo
   // "socket hang up"). Reintentamos solo GET/HEAD para no duplicar escrituras.
@@ -144,6 +234,7 @@ async function botApiResult(requestContext, section, endpoint, options = {}) {
         failOnStatusCode: false,
         headers: {
           Accept: 'application/json',
+          ...(localDevKey ? { 'X-Panel-Local-Dev-Key': localDevKey } : {}),
           ...(options.data !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...(options.headers || {}),
         },
@@ -244,9 +335,20 @@ async function openChatOptions(page) {
 
 function endpointMatcher(endpoint) {
   const file = normalizeBotEndpoint(endpoint);
-  return (url) => {
+  return (candidate) => {
     try {
-      return new URL(url).pathname.endsWith(`/${file}`);
+      const url = new URL(botCandidateUrl(candidate));
+      if (url.pathname.endsWith(`/${file}`)) return true;
+      if (url.searchParams.get('action') !== 'bot_panel_proxy') return false;
+
+      // El predicado de page.route recibe solamente la URL. En ese punto se
+      // acepta cualquier llamada al proxy y el handler confirma el endpoint
+      // con el cuerpo antes de responder o continuar con route.fallback().
+      const request = botCandidateRequest(candidate);
+      if (!request) return true;
+
+      const payload = botProxyPayload(request);
+      return normalizeBotEndpoint(payload?.endpoint || '') === file;
     } catch (_error) {
       return false;
     }
@@ -255,7 +357,7 @@ function endpointMatcher(endpoint) {
 
 async function waitForBotResponse(page, endpoint, predicate = () => true) {
   return page.waitForResponse(async (response) => {
-    if (!endpointMatcher(endpoint)(response.url())) return false;
+    if (!endpointMatcher(endpoint)(response)) return false;
     if (!predicate(response)) return false;
     return true;
   });
@@ -268,6 +370,8 @@ module.exports = {
   botApiCall,
   botApiResult,
   botApiUrl,
+  botRequestBody,
+  botRequestParams,
   botTestWaId,
   digitsOnly,
   endpointMatcher,

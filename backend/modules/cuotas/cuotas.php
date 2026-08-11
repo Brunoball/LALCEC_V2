@@ -132,16 +132,19 @@ final class Cuotas
             $params[] = $categoria;
         }
 
-        if ($buscar !== '') {
-            $where[] = "(
-                COALESCE(sp.apellido, '') LIKE ? OR
-                COALESCE(sp.nombre, '') LIKE ? OR
-                COALESCE(sp.dni, '') LIKE ? OR
-                COALESCE(se.razon_social, '') LIKE ? OR
-                COALESCE(se.cuit, '') LIKE ?
-            )";
-            $term = '%' . $buscar . '%';
-            array_push($params, $term, $term, $term, $term, $term);
+        $searchFilter = build_search_filter(
+            $buscar,
+            ["CONCAT_WS(' ',
+                sp.apellido, sp.nombre, sp.dni,
+                se.razon_social, se.cuit,
+                c.nombre, mp_preferido.nombre, mp.nombre, f.nombre
+            ) LIKE {param}"],
+            120,
+            null
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            array_push($params, ...$searchFilter['params']);
         }
 
         $statement = $db->prepare(

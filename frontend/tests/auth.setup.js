@@ -28,7 +28,13 @@ module.exports = async function globalSetup() {
   }
 
   if (!response.ok() || body?.exito === false || !body?.token) {
-    throw new Error(body?.mensaje || `No se pudo iniciar la sesión E2E (HTTP ${response.status()}).`);
+    const message = body?.mensaje ||
+      `No se pudo iniciar la sesión E2E (HTTP ${response.status()}).`;
+    const rawDetail = body?.detalle ?? body?.detalles;
+    const detail = rawDetail && typeof rawDetail === 'object'
+      ? JSON.stringify(rawDetail)
+      : String(rawDetail || '').trim();
+    throw new Error(detail ? `${message}\nDetalle backend: ${detail}` : message);
   }
   if (body.usuario?.rol !== 'admin') {
     throw new Error('PW_USER debe corresponder a un administrador para probar altas, edición y bajas.');

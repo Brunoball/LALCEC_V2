@@ -275,18 +275,19 @@ trait ContableConsultas
             $where[] = 'p.id_medio_pago = ?';
             $params[] = $meanId;
         }
-        if ($search !== '') {
-            $where[] = "(
-                COALESCE(sp.apellido, '') LIKE ? OR
-                COALESCE(sp.nombre, '') LIKE ? OR
-                COALESCE(sp.dni, '') LIKE ? OR
-                COALESCE(se.razon_social, '') LIKE ? OR
-                COALESCE(se.cuit, '') LIKE ? OR
-                COALESCE(c.nombre, '') LIKE ? OR
-                COALESCE(mp.nombre, '') LIKE ?
-            )";
-            $term = '%' . $search . '%';
-            array_push($params, $term, $term, $term, $term, $term, $term, $term);
+        $searchFilter = build_search_filter(
+            $search,
+            ["CONCAT_WS(' ',
+                sp.apellido, sp.nombre, sp.dni,
+                se.razon_social, se.cuit,
+                c.nombre, mp.nombre
+            ) LIKE {param}"],
+            160,
+            null
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            array_push($params, ...$searchFilter['params']);
         }
 
         $statement = $db->prepare(
@@ -398,17 +399,18 @@ trait ContableConsultas
             $where[] = 'm.id_medio_pago = ?';
             $params[] = $meanId;
         }
-        if ($search !== '') {
-            $where[] = "(
-                m.proveedor LIKE ? OR
-                m.categoria LIKE ? OR
-                m.concepto LIKE ? OR
-                COALESCE(mp.nombre, '') LIKE ? OR
-                COALESCE(m.detalle, '') LIKE ?" . ($isIncome ? '' : " OR COALESCE(m.numero_comprobante, '') LIKE ?") . '
-            )';
-            $term = '%' . $search . '%';
-            array_push($params, $term, $term, $term, $term, $term);
-            if (!$isIncome) $params[] = $term;
+        $manualSearchExpression = $isIncome
+            ? "CONCAT_WS(' ', m.proveedor, m.categoria, m.concepto, mp.nombre, m.detalle) LIKE {param}"
+            : "CONCAT_WS(' ', m.proveedor, m.categoria, m.concepto, mp.nombre, m.detalle, m.numero_comprobante) LIKE {param}";
+        $searchFilter = build_search_filter(
+            $search,
+            [$manualSearchExpression],
+            160,
+            null
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            array_push($params, ...$searchFilter['params']);
         }
 
         $extra = $isIncome

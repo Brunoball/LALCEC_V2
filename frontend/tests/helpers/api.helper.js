@@ -77,10 +77,13 @@ async function apiResult(requestContext, action, options = {}) {
 async function apiCall(requestContext, action, options = {}) {
   const result = await apiResult(requestContext, action, options);
   if (!result.ok) {
-    const error = new Error(
-      result.body?.mensaje ||
-        `Falló ${String(options.method || 'GET').toUpperCase()} ${action} con HTTP ${result.status}`,
-    );
+    const message = result.body?.mensaje ||
+      `Falló ${String(options.method || 'GET').toUpperCase()} ${action} con HTTP ${result.status}`;
+    const rawDetail = result.body?.detalle ?? result.body?.detalles;
+    const detail = rawDetail && typeof rawDetail === 'object'
+      ? JSON.stringify(rawDetail)
+      : String(rawDetail || '').trim();
+    const error = new Error(detail ? `${message}\nDetalle backend: ${detail}` : message);
     error.status = result.status;
     error.code = result.body?.codigo;
     error.body = result.body;

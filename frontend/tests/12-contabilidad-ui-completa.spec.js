@@ -200,6 +200,8 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await expect(dialog).toBeHidden();
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(`${textSuffix.toLowerCase()}, ingreso`);
+    await expect(rowByText(page, 'Listado de ingresos', suffix)).toBeVisible();
     await search.fill(suffix);
     let row = rowByText(page, 'Listado de ingresos', suffix);
     await expect(row).toContainText(incomeDetail);
@@ -306,6 +308,8 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await expect(dialog).toBeHidden();
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(`${textSuffix.toLowerCase()}, egreso`);
+    await expect(rowByText(page, 'Listado de egresos', suffix)).toBeVisible();
     await search.fill(suffix);
     let row = rowByText(page, 'Listado de egresos', suffix);
     await expect(row).toContainText(expenseDetail);

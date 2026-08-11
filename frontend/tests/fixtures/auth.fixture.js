@@ -1,3 +1,4 @@
+const path = require('path');
 const base = require('@playwright/test');
 const { readAuthSession, normalizedApiBase } = require('../helpers/api.helper');
 const { SESSION_KEY } = require('../helpers/auth.helper');
@@ -7,6 +8,7 @@ const test = base.test.extend({
   page: async ({ page }, use, testInfo) => {
     const session = readAuthSession();
     const appOrigin = new URL(process.env.PW_BASE_URL || 'http://localhost:3000').origin;
+    const isBotSpec = path.basename(testInfo.file || '') === '14-panel-bot.spec.js';
     await page.addInitScript(
       ({ origin, key, value }) => {
         try {
@@ -26,9 +28,21 @@ const test = base.test.extend({
     });
     page.on('response', (response) => {
       const url = response.url();
+      let isLocalBotProxy = false;
+      try {
+        isLocalBotProxy = new URL(url).searchParams.get('action') === 'bot_panel_proxy';
+      } catch (_error) {
+        // Una URL no válida seguirá tratándose como cualquier otra respuesta.
+      }
       const monitoredApi =
         url.startsWith(normalizedApiBase()) || url.startsWith(normalizedBotApiBase());
-      if (monitoredApi && response.status() >= 500) {
+
+      // Principal consulta el Panel Bot en segundo plano para mostrar su badge.
+      // Cuando Hostinger o el certificado local no están disponibles, esa función
+      // opcional no debe hacer fallar pruebas de Dashboard, Socios, Cuotas, etc.
+      // El spec del Panel Bot sí conserva el monitoreo estricto del proxy.
+      const optionalBotFailure = isLocalBotProxy && !isBotSpec;
+      if (monitoredApi && response.status() >= 500 && !optionalBotFailure) {
         technicalFailures.push(`HTTP ${response.status()} en ${url}`);
       }
     });

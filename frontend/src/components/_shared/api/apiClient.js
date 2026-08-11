@@ -14,7 +14,12 @@ function buildUrl(action, params = {}) {
       url.searchParams.set(key, String(value));
     }
   });
-  return url.toString();
+
+  // URLSearchParams representa los espacios como "+". Aunque es válido,
+  // algunos backends o proxies heredados interpretan ese carácter como un
+  // separador y terminan leyendo sólo la primera palabra de una búsqueda.
+  // %20 mantiene el valor completo y sigue siendo una URL válida.
+  return url.toString().replace(/\+/g, "%20");
 }
 
 async function request(action, { method = "GET", params, body, signal } = {}) {

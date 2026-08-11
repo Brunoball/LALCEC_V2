@@ -42,6 +42,7 @@ import {
   onlyDigits,
   upperWithoutDigits,
 } from "../Global/Formularios/inputSanitizers";
+import { normalizeSearchQuery } from "../Global/Formularios/searchUtils";
 import { canWrite } from "../_shared/auth/session";
 import { sociosApi } from "./api/sociosApi";
 import { useSocios } from "./hooks/useSocios";
@@ -945,7 +946,7 @@ export default function Socios({ tipo = PERSON }) {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setDebouncedSearch(search.trim());
+      setDebouncedSearch(normalizeSearchQuery(search));
       setPage(1);
     }, 300);
     return () => window.clearTimeout(timeout);

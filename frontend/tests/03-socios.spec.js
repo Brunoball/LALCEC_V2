@@ -116,6 +116,8 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Registro creado correctamente.');
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(`  ${person.nombre.toLowerCase()} ,  ${person.apellido.toLowerCase()}  `);
+    await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
     await search.fill(person.dni);
     let row = tableRow(page, 'Listado de socios', person.dni);
     await expect(row).toContainText(`${person.apellido}, ${person.nombre}`);
@@ -209,6 +211,8 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Registro creado correctamente.');
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(`${company.suffix.toLowerCase()}, empresa`);
+    await expect(tableRow(page, 'Listado de empresas', company.cuit)).toBeVisible();
     await search.fill(company.cuit);
     let row = tableRow(page, 'Listado de empresas', company.cuit);
     await expect(row).toContainText(company.razonSocial);
@@ -336,12 +340,15 @@ test.describe('Socios, empresas y familias', () => {
       'aria-selected',
       'true',
     );
-    await dialog
-      .getByLabel('Buscar socio por nombre, DNI o categoría')
-      .fill(familyMember.dni);
+    const memberSearch = dialog.getByLabel('Buscar socio por nombre, DNI o categoría');
+    await memberSearch.fill(
+      `  ${familyMember.nombre.toLowerCase()} ${familyMember.apellido.toLowerCase()}  `,
+    );
     const memberCheckbox = dialog.getByRole('checkbox', {
       name: new RegExp(familyMember.apellido, 'i'),
     });
+    await expect(memberCheckbox).toBeVisible();
+    await memberSearch.fill(familyMember.dni);
     await memberCheckbox.check();
     await dialog.getByRole('button', { name: /Agregar miembros \(1\)/ }).click();
     const selectedMember = dialog.locator('.familias-selected-member').filter({
@@ -355,6 +362,10 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Familia creada correctamente.');
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(
+      `${family.textSuffix.toLowerCase()}, ${familyMember.apellido.toLowerCase()}`,
+    );
+    await expect(tableRow(page, 'Listado de familias', family.nombre)).toBeVisible();
     await search.fill(family.prefix);
     let row = tableRow(page, 'Listado de familias', family.prefix);
     await expect(row).toContainText(familyMember.apellido);

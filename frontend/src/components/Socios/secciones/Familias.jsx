@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAddressBook,
@@ -33,6 +33,10 @@ import {
   FloatingField,
 } from "../../Global/Formularios/TabbedForm";
 import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
+import {
+  matchesEverySearchTerm,
+  normalizeSearchQuery,
+} from "../../Global/Formularios/searchUtils";
 import { canWrite } from "../../_shared/auth/session";
 import { familiasApi } from "../api/sociosApi";
 import { useFamilias } from "../hooks/useFamilias";
@@ -174,15 +178,14 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
     [form.integrantes],
   );
   const visible = useMemo(() => {
-    const term = memberSearch.trim().toLocaleLowerCase("es-AR");
     return (catalog || []).filter((person) => {
       if (selectedIds.has(Number(person.id_socio))) return false;
-      if (!term) return true;
-      return [person.apellido, person.nombre, person.dni, person.categoria]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("es-AR")
-        .includes(term);
+      return matchesEverySearchTerm(
+        [person.apellido, person.nombre, person.dni, person.categoria]
+          .filter(Boolean)
+          .join(" "),
+        memberSearch,
+      );
     });
   }, [catalog, memberSearch, selectedIds]);
 
@@ -312,8 +315,9 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                 <input
                   type="search"
                   value={memberSearch}
-                  onChange={(event) => setMemberSearch(event.target.value)}
+                  onInput={(event) => setMemberSearch(event.currentTarget.value)}
                   placeholder=" "
+                  autoComplete="off"
                 />
               </FloatingField>
 
@@ -529,10 +533,19 @@ function formFromFamily(item) {
 export default function Familias() {
   const writable = canWrite();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState(readSharedFamilyStatus);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(normalizeSearchQuery(search));
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
   const filters = useMemo(
-    () => ({ buscar: search, estado: status }),
-    [search, status],
+    () => ({ buscar: debouncedSearch, estado: status }),
+    [debouncedSearch, status],
   );
   const { items, catalogos, loading, error, cargar } = useFamilias(filters);
   const [form, setForm] = useState(emptyForm);
@@ -859,7 +872,7 @@ export default function Familias() {
         tituloArchivo="Familias"
         subtituloArchivoActual={[
           status === "inactivo" ? "Bajas" : "Activas",
-          search.trim() ? `Búsqueda: ${search.trim()}` : null,
+          debouncedSearch ? `Búsqueda: ${debouncedSearch}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}

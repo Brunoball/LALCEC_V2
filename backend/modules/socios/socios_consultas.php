@@ -26,27 +26,20 @@ trait SociosConsultas
             $params['estado'] = $status;
         }
 
-        $search = clean_text($filters['buscar'] ?? '', 150, false);
-        if ($search !== '') {
-            $term = '%' . $search . '%';
-            $where[] = '(
-                p.apellido LIKE :buscar_apellido
-                OR p.nombre LIKE :buscar_nombre
-                OR p.dni LIKE :buscar_dni
-                OR p.telefono LIKE :buscar_telefono_persona
-                OR p.email LIKE :buscar_email_persona
-                OR e.razon_social LIKE :buscar_razon_social
-                OR e.cuit LIKE :buscar_cuit
-                OR e.telefono LIKE :buscar_telefono_empresa
-                OR e.email LIKE :buscar_email_empresa
-            )';
-            foreach ([
-                'buscar_apellido', 'buscar_nombre', 'buscar_dni', 'buscar_telefono_persona',
-                'buscar_email_persona', 'buscar_razon_social', 'buscar_cuit',
-                'buscar_telefono_empresa', 'buscar_email_empresa',
-            ] as $key) {
-                $params[$key] = $term;
-            }
+        $searchFilter = build_search_filter(
+            $filters['buscar'] ?? '',
+            ["CONCAT_WS(' ',
+                p.apellido, p.nombre, p.dni, p.domicilio, p.numero_domicilio,
+                p.localidad, p.telefono, p.email,
+                e.razon_social, e.cuit, e.domicilio, e.telefono, e.email,
+                c.nombre, mp.nombre, f.nombre
+            ) LIKE {param}"],
+            150,
+            'buscar_socio'
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            $params = array_merge($params, $searchFilter['params']);
         }
 
         $category = filter_var($filters['categoria'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

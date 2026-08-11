@@ -15,24 +15,25 @@ trait FamiliasConsultas
         if ($status === 'activo') $where[] = 'f.activo = 1';
         if ($status === 'inactivo') $where[] = 'f.activo = 0';
 
-        $search = clean_text($filters['buscar'] ?? '', 150, false);
-        if ($search !== '') {
-            $where[] = '(f.nombre LIKE :buscar_nombre OR f.descripcion LIKE :buscar_descripcion OR EXISTS (
-                SELECT 1
-                FROM familias_socios fsb
-                INNER JOIN socios_personas pb ON pb.id_socio = fsb.id_socio
-                WHERE fsb.id_familia = f.id_familia
-                  AND fsb.fecha_desvinculacion IS NULL
-                  AND (pb.apellido LIKE :buscar_apellido OR pb.nombre LIKE :buscar_socio OR pb.dni LIKE :buscar_dni)
-            ))';
-            $term = '%' . $search . '%';
-            $params = [
-                'buscar_nombre' => $term,
-                'buscar_descripcion' => $term,
-                'buscar_apellido' => $term,
-                'buscar_socio' => $term,
-                'buscar_dni' => $term,
-            ];
+        $searchFilter = build_search_filter(
+            $filters['buscar'] ?? '',
+            [
+                "CONCAT_WS(' ', f.nombre, f.descripcion) LIKE {param}",
+                "EXISTS (
+                    SELECT 1
+                    FROM familias_socios fsb
+                    INNER JOIN socios_personas pb ON pb.id_socio = fsb.id_socio
+                    WHERE fsb.id_familia = f.id_familia
+                      AND fsb.fecha_desvinculacion IS NULL
+                      AND CONCAT_WS(' ', pb.apellido, pb.nombre, pb.dni) LIKE {param}
+                )",
+            ],
+            150,
+            'buscar_familia'
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            $params = array_merge($params, $searchFilter['params']);
         }
 
         $sqlWhere = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);

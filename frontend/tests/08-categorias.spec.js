@@ -97,6 +97,8 @@ test.describe('Categorías y descuentos familiares', () => {
     await expectToast(page, 'Categoría creada correctamente.');
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    await search.fill(`${category.textSuffix.toLowerCase()}, playwright`);
+    await expect(tableRow(page, 'Listado de categorías', category.nombre)).toBeVisible();
     await search.fill(category.nombre);
     let row = tableRow(page, 'Listado de categorías', category.nombre);
     await expect(row).toBeVisible();

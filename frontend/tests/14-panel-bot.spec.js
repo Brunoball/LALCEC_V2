@@ -2,7 +2,8 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const {
   botApiCall,
   botApiResult,
-  botApiUrl,
+  botRequestBody,
+  botRequestParams,
   botTestWaId,
   endpointMatcher,
   getBotContact,
@@ -10,9 +11,21 @@ const {
   openBotTestChat,
   openChatOptions,
 } = require('./helpers/bot.helper');
+const { envBoolean } = require('./helpers/env.helper');
 
 const WA_ID = botTestWaId();
 const TEST_LABEL_PREFIX = 'PW E2E BOT';
+const REAL_BOT_ENABLED =
+  envBoolean('PW_BOT_REAL_INTEGRATION') &&
+  String(process.env.PW_BOT_LOCAL_DEV_KEY || '').trim().length > 0;
+
+function realBotTest(title, body) {
+  if (REAL_BOT_ENABLED) {
+    test(title, body);
+    return;
+  }
+  test.skip(title, body);
+}
 
 function contactName(contact) {
   return String(
@@ -72,6 +85,10 @@ async function mockEndpoint(page, endpoint, handler) {
     (url) => endpointMatcher(endpoint)(url.toString()),
     async (route) => {
       const request = route.request();
+      if (!endpointMatcher(endpoint)(request)) {
+        await route.fallback();
+        return;
+      }
       const result = await handler(request);
       await route.fulfill({
         status: 200,
@@ -83,10 +100,10 @@ async function mockEndpoint(page, endpoint, handler) {
 }
 
 function mockReportFor(request) {
-  const url = new URL(request.url());
+  const params = botRequestParams(request);
   const now = new Date();
-  const anio = Number(url.searchParams.get('anio') || now.getFullYear());
-  const mes = Number(url.searchParams.get('mes') || now.getMonth() + 1);
+  const anio = Number(params.anio || now.getFullYear());
+  const mes = Number(params.mes || now.getMonth() + 1);
   const clave = `${anio}-${String(mes).padStart(2, '0')}`;
 
   return {
@@ -267,13 +284,13 @@ async function installSafeBotMock(page, options = {}) {
     return { success: true, hash: 'pw-global-hash' };
   });
   await mockEndpoint(page, 'panel_set_modo', async (request) => {
-    const body = request.postDataJSON();
+    const body = botRequestBody(request);
     state.mode = body.modo;
     remember('panel_set_modo', request, body);
     return { success: true, modo: state.mode };
   });
   await mockEndpoint(page, 'panel_send', async (request) => {
-    const body = request.postDataJSON();
+    const body = botRequestBody(request);
     remember('panel_send', request, body);
     return { success: true, id: 99901 };
   });
@@ -294,35 +311,35 @@ async function installSafeBotMock(page, options = {}) {
     };
   });
   await mockEndpoint(page, 'editar_nombre', async (request) => {
-    const body = request.postDataJSON();
+    const body = botRequestBody(request);
     state.name = body.nombre;
     remember('editar_nombre', request, body);
     return { success: true };
   });
   await mockEndpoint(page, 'etiquetas_set', async (request) => {
-    const body = request.postDataJSON();
+    const body = botRequestBody(request);
     state.labelId = body.etiqueta_id ?? null;
     remember('etiquetas_set', request, body);
     return { success: true };
   });
   await mockEndpoint(page, 'etiquetas_create', async (request) => {
-    remember('etiquetas_create', request, request.postDataJSON());
+    remember('etiquetas_create', request, botRequestBody(request));
     return { success: true, id_etiqueta: 92 };
   });
   await mockEndpoint(page, 'etiquetas_update', async (request) => {
-    remember('etiquetas_update', request, request.postDataJSON());
+    remember('etiquetas_update', request, botRequestBody(request));
     return { success: true };
   });
   await mockEndpoint(page, 'etiquetas_delete', async (request) => {
-    remember('etiquetas_delete', request, request.postDataJSON());
+    remember('etiquetas_delete', request, botRequestBody(request));
     return { success: true };
   });
   await mockEndpoint(page, 'vaciar_chat', async (request) => {
-    remember('vaciar_chat', request, request.postDataJSON());
+    remember('vaciar_chat', request, botRequestBody(request));
     return { success: true };
   });
   await mockEndpoint(page, 'eliminar_contacto', async (request) => {
-    remember('eliminar_contacto', request, request.postDataJSON());
+    remember('eliminar_contacto', request, botRequestBody(request));
     return { success: true };
   });
 
@@ -349,7 +366,7 @@ test.describe('Panel Bot WhatsApp', () => {
     expect(WA_ID).toBe('5493492253860');
   });
 
-  test('Hostinger expone health, chats, unread, reportes y lectura del contacto real', async ({ request }) => {
+  realBotTest('Hostinger expone health, chats, unread, reportes y lectura del contacto real', async ({ request }) => {
     const health = await botApiCall(request, 'panel', 'panel_health', {
       params: { db: 1 },
     });
@@ -389,7 +406,7 @@ test.describe('Panel Bot WhatsApp', () => {
     expect(report).toHaveProperty('costos');
   });
 
-  test('los endpoints de escritura delicados existen sin ejecutar una mutación válida', async ({ request }) => {
+  realBotTest('los endpoints de escritura delicados existen sin ejecutar una mutación válida', async ({ request }) => {
     const probes = [
       ['panel', 'panel_send', { wa_id: '', texto: '' }],
       ['panel', 'panel_set_modo', { wa_id: '', modo: 'invalido' }],
@@ -405,15 +422,13 @@ test.describe('Panel Bot WhatsApp', () => {
       await expectEndpointExists(result, endpoint);
     }
 
-    const mediaProbe = await request.get(botApiUrl('panel', 'panel_send_media'), {
-      failOnStatusCode: false,
-      headers: { Accept: 'application/json' },
+    const mediaProbe = await botApiResult(request, 'panel', 'panel_send_media', {
+      retries: 0,
     });
-    expect(mediaProbe.status(), 'panel_send_media no debe responder 404.').not.toBe(404);
-    expect(String(mediaProbe.headers()['content-type'] || '')).toContain('application/json');
+    await expectEndpointExists(mediaProbe, 'panel_send_media');
   });
 
-  test('recorre lectura, búsqueda, filtros, hashes, tema y Reportes del Bot con backend real', async ({ page }) => {
+  realBotTest('recorre lectura, búsqueda, filtros, hashes, tema y Reportes del Bot con backend real', async ({ page }) => {
     const observed = new Set();
     const botHttpErrors = [];
     const tracked = [
@@ -428,7 +443,7 @@ test.describe('Panel Bot WhatsApp', () => {
 
     page.on('response', (response) => {
       for (const endpoint of tracked) {
-        if (endpointMatcher(endpoint)(response.url())) {
+        if (endpointMatcher(endpoint)(response)) {
           observed.add(endpoint);
           if (response.status() >= 400) {
             botHttpErrors.push(`${endpoint}: HTTP ${response.status()}`);
@@ -450,7 +465,7 @@ test.describe('Panel Bot WhatsApp', () => {
     await page.getByRole('button', { name: 'Cambiar tema' }).click();
     await expect.poll(() => page.locator('html').getAttribute('data-botpanel-theme')).not.toBe(oldTheme);
 
-    const reportResponse = page.waitForResponse((response) => endpointMatcher('panel_reportes')(response.url()));
+    const reportResponse = page.waitForResponse((response) => endpointMatcher('panel_reportes')(response));
     await page.getByRole('button', { name: 'Abrir reportes del bot' }).click();
     expect((await reportResponse).ok()).toBeTruthy();
 
@@ -480,19 +495,19 @@ test.describe('Panel Bot WhatsApp', () => {
     await expect(page).toHaveURL(/\/panel(?:$|\?)/);
   });
 
-  test('cambia Bot/Manual sobre el contacto real y restaura el modo original', async ({ page, request }) => {
+  realBotTest('cambia Bot/Manual sobre el contacto real y restaura el modo original', async ({ page, request }) => {
     const snapshot = await getBotContact(request, WA_ID);
     expect(snapshot).toBeTruthy();
 
     try {
       await openBotTestChat(page, WA_ID);
 
-      let responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response.url()));
+      let responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response));
       await page.getByRole('button', { name: 'Modo Manual' }).click();
       expect((await responsePromise).ok()).toBeTruthy();
       await expect(page.getByText(/Manual activo|Conversación manual activa|Consulta pendiente/i).first()).toBeVisible();
 
-      responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response));
       await page.getByRole('button', { name: 'Modo Bot' }).click();
       expect((await responsePromise).ok()).toBeTruthy();
     } finally {
@@ -500,7 +515,7 @@ test.describe('Panel Bot WhatsApp', () => {
     }
   });
 
-  test('edita/restaura nombre y completa alta, asignación, edición y baja de etiquetas reales', async ({ page, request }) => {
+  realBotTest('edita/restaura nombre y completa alta, asignación, edición y baja de etiquetas reales', async ({ page, request }) => {
     const snapshot = await getBotContact(request, WA_ID);
     expect(snapshot).toBeTruthy();
     await cleanupTestLabels(request);
@@ -517,7 +532,7 @@ test.describe('Panel Bot WhatsApp', () => {
       await menu.getByRole('button', { name: 'Editar nombre' }).click();
       let dialog = page.getByRole('dialog').filter({ hasText: 'Editar nombre' });
       await dialog.getByLabel('Nombre del contacto').fill(temporaryName);
-      let responsePromise = page.waitForResponse((response) => endpointMatcher('editar_nombre')(response.url()));
+      let responsePromise = page.waitForResponse((response) => endpointMatcher('editar_nombre')(response));
       await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
       expect((await responsePromise).ok()).toBeTruthy();
       await expect(page.locator('.wp-chat-top-name')).toHaveText(temporaryName);
@@ -526,14 +541,14 @@ test.describe('Panel Bot WhatsApp', () => {
       await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
       dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
       await dialog.getByPlaceholder('Ej: Pagó / Urgente / Nuevo...').fill(labelOne);
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_create')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_create')(response));
       await dialog.getByRole('button', { name: 'Agregar', exact: true }).click();
       const createdBody = await (await responsePromise).json();
       expect(Number(createdBody.id_etiqueta || 0)).toBeGreaterThan(0);
 
       const createdRow = dialog.locator('.bp-tag-row').filter({ hasText: labelOne });
       await expect(createdRow).toBeVisible();
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response));
       await dialog.locator('.bp-tag-actions').getByRole('button', { name: 'Guardar', exact: true }).click();
       expect((await responsePromise).ok()).toBeTruthy();
 
@@ -549,13 +564,13 @@ test.describe('Panel Bot WhatsApp', () => {
       const editRow = dialog.locator('.bp-tag-edit-row');
       await expect(editRow).toBeVisible();
       await editRow.locator('input').fill(labelTwo);
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_update')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_update')(response));
       await editRow.getByRole('button', { name: 'Guardar', exact: true }).click();
       expect((await responsePromise).ok()).toBeTruthy();
       await expect(dialog.locator('.bp-tag-row').filter({ hasText: labelTwo })).toBeVisible();
 
       await dialog.getByLabel('Etiqueta asignada').selectOption('');
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response));
       await dialog.locator('.bp-tag-actions').getByRole('button', { name: 'Guardar', exact: true }).click();
       expect((await responsePromise).ok()).toBeTruthy();
 
@@ -565,7 +580,7 @@ test.describe('Panel Bot WhatsApp', () => {
       const renamedRow = dialog.locator('.bp-tag-row').filter({ hasText: labelTwo });
       await renamedRow.getByRole('button', { name: 'Eliminar', exact: true }).click();
       const confirm = page.getByRole('dialog').filter({ hasText: 'Eliminar etiqueta' });
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_delete')(response.url()));
+      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_delete')(response));
       await confirm.getByRole('button', { name: 'Eliminar', exact: true }).click();
       expect((await responsePromise).ok()).toBeTruthy();
     } finally {

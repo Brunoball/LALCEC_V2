@@ -151,10 +151,11 @@ function ModuleFilter({ filter }) {
           <input
             className="module-filterControl module-filterControl--search"
             type="text"
-            value={value}
-            onChange={(event) => filter.onChange?.(event.target.value)}
+            value={String(value)}
+            onInput={(event) => filter.onChange?.(event.currentTarget.value)}
             placeholder={filter.placeholder ?? "Buscar..."}
             aria-label={filter.label}
+            autoComplete="off"
           />
           {String(value).trim() ? (
             <button
