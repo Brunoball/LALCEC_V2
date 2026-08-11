@@ -42,7 +42,11 @@ import {
   onlyDigits,
   upperWithoutDigits,
 } from "../Global/Formularios/inputSanitizers";
-import { normalizeSearchQuery } from "../Global/Formularios/searchUtils";
+import {
+  getPrimarySearchTerm,
+  matchesEverySearchTerm,
+  normalizeSearchQuery,
+} from "../Global/Formularios/searchUtils";
 import { canWrite } from "../_shared/auth/session";
 import { sociosApi } from "./api/sociosApi";
 import { useSocios } from "./hooks/useSocios";
@@ -175,6 +179,28 @@ const COMPANY_EXPORT_COLUMNS = [
     value: (item) => item.estado || (item.activo ? "ACTIVA" : "BAJA"),
   },
 ];
+
+function matchesSocioSearch(item, query) {
+  return matchesEverySearchTerm(
+    [
+      item.denominacion,
+      item.apellido,
+      item.nombre,
+      item.razon_social,
+      item.dni,
+      item.cuit,
+      item.categoria,
+      item.localidad,
+      item.domicilio,
+      item.numero_domicilio,
+      item.telefono,
+      item.email,
+    ]
+      .filter((value) => value !== undefined && value !== null && value !== "")
+      .join(" "),
+    query,
+  );
+}
 
 const MONTHS = [
   "ENERO",
@@ -973,19 +999,28 @@ export default function Socios({ tipo = PERSON }) {
     setPage(1);
   }, [type]);
 
+  const serverSearch = useMemo(
+    () => getPrimarySearchTerm(debouncedSearch),
+    [debouncedSearch],
+  );
+
   const filters = useMemo(
     () => ({
       tipo: type,
-      buscar: debouncedSearch,
+      buscar: serverSearch,
       estado: status,
       categoria: category,
       pagina: page,
       por_pagina: PAGE_SIZE,
     }),
-    [type, debouncedSearch, status, category, page],
+    [type, serverSearch, status, category, page],
   );
   const { items, catalogos, paginacion, loading, error, cargar } =
     useSocios(filters);
+  const visibleItems = useMemo(
+    () => items.filter((item) => matchesSocioSearch(item, debouncedSearch)),
+    [items, debouncedSearch],
+  );
   const categoryAmounts = useMemo(
     () =>
       Object.fromEntries(
@@ -1089,8 +1124,10 @@ export default function Socios({ tipo = PERSON }) {
       registros.push(...(respuesta.items || []));
     }
 
-    return registros;
-  }, [filters]);
+    return registros.filter((item) =>
+      matchesSocioSearch(item, debouncedSearch),
+    );
+  }, [debouncedSearch, filters]);
 
   const openNew = () => {
     setForm(emptyForm(type, catalogos));
@@ -1286,7 +1323,7 @@ export default function Socios({ tipo = PERSON }) {
           <BotonExportarGlobal
             label="Exportar"
             onClick={() => setExportModalOpen(true)}
-            disabled={loading || items.length === 0}
+            disabled={loading || visibleItems.length === 0}
             title={`Exportar ${title.toLowerCase()} en Excel o PDF`}
           />
         }
@@ -1333,7 +1370,7 @@ export default function Socios({ tipo = PERSON }) {
                 ]
           }
         >
-          {!loading && !error && !items.length ? (
+          {!loading && !error && !visibleItems.length ? (
             <div className="module-empty">
               <FontAwesomeIcon icon={isCompany ? faBuilding : faUser} />
               <strong>Sin {title.toLowerCase()} para mostrar</strong>
@@ -1341,7 +1378,7 @@ export default function Socios({ tipo = PERSON }) {
             </div>
           ) : null}
           <SociosRows
-            items={items}
+            items={visibleItems}
             isCompany={isCompany}
             categoryAmounts={categoryAmounts}
             writable={writable}
@@ -1419,11 +1456,11 @@ export default function Socios({ tipo = PERSON }) {
         subtituloArchivoTodos={exportFilterDescription}
         nombreArchivo={isCompany ? "empresas" : "socios"}
         columnas={exportColumns}
-        registrosActuales={items}
+        registrosActuales={visibleItems}
         obtenerRegistrosTodos={obtenerTodosParaExportar}
-        cantidadActual={items.length}
-        cantidadTodos={Number(paginacion?.total || items.length)}
-        mostrarAlcanceTodos={Number(paginacion?.total || 0) > items.length}
+        cantidadActual={visibleItems.length}
+        cantidadTodos={Number(paginacion?.total || visibleItems.length)}
+        mostrarAlcanceTodos={Number(paginacion?.total || 0) > visibleItems.length}
         alcanceActualLabel={totalPages > 1 ? "Exportar esta página" : "Exportar registros visibles"}
         alcanceActualDescription="Descarga los registros visibles con los filtros actuales."
         alcanceTodosLabel={`Exportar todos los ${title.toLowerCase()}`}

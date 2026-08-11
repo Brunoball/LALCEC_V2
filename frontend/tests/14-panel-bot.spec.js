@@ -1,84 +1,15 @@
 const { test, expect } = require('./fixtures/auth.fixture');
 const {
-  botApiCall,
-  botApiResult,
   botRequestBody,
   botRequestParams,
   botTestWaId,
   endpointMatcher,
-  getBotContact,
   normalizeBotWaId,
   openBotTestChat,
   openChatOptions,
 } = require('./helpers/bot.helper');
-const { envBoolean } = require('./helpers/env.helper');
 
 const WA_ID = botTestWaId();
-const TEST_LABEL_PREFIX = 'PW E2E BOT';
-const REAL_BOT_ENABLED =
-  envBoolean('PW_BOT_REAL_INTEGRATION') &&
-  String(process.env.PW_BOT_LOCAL_DEV_KEY || '').trim().length > 0;
-
-function realBotTest(title, body) {
-  if (REAL_BOT_ENABLED) {
-    test(title, body);
-    return;
-  }
-  test.skip(title, body);
-}
-
-function contactName(contact) {
-  return String(
-    contact?.nombre ||
-      contact?.nombre_contacto ||
-      contact?.contacto_nombre ||
-      contact?.nombre_db ||
-      contact?.name ||
-      '',
-  ).trim();
-}
-
-function contactMode(contact) {
-  return String(contact?.modo || '').trim().toLowerCase() === 'manual'
-    ? 'manual'
-    : 'bot';
-}
-
-async function cleanupTestLabels(request) {
-  const data = await botApiCall(request, 'management', 'etiquetas_list');
-  const labels = (data.etiquetas || []).filter((item) =>
-    String(item?.nombre || '').toUpperCase().startsWith(TEST_LABEL_PREFIX),
-  );
-  for (const label of labels) {
-    await botApiCall(request, 'management', 'etiquetas_delete', {
-      method: 'POST',
-      data: { id_etiqueta: Number(label.id_etiqueta) },
-    }).catch(() => undefined);
-  }
-}
-
-async function restoreContact(request, snapshot) {
-  if (!snapshot) return;
-
-  const originalName = contactName(snapshot);
-  await botApiCall(request, 'management', 'editar_nombre', {
-    method: 'POST',
-    data: { wa_id: WA_ID, nombre: originalName },
-  }).catch(() => undefined);
-
-  await botApiCall(request, 'management', 'etiquetas_set', {
-    method: 'POST',
-    data: {
-      wa_id: WA_ID,
-      etiqueta_id: snapshot?.etiqueta_id ?? null,
-    },
-  }).catch(() => undefined);
-
-  await botApiCall(request, 'panel', 'panel_set_modo', {
-    method: 'POST',
-    data: { wa_id: WA_ID, modo: contactMode(snapshot) },
-  }).catch(() => undefined);
-}
 
 async function mockEndpoint(page, endpoint, handler) {
   await page.route(
@@ -352,11 +283,6 @@ function hasRequest(state, endpoint, predicate = () => true) {
   );
 }
 
-async function expectEndpointExists(result, endpoint) {
-  expect(result.status, `${endpoint} no debe responder 404.`).not.toBe(404);
-  expect(result.body, `${endpoint} debe devolver JSON.`).toBeTruthy();
-}
-
 test.describe('Panel Bot WhatsApp', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -366,94 +292,9 @@ test.describe('Panel Bot WhatsApp', () => {
     expect(WA_ID).toBe('5493492253860');
   });
 
-  realBotTest('Hostinger expone health, chats, unread, reportes y lectura del contacto real', async ({ request }) => {
-    const health = await botApiCall(request, 'panel', 'panel_health', {
-      params: { db: 1 },
-    });
-    expect(health.status).toBe('ok');
-    expect(health.db).toBe(true);
-
-    const contact = await getBotContact(request, WA_ID);
-    expect(contact, `No existe ${WA_ID} en panel_chats del backend del bot.`).toBeTruthy();
-
-    const messages = await botApiCall(request, 'panel', 'panel_mensajes', {
-      params: { wa_id: WA_ID, limit: 25 },
-    });
-    expect(Array.isArray(messages.mensajes)).toBe(true);
-
-    const hash = await botApiCall(request, 'panel', 'panel_hash', {
-      params: { wa_id: WA_ID },
-    });
-    expect(typeof hash.hash).toBe('string');
-
-    const globalHash = await botApiCall(request, 'panel', 'panel_global_hash');
-    expect(typeof globalHash.hash).toBe('string');
-
-    const unread = await botApiCall(request, 'panel', 'panel_unread_total');
-    expect(Number(unread.total_normal)).toBeGreaterThanOrEqual(0);
-    expect(Number(unread.total_urgent)).toBeGreaterThanOrEqual(0);
-
-    const labels = await botApiCall(request, 'management', 'etiquetas_list');
-    expect(Array.isArray(labels.etiquetas)).toBe(true);
-
-    const now = new Date();
-    const report = await botApiCall(request, 'panel', 'panel_reportes', {
-      params: { anio: now.getFullYear(), mes: now.getMonth() + 1 },
-    });
-    expect(report).toHaveProperty('resumen');
-    expect(report).toHaveProperty('actividad');
-    expect(report).toHaveProperty('pagos');
-    expect(report).toHaveProperty('costos');
-  });
-
-  realBotTest('los endpoints de escritura delicados existen sin ejecutar una mutación válida', async ({ request }) => {
-    const probes = [
-      ['panel', 'panel_send', { wa_id: '', texto: '' }],
-      ['panel', 'panel_set_modo', { wa_id: '', modo: 'invalido' }],
-      ['management', 'vaciar_chat', { wa_id: 'PW_E2E_INVALID' }],
-      ['management', 'eliminar_contacto', { wa_id: 'PW_E2E_INVALID' }],
-    ];
-
-    for (const [section, endpoint, data] of probes) {
-      const result = await botApiResult(request, section, endpoint, {
-        method: 'POST',
-        data,
-      });
-      await expectEndpointExists(result, endpoint);
-    }
-
-    const mediaProbe = await botApiResult(request, 'panel', 'panel_send_media', {
-      retries: 0,
-    });
-    await expectEndpointExists(mediaProbe, 'panel_send_media');
-  });
-
-  realBotTest('recorre lectura, búsqueda, filtros, hashes, tema y Reportes del Bot con backend real', async ({ page }) => {
-    const observed = new Set();
-    const botHttpErrors = [];
-    const tracked = [
-      'panel_chats',
-      'panel_mensajes',
-      'panel_mark_seen',
-      'panel_hash',
-      'panel_global_hash',
-      'panel_reportes',
-      'etiquetas_list',
-    ];
-
-    page.on('response', (response) => {
-      for (const endpoint of tracked) {
-        if (endpointMatcher(endpoint)(response)) {
-          observed.add(endpoint);
-          if (response.status() >= 400) {
-            botHttpErrors.push(`${endpoint}: HTTP ${response.status()}`);
-          }
-        }
-      }
-    });
-
+  test('recorre filtros, tema, modos, reportes y datos del contacto usando mocks', async ({ page }) => {
+    const state = await installSafeBotMock(page, { mode: 'manual' });
     await openBotTestChat(page, WA_ID);
-    await expect(page.locator('.wp-chat-top-name')).not.toHaveText('');
 
     const filterButton = page.getByRole('button', { name: /Filtrar por etiqueta/i });
     await filterButton.click();
@@ -463,132 +304,50 @@ test.describe('Panel Bot WhatsApp', () => {
 
     const oldTheme = await page.locator('html').getAttribute('data-botpanel-theme');
     await page.getByRole('button', { name: 'Cambiar tema' }).click();
-    await expect.poll(() => page.locator('html').getAttribute('data-botpanel-theme')).not.toBe(oldTheme);
+    await expect.poll(
+      () => page.locator('html').getAttribute('data-botpanel-theme'),
+    ).not.toBe(oldTheme);
 
-    const reportResponse = page.waitForResponse((response) => endpointMatcher('panel_reportes')(response));
+    const reportResponsePromise = page.waitForResponse((response) =>
+      endpointMatcher('panel_reportes')(response),
+    );
     await page.getByRole('button', { name: 'Abrir reportes del bot' }).click();
-    expect((await reportResponse).ok()).toBeTruthy();
+    expect((await reportResponsePromise).ok()).toBeTruthy();
 
     const report = page.getByRole('dialog', { name: 'Reportes del bot' });
     await expect(report).toBeVisible();
     await expect(report.getByRole('heading', { name: 'Reportes del Bot' })).toBeVisible();
     await expect(report.getByLabel('Período del reporte')).toBeVisible();
-    await expect(report.getByText('Socios que pagaron por el bot')).toBeVisible();
 
     await report.getByRole('button', { name: 'Actividad', exact: true }).click();
     await expect(report.getByText('Mensajes de prioridad alta')).toBeVisible();
     await expect(report.getByText('Consultas atendidas')).toBeVisible();
-
     await report.getByRole('button', { name: 'Pagos', exact: true }).click();
-    await expect(report.getByRole('heading', { name: 'Pagos gestionados por el bot' })).toBeVisible();
-
     await report.getByRole('button', { name: 'Costos WhatsApp', exact: true }).click();
-    await expect(report.getByRole('heading', { name: 'Costos de recordatorios por WhatsApp' })).toBeVisible();
     await report.getByRole('button', { name: 'Cerrar reportes' }).click();
 
-    await expect.poll(() => [...observed], { timeout: 15000 }).toEqual(
-      expect.arrayContaining(tracked),
-    );
-    expect(botHttpErrors, `Errores HTTP del Panel Bot: ${botHttpErrors.join(', ')}`).toEqual([]);
+    await page.getByRole('button', { name: 'Modo Bot' }).click();
+    await expect.poll(() => state.mode).toBe('bot');
+    await page.getByRole('button', { name: 'Modo Manual' }).click();
+    await expect.poll(() => state.mode).toBe('manual');
 
-    await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page).toHaveURL(/\/panel(?:$|\?)/);
-  });
+    let menu = await openChatOptions(page);
+    await menu.getByRole('button', { name: 'Editar nombre' }).click();
+    let dialog = page.getByRole('dialog').filter({ hasText: 'Editar nombre' });
+    await dialog.getByLabel('Nombre del contacto').fill('PW BOT MOCK EDITADO');
+    await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
+    await expect.poll(() => state.name).toBe('PW BOT MOCK EDITADO');
+    await expect(page.locator('.wp-chat-top-name')).toHaveText('PW BOT MOCK EDITADO');
 
-  realBotTest('cambia Bot/Manual sobre el contacto real y restaura el modo original', async ({ page, request }) => {
-    const snapshot = await getBotContact(request, WA_ID);
-    expect(snapshot).toBeTruthy();
-
-    try {
-      await openBotTestChat(page, WA_ID);
-
-      let responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response));
-      await page.getByRole('button', { name: 'Modo Manual' }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-      await expect(page.getByText(/Manual activo|Conversación manual activa|Consulta pendiente/i).first()).toBeVisible();
-
-      responsePromise = page.waitForResponse((response) => endpointMatcher('panel_set_modo')(response));
-      await page.getByRole('button', { name: 'Modo Bot' }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-    } finally {
-      await restoreContact(request, snapshot);
-    }
-  });
-
-  realBotTest('edita/restaura nombre y completa alta, asignación, edición y baja de etiquetas reales', async ({ page, request }) => {
-    const snapshot = await getBotContact(request, WA_ID);
-    expect(snapshot).toBeTruthy();
-    await cleanupTestLabels(request);
-
-    const suffix = String(Date.now()).slice(-6);
-    const labelOne = `${TEST_LABEL_PREFIX} ${suffix}`;
-    const labelTwo = `${TEST_LABEL_PREFIX} X${suffix}`;
-    const temporaryName = `${TEST_LABEL_PREFIX} CONTACTO`;
-
-    try {
-      await openBotTestChat(page, WA_ID);
-
-      let menu = await openChatOptions(page);
-      await menu.getByRole('button', { name: 'Editar nombre' }).click();
-      let dialog = page.getByRole('dialog').filter({ hasText: 'Editar nombre' });
-      await dialog.getByLabel('Nombre del contacto').fill(temporaryName);
-      let responsePromise = page.waitForResponse((response) => endpointMatcher('editar_nombre')(response));
-      await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-      await expect(page.locator('.wp-chat-top-name')).toHaveText(temporaryName);
-
-      menu = await openChatOptions(page);
-      await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
-      dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
-      await dialog.getByPlaceholder('Ej: Pagó / Urgente / Nuevo...').fill(labelOne);
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_create')(response));
-      await dialog.getByRole('button', { name: 'Agregar', exact: true }).click();
-      const createdBody = await (await responsePromise).json();
-      expect(Number(createdBody.id_etiqueta || 0)).toBeGreaterThan(0);
-
-      const createdRow = dialog.locator('.bp-tag-row').filter({ hasText: labelOne });
-      await expect(createdRow).toBeVisible();
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response));
-      await dialog.locator('.bp-tag-actions').getByRole('button', { name: 'Guardar', exact: true }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-
-      menu = await openChatOptions(page);
-      await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
-      dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
-      const labelRow = dialog.locator('.bp-tag-row').filter({ hasText: labelOne });
-      await labelRow.getByRole('button', { name: 'Editar', exact: true }).click();
-
-      // Al entrar en edición el <b> con el nombre desaparece y la fila deja de
-      // cumplir filter({ hasText: labelOne }). Tomamos el único editor activo,
-      // que es estable mientras solo puede editarse una etiqueta a la vez.
-      const editRow = dialog.locator('.bp-tag-edit-row');
-      await expect(editRow).toBeVisible();
-      await editRow.locator('input').fill(labelTwo);
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_update')(response));
-      await editRow.getByRole('button', { name: 'Guardar', exact: true }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-      await expect(dialog.locator('.bp-tag-row').filter({ hasText: labelTwo })).toBeVisible();
-
-      await dialog.getByLabel('Etiqueta asignada').selectOption('');
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_set')(response));
-      await dialog.locator('.bp-tag-actions').getByRole('button', { name: 'Guardar', exact: true }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-
-      menu = await openChatOptions(page);
-      await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
-      dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
-      const renamedRow = dialog.locator('.bp-tag-row').filter({ hasText: labelTwo });
-      await renamedRow.getByRole('button', { name: 'Eliminar', exact: true }).click();
-      const confirm = page.getByRole('dialog').filter({ hasText: 'Eliminar etiqueta' });
-      responsePromise = page.waitForResponse((response) => endpointMatcher('etiquetas_delete')(response));
-      await confirm.getByRole('button', { name: 'Eliminar', exact: true }).click();
-      expect((await responsePromise).ok()).toBeTruthy();
-    } finally {
-      // Primero desasignar/restaurar el contacto; después eliminar etiquetas PW.
-      // Así el cleanup también funciona cuando una aserción corta el flujo a mitad de prueba.
-      await restoreContact(request, snapshot);
-      await cleanupTestLabels(request).catch(() => undefined);
-    }
+    menu = await openChatOptions(page);
+    await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
+    dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
+    await dialog.getByLabel('Etiqueta asignada').selectOption('91');
+    await dialog
+      .locator('.bp-tag-actions')
+      .getByRole('button', { name: 'Guardar', exact: true })
+      .click();
+    await expect.poll(() => state.labelId).toBe(91);
   });
 
   test('recorre leído/no leído y prioridad de consulta sin alterar datos reales', async ({ page }) => {

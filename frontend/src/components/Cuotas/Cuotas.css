@@ -25,23 +25,27 @@
   justify-self: end;
   justify-content: end;
   grid-template-columns:
-    minmax(240px, 280px)
+    minmax(330px, 360px)
     minmax(220px, 250px)
     120px
     120px;
 }
 
 .cuotas-head-filters .module-filter--tabs {
-  min-width: 0;
+  min-width: 330px;
 }
 
-/* Estado (Deudores / Pagados): replica el armado del Cuotas viejo.
+/* Estado (Deudores / Pagados / Condonados): mantiene la estética compacta.
    Texto + contador viven en una sola fila flex y comparten el mismo centro vertical. */
 .cuotas-head-filters .module-filter--tabs .module-filterTab {
+  min-width: 0;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  padding-inline: 7px;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .cuotas-head-filters .module-filter--tabs .module-tabContent,
@@ -59,8 +63,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 5px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .cuotas-state-tabText {
@@ -72,17 +77,23 @@
 
 /* Mismo concepto de badge del GestionarCuotas viejo. */
 .cuotas-state-tabBadge {
+  min-width: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  padding: 1px 8px 0;
-  border-radius: 10px;
-  background-color: rgba(255, 255, 255, 0.2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.cuotas-state-tabBadge.is-pending {
+  visibility: hidden;
 }
 
 .cuotas-head-filters .cuotas-search-filter {
@@ -496,7 +507,7 @@
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 980px) {
   .cuotas-head-filters {
     max-width: none;
     flex-basis: 100%;
@@ -523,6 +534,19 @@
 @media (max-width: 600px) {
   .cuotas-head-filters {
     grid-template-columns: minmax(0, 1fr) 120px 120px;
+  }
+
+  .cuotas-head-filters .module-filter--tabs {
+    min-width: 0;
+  }
+
+  .cuotas-head-filters .module-filter--tabs .module-filterTabs {
+    overflow-x: auto;
+  }
+
+  .cuotas-head-filters .module-filter--tabs .module-filterTab {
+    min-width: 112px;
+    flex: 0 0 112px;
   }
 }
 

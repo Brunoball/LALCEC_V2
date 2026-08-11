@@ -171,7 +171,7 @@ test.describe('Cuotas de socios y empresas', () => {
     }
   });
 
-  test('muestra las cuatro vistas y no conserva la pestaña de condonados', async ({ page }) => {
+  test('muestra las vistas de deudores, pagados y condonados para socios y empresas', async ({ page }) => {
     await page.goto('/cuotas');
 
     await expect(page.getByRole('heading', { name: 'Cuotas' })).toBeVisible();
@@ -179,12 +179,16 @@ test.describe('Cuotas de socios y empresas', () => {
     await expect(page.getByRole('tab', { name: 'Empresas' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Deudores' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Pagados' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Condonados/i })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /Condonados/i })).toBeVisible();
 
     await expect(page.getByRole('table', { name: /Cuotas de socios adeudadas/i })).toBeVisible();
     await page.getByRole('tab', { name: 'Pagados' }).click();
     await expect(page.getByRole('table', { name: /Cuotas de socios pagadas/i })).toBeVisible();
+    await page.getByRole('tab', { name: /Condonados/i }).click();
+    await expect(page.getByRole('table', { name: /Cuotas de socios condonadas/i })).toBeVisible();
     await page.getByRole('tab', { name: 'Empresas' }).click();
+    await expect(page.getByRole('table', { name: /Cuotas de empresas condonadas/i })).toBeVisible();
+    await page.getByRole('tab', { name: 'Pagados' }).click();
     await expect(page.getByRole('table', { name: /Cuotas de empresas pagadas/i })).toBeVisible();
     await page.getByRole('tab', { name: 'Deudores' }).click();
     await expect(page.getByRole('table', { name: /Cuotas de empresas adeudadas/i })).toBeVisible();
@@ -807,7 +811,7 @@ test.describe('Cuotas de socios y empresas', () => {
     await expectApiError(
       request,
       'cuotas_listar',
-      { params: { estado: 'CONDONADOS' } },
+      { params: { estado: 'ARCHIVADOS' } },
       { status: 422, code: 'FILTRO_INVALIDO' },
     );
     await expectApiError(

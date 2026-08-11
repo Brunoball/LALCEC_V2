@@ -763,6 +763,18 @@
   scrollbar-gutter: stable;
 }
 
+.global-divTable.is-empty > .global-divTable__wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+.global-divTable.is-empty > .global-divTable__wrap > .module-empty {
+  min-height: 0;
+  flex: 1;
+}
+
 .global-divTable__body {
   min-width: 100%;
 }

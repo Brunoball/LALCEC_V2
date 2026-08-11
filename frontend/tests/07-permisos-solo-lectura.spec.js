@@ -124,6 +124,11 @@ test.describe('Permisos de usuario de solo lectura', () => {
       const mutationCases = [
         ['cuotas_registrar_pago', { id_socio: personItem.id_socio }],
         ['cuotas_registrar_pagos', { pagos: [{ id_socio: personItem.id_socio }] }],
+        ['cuotas_condonar_pago', {
+          id_socio: personItem.id_socio,
+          anio: new Date().getFullYear(),
+          mes: new Date().getMonth() + 1,
+        }],
         ['cuotas_eliminar_pago', { id_pago: 1 }],
         ['contable_opcion_guardar', { tipo: 'PROVEEDOR', nombre: 'NO PERMITIDO' }],
         ['contable_opcion_cambiar_estado', { id_opcion: 1, activo: false }],
@@ -181,7 +186,9 @@ test.describe('Permisos de usuario de solo lectura', () => {
       const page = await context.newPage();
 
       await page.goto('/cuotas');
-      await expect(page.getByText(/permiso de consulta.*registrar y eliminar pagos.*deshabilitado/i)).toBeVisible();
+      await expect(
+        page.getByText(/permiso de consulta.*registrar.*condonar.*eliminar cuotas.*deshabilitado/i),
+      ).toBeVisible();
       await expect(page.locator('.module-card__actions .mov-btn--primary')).toHaveCount(0);
       await expect(page.locator('.cuotas-pay-button:not(:disabled)')).toHaveCount(0);
 

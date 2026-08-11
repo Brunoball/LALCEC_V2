@@ -561,8 +561,14 @@ export default function Cuotas() {
   const cargarTotalesEstado = useCallback(async () => {
     const currentRequest = ++totalsRequestId.current;
 
+    setEstadoTotales({
+      DEUDORES: null,
+      PAGADOS: null,
+      CONDONADOS: null,
+    });
+
     try {
-      const [deudoresResponse, pagadosResponse, condonadosResponse] = await Promise.all([
+      const [deudoresResult, pagadosResult, condonadosResult] = await Promise.allSettled([
         cuotasApi.listar({ ...filtrosTotales, estado: "DEUDORES" }),
         cuotasApi.listar({ ...filtrosTotales, estado: "PAGADOS" }),
         cuotasApi.listar({ ...filtrosTotales, estado: "CONDONADOS" }),
@@ -578,11 +584,14 @@ export default function Cuotas() {
             0,
         );
 
-      setEstadoTotales({
-        DEUDORES: totalFromResponse(deudoresResponse),
-        PAGADOS: totalFromResponse(pagadosResponse),
-        CONDONADOS: totalFromResponse(condonadosResponse),
-      });
+      const totalFromResult = (result) =>
+        result.status === "fulfilled" ? totalFromResponse(result.value) : null;
+
+      setEstadoTotales((current) => ({
+        DEUDORES: totalFromResult(deudoresResult) ?? current.DEUDORES,
+        PAGADOS: totalFromResult(pagadosResult) ?? current.PAGADOS,
+        CONDONADOS: totalFromResult(condonadosResult) ?? current.CONDONADOS,
+      }));
     } catch {
       // El contador es informativo: una falla no debe bloquear la tabla principal.
     }
@@ -634,14 +643,6 @@ export default function Cuotas() {
           Math.min(paginaRemota * porPaginaRemota, totalRegistros),
       )
     : Math.min(pagina * PAGE_SIZE, totalRegistros);
-
-  useEffect(() => {
-    if (loading) return;
-    setEstadoTotales((current) => ({
-      ...current,
-      [estado]: totalRegistros,
-    }));
-  }, [estado, loading, totalRegistros]);
 
   useEffect(() => {
     setPagina(1);
@@ -1660,9 +1661,12 @@ export default function Cuotas() {
           label: (
             <span className="cuotas-state-tabContent">
               <span className="cuotas-state-tabText">Deudores</span>
-              {estadoTotales.DEUDORES != null ? (
-                <span className="cuotas-state-tabBadge">{estadoTotales.DEUDORES}</span>
-              ) : null}
+              <span
+                className={`cuotas-state-tabBadge ${estadoTotales.DEUDORES == null ? "is-pending" : ""}`.trim()}
+                aria-label={estadoTotales.DEUDORES == null ? "Total de deudores cargando" : `${estadoTotales.DEUDORES} deudores`}
+              >
+                {estadoTotales.DEUDORES ?? "…"}
+              </span>
             </span>
           ),
         },
@@ -1671,9 +1675,12 @@ export default function Cuotas() {
           label: (
             <span className="cuotas-state-tabContent">
               <span className="cuotas-state-tabText">Pagados</span>
-              {estadoTotales.PAGADOS != null ? (
-                <span className="cuotas-state-tabBadge">{estadoTotales.PAGADOS}</span>
-              ) : null}
+              <span
+                className={`cuotas-state-tabBadge ${estadoTotales.PAGADOS == null ? "is-pending" : ""}`.trim()}
+                aria-label={estadoTotales.PAGADOS == null ? "Total de pagados cargando" : `${estadoTotales.PAGADOS} pagados`}
+              >
+                {estadoTotales.PAGADOS ?? "…"}
+              </span>
             </span>
           ),
         },
@@ -1682,9 +1689,12 @@ export default function Cuotas() {
           label: (
             <span className="cuotas-state-tabContent">
               <span className="cuotas-state-tabText">Condonados</span>
-              {estadoTotales.CONDONADOS != null ? (
-                <span className="cuotas-state-tabBadge">{estadoTotales.CONDONADOS}</span>
-              ) : null}
+              <span
+                className={`cuotas-state-tabBadge ${estadoTotales.CONDONADOS == null ? "is-pending" : ""}`.trim()}
+                aria-label={estadoTotales.CONDONADOS == null ? "Total de condonados cargando" : `${estadoTotales.CONDONADOS} condonados`}
+              >
+                {estadoTotales.CONDONADOS ?? "…"}
+              </span>
             </span>
           ),
         },
@@ -1860,6 +1870,7 @@ export default function Cuotas() {
             isResolved ? "cuotas-grid cuotas-grid--paid" : debtGridClass
           }
           ariaLabel={tableLabel}
+          empty={!loading && !error && !items.length}
           loading={loading}
           loadingLabel="Cargando cuotas..."
           skeletonRows={8}

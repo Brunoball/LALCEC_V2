@@ -15,6 +15,7 @@ export default function GlobalDivTable({
   children,
   className = "",
   columns = [],
+  empty = false,
   gridClassName = "",
   loading = false,
   loadingLabel = "Cargando registros...",
@@ -44,6 +45,13 @@ export default function GlobalDivTable({
     const updateScrollbar = () => {
       cancelAnimationFrame(animationFrame);
       animationFrame = requestAnimationFrame(() => {
+        if (empty) {
+          body.scrollTop = 0;
+          setHasVerticalScroll(false);
+          setScrollbarWidth(0);
+          return;
+        }
+
         const hasOverflow = body.scrollHeight > body.clientHeight + 1;
         const width = hasOverflow
           ? Math.max(0, body.offsetWidth - body.clientWidth)
@@ -71,7 +79,7 @@ export default function GlobalDivTable({
       mutationObserver.disconnect();
       window.removeEventListener("resize", updateScrollbar);
     };
-  }, []);
+  }, [empty]);
 
   const actionColumnIndex =
     typeof skeletonActionColumn === "number"
@@ -82,7 +90,7 @@ export default function GlobalDivTable({
 
   return (
     <div
-      className={`global-divTable ${hasVerticalScroll ? "has-y-scroll" : ""} ${className}`.trim()}
+      className={`global-divTable ${empty ? "is-empty" : ""} ${hasVerticalScroll ? "has-y-scroll" : ""} ${className}`.trim()}
       role="table"
       aria-label={ariaLabel}
       aria-busy={loading}

@@ -12,6 +12,7 @@ const { captureDownload, exportFromGlobalModal } = require('./helpers/download.h
 const { todayIso } = require('./helpers/data.helper');
 
 const singlePerson = personData();
+const condonePerson = personData();
 const singleCompany = companyData();
 const batchPersonOne = personData();
 const batchPersonTwo = personData();
@@ -126,6 +127,13 @@ function paidRow(page, data) {
     .filter({ hasText: data.dni });
 }
 
+function condonedRow(page, data) {
+  return page
+    .getByRole('table', { name: /Cuotas de socios condonadas/i })
+    .getByRole('row')
+    .filter({ hasText: data.dni });
+}
+
 async function selectPreferredMedium(dialog) {
   const medium = dialog.getByLabel('Medio de pago *');
   if (!(await medium.inputValue())) await medium.selectOption({ index: 1 });
@@ -172,6 +180,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
 
     for (const person of [
       singlePerson,
+      condonePerson,
       batchPersonOne,
       batchPersonTwo,
       multiMonthPerson,
@@ -254,6 +263,57 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await deleteDialog.getByRole('button', { name: 'Eliminar pago', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Deudores' })).toHaveAttribute('aria-selected', 'true');
     await expect(debtRow(page, singlePerson)).toBeVisible();
+  });
+
+  test('condona una cuota, la muestra en Condonados y elimina la condonación', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await createPerson(request, condonePerson, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    await page.goto('/cuotas');
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(condonePerson.dni);
+
+    let row = debtRow(page, condonePerson);
+    await expect(row).toBeVisible();
+    await row.getByRole('button', { name: /Condonar cuota de/i }).click();
+
+    const condoneDialog = page.getByRole('dialog', { name: 'Condonar cuota' });
+    await expect(condoneDialog).toBeVisible();
+    await expect(condoneDialog).toContainText(condonePerson.apellido);
+
+    const condoneResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.searchParams.get('action') === 'cuotas_condonar_pago';
+    });
+    await condoneDialog.getByRole('button', { name: 'Condonar cuota', exact: true }).click();
+    const condoneResponse = await condoneResponsePromise;
+    expect(condoneResponse.ok()).toBeTruthy();
+    const condoneBody = await condoneResponse.json();
+    expect(condoneBody.item?.estado).toBe('CONDONADO');
+    expect(Number(condoneBody.item?.monto)).toBe(0);
+
+    await expect(debtRow(page, condonePerson)).toHaveCount(0);
+    await page.getByRole('tab', { name: /Condonados/i }).click();
+    row = condonedRow(page, condonePerson);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('CONDONADO');
+
+    await row.getByRole('button', { name: /Eliminar condonación de/i }).click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Eliminar condonación' });
+    await expect(deleteDialog).toBeVisible();
+    const deleteResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.searchParams.get('action') === 'cuotas_eliminar_pago';
+    });
+    await deleteDialog
+      .getByRole('button', { name: 'Eliminar condonación', exact: true })
+      .click();
+    expect((await deleteResponsePromise).ok()).toBeTruthy();
+
+    await expect(page.getByRole('tab', { name: 'Deudores' })).toHaveAttribute('aria-selected', 'true');
+    await expect(debtRow(page, condonePerson)).toBeVisible();
   });
 
   test('registra y elimina un pago de empresa desde la interfaz completa de Cuotas', async ({ page, request }) => {
