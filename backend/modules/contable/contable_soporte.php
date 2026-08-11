@@ -304,7 +304,8 @@ trait ContableSoporte
              FROM (
                  SELECT YEAR(p.fecha_pago) AS anio
                  FROM pagos p
-                 WHERE p.fecha_pago IS NOT NULL
+                 WHERE p.estado = 'PAGADO'
+                   AND p.fecha_pago IS NOT NULL
 
                  UNION
 

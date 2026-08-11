@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faBan,
   faDollarSign,
   faPrint,
   faReceipt,
@@ -55,7 +56,8 @@ const CUOTAS_EXPORT_COLUMNS = [
   { key: "documento", label: "DNI / CUIT" },
   { key: "categoria", label: "Categoría" },
   { key: "periodo", label: "Período" },
-  { key: "fecha_pago", label: "Fecha de pago" },
+  { key: "estado_exportacion", label: "Estado" },
+  { key: "fecha_pago", label: "Fecha" },
   { key: "medio_pago", label: "Medio de pago" },
   {
     key: "importe_exportacion",
@@ -331,7 +333,8 @@ const enrichPaymentReceipt = (source, context = {}) => {
 const CuotasTableRows = React.memo(function CuotasTableRows({
   items,
   selectedPayments,
-  isPaid,
+  isResolved,
+  isCondoned,
   multiMode,
   writable,
   tipo,
@@ -342,15 +345,15 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
     const selected = Boolean(selectedPayments[selectionKey(item)]);
     return (
       <div
-        className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row cuotas-grid ${isPaid ? "cuotas-grid--paid" : debtRowClass} ${selected ? "is-selected" : ""}`}
+        className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row cuotas-grid ${isResolved ? "cuotas-grid--paid" : debtRowClass} ${selected ? "is-selected" : ""}`}
         role="row"
         key={item.id_pago || `${item.id_socio}-${item.anio}-${item.mes}`}
         onClick={(event) => actionsRef.current.selectRow(event, item)}
         onKeyDown={(event) => actionsRef.current.selectRowWithKeyboard(event, item)}
-        tabIndex={!isPaid && multiMode && writable ? 0 : undefined}
-        aria-selected={!isPaid && multiMode ? selected : undefined}
+        tabIndex={!isResolved && multiMode && writable ? 0 : undefined}
+        aria-selected={!isResolved && multiMode ? selected : undefined}
       >
-        {!isPaid && multiMode ? (
+        {!isResolved && multiMode ? (
           <div className="mov-gridCell cuotas-select-cell">
             <input
               type="checkbox"
@@ -386,8 +389,15 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
           </span>
         </div>
         <div className="mov-gridCell is-strong is-center">{item.periodo}</div>
-        {isPaid ? (
+        {isResolved ? (
           <>
+            <div className="mov-gridCell is-center">
+              <span
+                className={`cuotas-payment-state ${isCondoned ? "is-condoned" : "is-paid"}`}
+              >
+                {isCondoned ? "CONDONADO" : "PAGADO"}
+              </span>
+            </div>
             <div className="mov-gridCell is-center">
               {formatDate(item.fecha_pago)}
             </div>
@@ -417,37 +427,51 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
         {!multiMode ? (
           <div className="mov-gridCell mov-gridCell--actions">
             <div className="mov-actionsInline">
-              <button
-                type="button"
-                className="mov-iconBtn"
-                title="Imprimir comprobante"
-                aria-label={`Imprimir comprobante de ${item.denominacion}`}
-                onClick={() => actionsRef.current.printPaymentRow(item)}
-              >
-                <FontAwesomeIcon icon={faPrint} />
-              </button>
-              {isPaid ? (
+              {!isCondoned ? (
+                <button
+                  type="button"
+                  className="mov-iconBtn"
+                  title="Imprimir comprobante"
+                  aria-label={`Imprimir comprobante de ${item.denominacion}`}
+                  onClick={() => actionsRef.current.printPaymentRow(item)}
+                >
+                  <FontAwesomeIcon icon={faPrint} />
+                </button>
+              ) : null}
+              {isResolved ? (
                 <button
                   type="button"
                   className="mov-iconBtn mov-iconBtn--danger"
-                  title="Eliminar pago"
-                  aria-label={`Eliminar pago de ${item.denominacion}`}
+                  title={isCondoned ? "Eliminar condonación" : "Eliminar pago"}
+                  aria-label={`${isCondoned ? "Eliminar condonación" : "Eliminar pago"} de ${item.denominacion}`}
                   onClick={() => actionsRef.current.setDeleteRow(item)}
                   disabled={!writable}
                 >
                   <FontAwesomeIcon icon={faTimes} />
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="mov-iconBtn"
-                  title="Registrar pago"
-                  aria-label={`Registrar pago de ${item.denominacion}`}
-                  onClick={() => actionsRef.current.openPayment(item)}
-                  disabled={!writable}
-                >
-                  <FontAwesomeIcon icon={faDollarSign} />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="mov-iconBtn cuotas-condone-btn"
+                    title="Condonar cuota"
+                    aria-label={`Condonar cuota de ${item.denominacion}`}
+                    onClick={() => actionsRef.current.setCondoneRow(item)}
+                    disabled={!writable}
+                  >
+                    <FontAwesomeIcon icon={faBan} />
+                  </button>
+                  <button
+                    type="button"
+                    className="mov-iconBtn"
+                    title="Registrar pago"
+                    aria-label={`Registrar pago de ${item.denominacion}`}
+                    onClick={() => actionsRef.current.openPayment(item)}
+                    disabled={!writable}
+                  >
+                    <FontAwesomeIcon icon={faDollarSign} />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -479,6 +503,7 @@ export default function Cuotas() {
   const [paymentPeriods, setPaymentPeriods] = useState({});
   const [contextLoading, setContextLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [condoneRow, setCondoneRow] = useState(null);
   const [deleteRow, setDeleteRow] = useState(null);
   const [multiMode, setMultiMode] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState({});
@@ -487,6 +512,7 @@ export default function Cuotas() {
   const [estadoTotales, setEstadoTotales] = useState({
     DEUDORES: null,
     PAGADOS: null,
+    CONDONADOS: null,
   });
 
   useEffect(() => {
@@ -536,9 +562,10 @@ export default function Cuotas() {
     const currentRequest = ++totalsRequestId.current;
 
     try {
-      const [deudoresResponse, pagadosResponse] = await Promise.all([
+      const [deudoresResponse, pagadosResponse, condonadosResponse] = await Promise.all([
         cuotasApi.listar({ ...filtrosTotales, estado: "DEUDORES" }),
         cuotasApi.listar({ ...filtrosTotales, estado: "PAGADOS" }),
+        cuotasApi.listar({ ...filtrosTotales, estado: "CONDONADOS" }),
       ]);
 
       if (currentRequest !== totalsRequestId.current) return;
@@ -554,6 +581,7 @@ export default function Cuotas() {
       setEstadoTotales({
         DEUDORES: totalFromResponse(deudoresResponse),
         PAGADOS: totalFromResponse(pagadosResponse),
+        CONDONADOS: totalFromResponse(condonadosResponse),
       });
     } catch {
       // El contador es informativo: una falla no debe bloquear la tabla principal.
@@ -678,19 +706,24 @@ export default function Cuotas() {
     ? catalogos.meses
     : DEFAULT_MONTHS;
   const isPaid = estado === "PAGADOS";
+  const isCondoned = estado === "CONDONADOS";
+  const isResolved = isPaid || isCondoned;
   const exportRecords = useCallback(
     (records) =>
       (records || []).map((item) => ({
         ...item,
-        fecha_pago: isPaid ? formatDate(item.fecha_pago) : "—",
-        medio_pago: isPaid ? item.medio_pago || "—" : "PENDIENTE",
+        estado_exportacion: isResolved
+          ? item.estado || (isCondoned ? "CONDONADO" : "PAGADO")
+          : "PENDIENTE",
+        fecha_pago: isResolved ? formatDate(item.fecha_pago) : "—",
+        medio_pago: isPaid ? item.medio_pago || "—" : isCondoned ? "—" : "PENDIENTE",
         importe_exportacion: money(
-          isPaid
+          isResolved
             ? item.monto || 0
             : item.monto_sugerido || item.monto_base || 0,
         ),
       })),
-    [isPaid],
+    [isCondoned, isPaid, isResolved],
   );
 
   const obtenerTodosParaExportar = useCallback(async () => {
@@ -724,7 +757,7 @@ export default function Cuotas() {
 
   const exportFilterDescription = [
     tipo === "EMPRESA" ? "Empresas" : "Socios",
-    isPaid ? "Pagados" : "Adeudados",
+    isPaid ? "Pagados" : isCondoned ? "Condonados" : "Adeudados",
     `Período: ${mes}/${anio}`,
     buscar ? `Búsqueda: ${buscar}` : null,
   ]
@@ -1524,6 +1557,21 @@ export default function Cuotas() {
     return response;
   };
 
+  const condonePayment = async () => {
+    if (!condoneRow) return null;
+    const response = await cuotasApi.condonarPago({
+      id_socio: Number(condoneRow.id_socio),
+      anio: Number(condoneRow.anio),
+      mes: Number(condoneRow.mes),
+      fecha_condonacion: localToday(),
+    });
+    pendingTableScrollRef.current = tableBodyRef.current?.scrollTop || 0;
+    setCondoneRow(null);
+    setFeedback({ type: "success", message: response.mensaje });
+    await Promise.all([cargar(), cargarTotalesEstado(), cargarCatalogos()]);
+    return response;
+  };
+
   const toggleSelection = (item) => {
     const key = selectionKey(item);
     setSelectedPayments((current) => {
@@ -1535,7 +1583,7 @@ export default function Cuotas() {
   };
 
   const selectRow = (event, item) => {
-    if (!multiMode || isPaid || !writable) return;
+    if (!multiMode || isResolved || !writable) return;
     if (!(event.target instanceof Element)) return;
 
     const interactiveElement = event.target.closest(
@@ -1547,7 +1595,7 @@ export default function Cuotas() {
   };
 
   const selectRowWithKeyboard = (event, item) => {
-    if (!multiMode || isPaid || !writable) return;
+    if (!multiMode || isResolved || !writable) return;
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
 
@@ -1563,6 +1611,7 @@ export default function Cuotas() {
     toggleSelection,
     printPaymentRow,
     openPayment,
+    setCondoneRow,
     setDeleteRow,
   };
 
@@ -1603,7 +1652,7 @@ export default function Cuotas() {
       value: estado,
       onChange: (value) => {
         setEstado(value);
-        if (value === "PAGADOS") clearMultipleSelection();
+        if (value !== "DEUDORES") clearMultipleSelection();
       },
       options: [
         {
@@ -1624,6 +1673,17 @@ export default function Cuotas() {
               <span className="cuotas-state-tabText">Pagados</span>
               {estadoTotales.PAGADOS != null ? (
                 <span className="cuotas-state-tabBadge">{estadoTotales.PAGADOS}</span>
+              ) : null}
+            </span>
+          ),
+        },
+        {
+          value: "CONDONADOS",
+          label: (
+            <span className="cuotas-state-tabContent">
+              <span className="cuotas-state-tabText">Condonados</span>
+              {estadoTotales.CONDONADOS != null ? (
+                <span className="cuotas-state-tabBadge">{estadoTotales.CONDONADOS}</span>
               ) : null}
             </span>
           ),
@@ -1664,7 +1724,7 @@ export default function Cuotas() {
     },
   ];
 
-  const tableLabel = `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : "adeudadas"}`;
+  const tableLabel = `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : isCondoned ? "condonadas" : "adeudadas"}`;
   const baseDebtColumns = [
     tipo === "EMPRESA" ? "Empresa" : "Socio",
     "Categoría",
@@ -1672,12 +1732,13 @@ export default function Cuotas() {
     "Importe",
     "Acciones",
   ];
-  const columns = isPaid
+  const columns = isResolved
     ? [
         tipo === "EMPRESA" ? "Empresa" : "Socio",
         "Categoría",
         "Período",
-        "Fecha de pago",
+        "Estado",
+        "Fecha",
         "Medio",
         "Importe",
         "Acciones",
@@ -1716,7 +1777,7 @@ export default function Cuotas() {
           />
         }
         secondaryActions={
-          !isPaid && writable
+          !isResolved && writable
             ? [
                 {
                   key: "multiple-selection",
@@ -1736,7 +1797,7 @@ export default function Cuotas() {
         refreshing={loading}
         notice={
           !writable
-            ? "Tu usuario tiene permiso de consulta. Registrar y eliminar pagos está deshabilitado."
+            ? "Tu usuario tiene permiso de consulta. Registrar, condonar y eliminar cuotas está deshabilitado."
             : null
         }
       >
@@ -1796,7 +1857,7 @@ export default function Cuotas() {
           bodyClassName="entity-table-wrap"
           bodyRef={tableBodyRef}
           gridClassName={
-            isPaid ? "cuotas-grid cuotas-grid--paid" : debtGridClass
+            isResolved ? "cuotas-grid cuotas-grid--paid" : debtGridClass
           }
           ariaLabel={tableLabel}
           loading={loading}
@@ -1806,14 +1867,20 @@ export default function Cuotas() {
         >
           {!loading && !error && !items.length ? (
             <div className="module-empty">
-              <FontAwesomeIcon icon={isPaid ? faReceipt : faWallet} />
+              <FontAwesomeIcon icon={isResolved ? faReceipt : faWallet} />
               <strong>
-                {isPaid ? "No hay pagos registrados" : "No hay deudores"}
+                {isPaid
+                  ? "No hay pagos registrados"
+                  : isCondoned
+                    ? "No hay cuotas condonadas"
+                    : "No hay deudores"}
               </strong>
               <span>
                 {isPaid
                   ? "No existen pagos para el mes, año y filtros seleccionados."
-                  : "Todos los registros del período están pagados o todavía no debían cuota."}
+                  : isCondoned
+                    ? "No existen condonaciones para el mes, año y filtros seleccionados."
+                    : "Todos los registros del período están pagados, condonados o todavía no debían cuota."}
               </span>
             </div>
           ) : null}
@@ -1821,7 +1888,8 @@ export default function Cuotas() {
           <CuotasTableRows
             items={itemsPagina}
             selectedPayments={selectedPayments}
-            isPaid={isPaid}
+            isResolved={isResolved}
+            isCondoned={isCondoned}
             multiMode={multiMode}
             writable={writable}
             tipo={tipo}
@@ -1900,7 +1968,7 @@ export default function Cuotas() {
               title="Exportar cuotas en Excel o PDF"
             />
 
-            {writable && !isPaid ? (
+            {writable && !isResolved ? (
               <button
                 type="button"
                 className={`mov-btn cuotas-lower-action cuotas-multiple-action ${multiMode ? "mov-btn--danger" : "mov-btn--primary"}`}
@@ -1921,7 +1989,7 @@ export default function Cuotas() {
         tituloArchivo="Cuotas"
         subtituloArchivoActual={`${exportFilterDescription} · Página ${pagina} de ${Math.max(1, totalPaginas)}`}
         subtituloArchivoTodos={exportFilterDescription}
-        nombreArchivo={`cuotas-${isPaid ? "pagadas" : "adeudadas"}`}
+        nombreArchivo={`cuotas-${isPaid ? "pagadas" : isCondoned ? "condonadas" : "adeudadas"}`}
         columnas={CUOTAS_EXPORT_COLUMNS}
         registrosActuales={exportRecords(itemsPagina)}
         obtenerRegistrosTodos={obtenerTodosParaExportar}
@@ -1987,24 +2055,49 @@ export default function Cuotas() {
       />
 
       <ModalEliminarGlobal
+        open={Boolean(condoneRow)}
+        operacion="advertencia"
+        row={condoneRow}
+        onClose={() => setCondoneRow(null)}
+        onConfirm={condonePayment}
+        title="Condonar cuota"
+        message="¿Seguro que querés condonar esta cuota?"
+        warning="El período dejará de figurar como deuda, pero no se registrará ningún ingreso: quedará con estado CONDONADO e importe $0,00."
+        confirmLabel="Condonar cuota"
+        loadingMessage="Condonando cuota…"
+        successMessage="Cuota condonada correctamente."
+        errorMessage="No se pudo condonar la cuota."
+        details={[
+          {
+            label: tipo === "EMPRESA" ? "Empresa" : "Socio",
+            value: condoneRow?.denominacion,
+          },
+          { label: "Período", value: condoneRow?.periodo },
+          { label: "Estado final", value: "CONDONADO" },
+          { label: "Importe contable", value: money(0) },
+        ]}
+      />
+
+      <ModalEliminarGlobal
         open={Boolean(deleteRow)}
         operacion="eliminar"
         row={deleteRow}
         onClose={() => setDeleteRow(null)}
         onConfirm={deletePayment}
-        title="Eliminar pago registrado"
-        message="¿Seguro que querés eliminar este pago?"
+        title={deleteRow?.estado === "CONDONADO" ? "Eliminar condonación" : "Eliminar pago registrado"}
+        message={deleteRow?.estado === "CONDONADO" ? "¿Seguro que querés eliminar esta condonación?" : "¿Seguro que querés eliminar este pago?"}
         warning="La cuota volverá a aparecer en Deudores para el mismo mes y año."
-        confirmLabel="Eliminar pago"
-        loadingMessage="Eliminando pago…"
-        successMessage="Pago eliminado correctamente."
-        errorMessage="No se pudo eliminar el pago."
+        confirmLabel={deleteRow?.estado === "CONDONADO" ? "Eliminar condonación" : "Eliminar pago"}
+        loadingMessage={deleteRow?.estado === "CONDONADO" ? "Eliminando condonación…" : "Eliminando pago…"}
+        successMessage={deleteRow?.estado === "CONDONADO" ? "Condonación eliminada correctamente." : "Pago eliminado correctamente."}
+        errorMessage={deleteRow?.estado === "CONDONADO" ? "No se pudo eliminar la condonación." : "No se pudo eliminar el pago."}
         details={[
           {
             label: tipo === "EMPRESA" ? "Empresa" : "Socio",
             value: deleteRow?.denominacion,
           },
           { label: "Período", value: deleteRow?.periodo },
+          { label: "Estado", value: deleteRow?.estado || "PAGADO" },
           { label: "Importe", value: money(deleteRow?.monto) },
           { label: "Medio", value: deleteRow?.medio_pago || "—" },
         ]}

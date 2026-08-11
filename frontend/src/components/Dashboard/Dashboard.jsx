@@ -231,7 +231,7 @@ export default function Dashboard() {
             icon={faCircleCheck}
             title="Cuotas pagadas"
             value={Number(cuotas.pagadas_mes || 0)}
-            detail={`Período ${periodo.mes_nombre || "actual"}`}
+            detail={`${Number(cuotas.condonadas_mes || 0)} condonadas · Período ${periodo.mes_nombre || "actual"}`}
             tone="success"
           />
           <MetricCard

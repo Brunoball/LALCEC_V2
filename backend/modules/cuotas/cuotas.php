@@ -4,7 +4,7 @@ declare(strict_types=1);
 final class Cuotas
 {
     private const TIPOS = ['PERSONA', 'EMPRESA'];
-    private const ESTADOS = ['DEUDORES', 'PAGADOS'];
+    private const ESTADOS = ['DEUDORES', 'PAGADOS', 'CONDONADOS'];
     private const MAX_PAGOS_LOTE = 200;
 
     public static function listar(): never
@@ -69,11 +69,21 @@ final class Cuotas
         self::registrarPago();
     }
 
+    public static function condonarPago(): never
+    {
+        $auth = require_admin();
+        $item = self::condonarPagoDatos($auth, request_body());
+        api_success(['item' => $item], 'Cuota condonada correctamente. El período ya no figura como deuda.');
+    }
+
     public static function eliminarPago(): never
     {
         $auth = require_admin();
         $item = self::eliminarPagoDatos($auth, request_body());
-        api_success(['item' => $item], 'Pago eliminado correctamente. El período volvió a quedar como deuda.');
+        $message = ($item['estado'] ?? 'PAGADO') === 'CONDONADO'
+            ? 'Condonación eliminada correctamente. El período volvió a quedar como deuda.'
+            : 'Pago eliminado correctamente. El período volvió a quedar como deuda.';
+        api_success(['item' => $item], $message);
     }
 
     /** Alias conservado para clientes anteriores del frontend. */
@@ -123,8 +133,12 @@ final class Cuotas
             $where[] = '(s.fecha_alta IS NULL OR s.fecha_alta <= ?)';
             $where[] = 'p.id_pago IS NULL';
             $params[] = $periodEnd;
+        } elseif ($estado === 'PAGADOS') {
+            $where[] = 'p.id_pago IS NOT NULL';
+            $where[] = "p.estado = 'PAGADO'";
         } else {
             $where[] = 'p.id_pago IS NOT NULL';
+            $where[] = "p.estado = 'CONDONADO'";
         }
 
         if ($categoria !== null) {
@@ -137,7 +151,7 @@ final class Cuotas
             ["CONCAT_WS(' ',
                 sp.apellido, sp.nombre, sp.dni,
                 se.razon_social, se.cuit,
-                c.nombre, mp_preferido.nombre, mp.nombre, f.nombre
+                c.nombre, mp_preferido.nombre, mp.nombre, f.nombre, p.estado
             ) LIKE {param}"],
             120,
             null
@@ -172,6 +186,7 @@ final class Cuotas
                 p.fecha_pago,
                 p.monto,
                 p.id_medio_pago,
+                p.estado AS estado_pago,
                 mp.nombre AS medio_pago
              FROM socios s
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
@@ -237,7 +252,9 @@ final class Cuotas
         $withCategory = 0;
         foreach ($items as $item) {
             if ($item['id_categoria'] !== null) $withCategory++;
-            $totalAmount += (float)($estado === 'PAGADOS' ? ($item['monto'] ?? 0) : $item['monto_sugerido']);
+            $totalAmount += (float)($estado === 'PAGADOS'
+                ? ($item['monto'] ?? 0)
+                : ($estado === 'CONDONADOS' ? 0 : $item['monto_sugerido']));
         }
 
         $totalItems = count($items);
@@ -499,7 +516,7 @@ final class Cuotas
         if ($memberIds !== []) {
             $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
             $paymentsStatement = $db->prepare(
-                "SELECT id_pago, id_socio, mes, fecha_pago, monto, id_medio_pago
+                "SELECT id_pago, id_socio, mes, fecha_pago, monto, id_medio_pago, estado
                  FROM pagos
                  WHERE anio = ?
                    AND id_socio IN ($placeholders)"
@@ -522,6 +539,7 @@ final class Cuotas
                 $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
                 $row['monto'] = $payment['monto'] ?? null;
                 $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
+                $row['estado_pago'] = $payment['estado'] ?? null;
                 $members[] = self::hydratePaymentCandidate(
                     $row,
                     $year,
@@ -547,6 +565,7 @@ final class Cuotas
                 $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
                 $row['monto'] = $payment['monto'] ?? null;
                 $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
+                $row['estado_pago'] = $payment['estado'] ?? null;
                 $principal = self::hydratePaymentCandidate(
                     $row,
                     $year,
@@ -611,7 +630,7 @@ final class Cuotas
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
                 fc.cantidad_integrantes,
-                p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago
+                p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago, p.estado AS estado_pago
              FROM socios s
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
              LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
@@ -650,7 +669,7 @@ final class Cuotas
                     sp.dni AS documento,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco,
-                    p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago
+                    p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago, p.estado AS estado_pago
                  FROM familias_socios fs
                  INNER JOIN socios s ON s.id_socio = fs.id_socio
                  INNER JOIN socios_personas sp ON sp.id_socio = s.id_socio
@@ -874,7 +893,8 @@ final class Cuotas
                 $applyFamily
             ): array {
                 $insert = $db->prepare(
-                    'INSERT INTO pagos (id_socio, mes, anio, fecha_pago, monto, id_medio_pago) VALUES (?, ?, ?, ?, ?, ?)'
+                    "INSERT INTO pagos (id_socio, mes, anio, fecha_pago, monto, id_medio_pago, estado)
+                     VALUES (?, ?, ?, ?, ?, ?, 'PAGADO')"
                 );
                 $items = [];
                 $lines = [];
@@ -905,6 +925,7 @@ final class Cuotas
                         'monto' => $target['monto'],
                         'id_medio_pago' => $mediumId,
                         'medio_pago' => $medium['nombre'],
+                        'estado' => 'PAGADO',
                         'id_familia' => $target['id_familia'],
                         'familia' => $target['familia'],
                         'pago_familiar' => $applyFamily,
@@ -947,7 +968,7 @@ final class Cuotas
             });
         } catch (PDOException $error) {
             if (duplicate_key($error)) {
-                api_error('Uno de los períodos seleccionados ya figura como pagado.', 'PAGO_YA_REGISTRADO', 409);
+                api_error('Uno de los períodos seleccionados ya figura como pagado o condonado.', 'PAGO_YA_REGISTRADO', 409);
             }
             throw $error;
         }
@@ -1012,7 +1033,7 @@ final class Cuotas
     private static function paymentCandidateError(array $candidate): never
     {
         if ((bool)($candidate['pagado'] ?? false)) {
-            api_error('Ese período ya figura como pagado.', 'PAGO_YA_REGISTRADO', 409);
+            api_error('Ese período ya figura como pagado o condonado.', 'PAGO_YA_REGISTRADO', 409);
         }
         if (($candidate['estado_socio'] ?? '') !== 'ACTIVO') {
             api_error('No se puede registrar una cuota a un socio o empresa inactiva.', 'SOCIO_INACTIVO', 409);
@@ -1086,9 +1107,91 @@ final class Cuotas
             'parentesco' => $row['parentesco'] ?? null,
             'pagado' => $paid,
             'id_pago' => $paid ? (int)$row['id_pago'] : null,
+            'estado' => $paid ? (string)($row['estado_pago'] ?? 'PAGADO') : null,
             'puede_pagar' => $canPay,
             'motivo_no_disponible' => $reason,
         ];
+    }
+
+    private static function condonarPagoDatos(array $auth, array $body): array
+    {
+        $db = $auth['db'];
+        $partnerId = positive_id($body['id_socio'] ?? null, 'socio o empresa');
+        $year = self::validYear($body['anio'] ?? null);
+        $month = self::validMonth($body['mes'] ?? null);
+        $condonationDate = valid_date(
+            $body['fecha_condonacion'] ?? $body['fecha'] ?? date('Y-m-d'),
+            'condonación'
+        );
+
+        $context = self::paymentContextData($db, $partnerId, $year, $month, $condonationDate);
+        $candidate = $context['principal'];
+        if (!(bool)($candidate['puede_pagar'] ?? false)) {
+            self::paymentCandidateError($candidate);
+        }
+
+        try {
+            $paymentId = transaction($db, static function () use (
+                $db,
+                $auth,
+                $partnerId,
+                $year,
+                $month,
+                $condonationDate,
+                $candidate
+            ): int {
+                $insert = $db->prepare(
+                    "INSERT INTO pagos (id_socio, mes, anio, fecha_pago, monto, id_medio_pago, estado)
+                     VALUES (?, ?, ?, ?, 0.00, NULL, 'CONDONADO')"
+                );
+                $insert->execute([$partnerId, $month, $year, $condonationDate]);
+                $paymentId = (int)$db->lastInsertId();
+
+                $auditData = [
+                    'id_pago' => $paymentId,
+                    'id_socio' => $partnerId,
+                    'denominacion' => $candidate['denominacion'],
+                    'tipo_socio' => $candidate['tipo_socio'],
+                    'categoria' => $candidate['categoria'],
+                    'anio' => $year,
+                    'mes' => $month,
+                    'fecha_condonacion' => $condonationDate,
+                    'monto' => '0.00',
+                    'id_medio_pago' => null,
+                    'medio_pago' => null,
+                    'estado' => 'CONDONADO',
+                    'id_familia' => $candidate['id_familia'],
+                    'familia' => $candidate['familia'],
+                ];
+
+                audit_change(
+                    $db,
+                    $auth,
+                    'CUOTAS',
+                    'CONDONAR_PAGO',
+                    'pagos',
+                    $paymentId,
+                    sprintf(
+                        'Se condonó la cuota de %s %d para %s%s.',
+                        self::monthName($month),
+                        $year,
+                        $candidate['denominacion'],
+                        $candidate['familia'] ? ' (' . $candidate['familia'] . ')' : ''
+                    ),
+                    null,
+                    $auditData
+                );
+
+                return $paymentId;
+            });
+        } catch (PDOException $error) {
+            if (duplicate_key($error)) {
+                api_error('Ese período ya figura como pagado o condonado.', 'PAGO_YA_REGISTRADO', 409);
+            }
+            throw $error;
+        }
+
+        return self::paymentById($db, $paymentId);
     }
 
     private static function eliminarPagoDatos(array $auth, array $body): array
@@ -1103,14 +1206,22 @@ final class Cuotas
             if ($delete->rowCount() !== 1) {
                 api_error('El pago ya no existe.', 'PAGO_NO_ENCONTRADO', 404);
             }
+            $isCondoned = ($payment['estado'] ?? 'PAGADO') === 'CONDONADO';
             audit_change(
                 $db,
                 $auth,
                 'CUOTAS',
-                'ELIMINAR_PAGO',
+                $isCondoned ? 'ELIMINAR_CONDONACION' : 'ELIMINAR_PAGO',
                 'pagos',
                 $paymentId,
-                sprintf('Se eliminó la cuota de %s %d de %s.', self::monthName((int)$payment['mes']), (int)$payment['anio'], $payment['denominacion']),
+                sprintf(
+                    $isCondoned
+                        ? 'Se eliminó la condonación de %s %d de %s.'
+                        : 'Se eliminó el pago de %s %d de %s.',
+                    self::monthName((int)$payment['mes']),
+                    (int)$payment['anio'],
+                    $payment['denominacion']
+                ),
                 $payment,
                 null
             );
@@ -1124,6 +1235,7 @@ final class Cuotas
         $statement = $db->prepare(
             "SELECT
                 p.id_pago, p.id_socio, p.mes, p.anio, p.fecha_pago, p.monto, p.id_medio_pago,
+                p.estado AS estado_pago,
                 s.tipo_socio, s.estado AS estado_socio, s.fecha_alta, s.id_categoria,
                 COALESCE(se.razon_social, CONCAT(sp.apellido, ', ', sp.nombre)) AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
@@ -1176,6 +1288,9 @@ final class Cuotas
             'monto' => !isset($row['monto']) || $row['monto'] === null ? null : number_format((float)$row['monto'], 2, '.', ''),
             'id_medio_pago' => isset($row['id_medio_pago']) && $row['id_medio_pago'] !== null ? (int)$row['id_medio_pago'] : null,
             'medio_pago' => $row['medio_pago'] ?? null,
+            'estado' => isset($row['estado_pago']) && $row['estado_pago'] !== null
+                ? (string)$row['estado_pago']
+                : (isset($row['id_pago']) && $row['id_pago'] !== null ? 'PAGADO' : null),
         ];
     }
 

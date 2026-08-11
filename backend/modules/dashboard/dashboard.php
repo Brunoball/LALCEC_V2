@@ -68,7 +68,7 @@ final class Dashboard
                AND (fecha_alta IS NULL OR fecha_alta < ?)",
             [$monthEnd->format('Y-m-d')]
         );
-        $paidCurrent = self::count(
+        $resolvedCurrent = self::count(
             $db,
             "SELECT COUNT(DISTINCT p.id_socio)
              FROM pagos p
@@ -79,21 +79,34 @@ final class Dashboard
                AND s.id_categoria IS NOT NULL",
             [$currentYear, $currentMonth]
         );
-        $pendingCurrent = max(0, $expectedCurrent - $paidCurrent);
+        $paidCurrent = self::count(
+            $db,
+            "SELECT COUNT(DISTINCT p.id_socio)
+             FROM pagos p
+             INNER JOIN socios s ON s.id_socio = p.id_socio
+             WHERE p.anio = ?
+               AND p.mes = ?
+               AND p.estado = 'PAGADO'
+               AND s.estado = 'ACTIVO'
+               AND s.id_categoria IS NOT NULL",
+            [$currentYear, $currentMonth]
+        );
+        $condonedCurrent = max(0, $resolvedCurrent - $paidCurrent);
+        $pendingCurrent = max(0, $expectedCurrent - $resolvedCurrent);
 
         $paymentOperations = self::count(
             $db,
-            'SELECT COUNT(*) FROM pagos WHERE fecha_pago >= ? AND fecha_pago < ?',
+            "SELECT COUNT(*) FROM pagos WHERE estado = 'PAGADO' AND fecha_pago >= ? AND fecha_pago < ?",
             [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
         );
         $paymentsWithoutAmount = self::count(
             $db,
-            'SELECT COUNT(*) FROM pagos WHERE fecha_pago >= ? AND fecha_pago < ? AND monto IS NULL',
+            "SELECT COUNT(*) FROM pagos WHERE estado = 'PAGADO' AND fecha_pago >= ? AND fecha_pago < ? AND monto IS NULL",
             [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
         );
         $partnerIncome = self::sum(
             $db,
-            'SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE fecha_pago >= ? AND fecha_pago < ?',
+            "SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE estado = 'PAGADO' AND fecha_pago >= ? AND fecha_pago < ?",
             [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
         );
 
@@ -151,8 +164,9 @@ final class Dashboard
             'cuotas' => [
                 'esperadas_mes' => $expectedCurrent,
                 'pagadas_mes' => $paidCurrent,
+                'condonadas_mes' => $condonedCurrent,
                 'pendientes_mes' => $pendingCurrent,
-                'cumplimiento_mes' => self::percentage($paidCurrent, $expectedCurrent),
+                'cumplimiento_mes' => self::percentage($resolvedCurrent, $expectedCurrent),
                 'cobros_registrados_mes' => $paymentOperations,
                 'cobros_sin_importe_mes' => $paymentsWithoutAmount,
             ],
@@ -215,7 +229,8 @@ final class Dashboard
         $statement = $db->prepare(
             "SELECT anio, mes, COUNT(*) AS pagadas, COALESCE(SUM(monto), 0) AS importe
              FROM pagos
-             WHERE (anio * 100 + mes) BETWEEN ? AND ?
+             WHERE estado = 'PAGADO'
+               AND (anio * 100 + mes) BETWEEN ? AND ?
              GROUP BY anio, mes"
         );
         $statement->execute([$startKey, $endKey]);
@@ -292,6 +307,7 @@ final class Dashboard
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
              LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
+             WHERE p.estado = 'PAGADO'
              ORDER BY p.fecha_pago DESC, p.creado_en DESC, p.id_pago DESC
              LIMIT 8"
         );

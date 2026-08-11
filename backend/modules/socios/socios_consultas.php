@@ -158,7 +158,7 @@ trait SociosConsultas
         unset($row);
 
         $payments = $db->prepare(
-            'SELECT p.id_pago, p.mes, p.anio, p.fecha_pago, p.monto, p.creado_en,
+            'SELECT p.id_pago, p.mes, p.anio, p.fecha_pago, p.monto, p.estado, p.creado_en,
                     mp.nombre AS medio_pago
              FROM pagos p
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
@@ -172,6 +172,7 @@ trait SociosConsultas
             $row['mes'] = (int)$row['mes'];
             $row['anio'] = (int)$row['anio'];
             $row['monto'] = $row['monto'] === null ? null : (float)$row['monto'];
+            $row['estado'] = (string)($row['estado'] ?? 'PAGADO');
         }
         unset($row);
 

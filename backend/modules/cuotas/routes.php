@@ -11,6 +11,7 @@ function register_cuotas_routes(Router $router): void
     $router->register('cuotas_contextos_pago', 'GET', [Cuotas::class, 'contextosPago'], true);
     $router->register('cuotas_registrar_pago', 'POST', [Cuotas::class, 'registrarPago'], true);
     $router->register('cuotas_registrar_pagos', 'POST', [Cuotas::class, 'registrarPagos'], true);
+    $router->register('cuotas_condonar_pago', 'POST', [Cuotas::class, 'condonarPago'], true);
     $router->register('cuotas_eliminar_pago', 'POST', [Cuotas::class, 'eliminarPago'], true);
 
     // Compatibilidad con versiones previas del módulo.

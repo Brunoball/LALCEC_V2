@@ -30,17 +30,19 @@ trait ContableConsultas
              FROM pagos p
              INNER JOIN socios s ON s.id_socio = p.id_socio
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
-             WHERE p.fecha_pago >= ? AND p.fecha_pago < ?
+             WHERE p.estado = 'PAGADO'
+               AND p.fecha_pago >= ? AND p.fecha_pago < ?
              GROUP BY MONTH(p.fecha_pago)",
             [$yearStart, $yearEnd],
             $partnerByMonth
         );
         self::acumularConteosMensuales(
             $db,
-            'SELECT MONTH(fecha_pago) AS mes, COUNT(*) AS total
+            "SELECT MONTH(fecha_pago) AS mes, COUNT(*) AS total
              FROM pagos
-             WHERE monto IS NULL AND fecha_pago >= ? AND fecha_pago < ?
-             GROUP BY MONTH(fecha_pago)',
+             WHERE estado = 'PAGADO'
+               AND monto IS NULL AND fecha_pago >= ? AND fecha_pago < ?
+             GROUP BY MONTH(fecha_pago)",
             [$yearStart, $yearEnd],
             $estimatedByMonth
         );
@@ -159,7 +161,8 @@ trait ContableConsultas
              FROM pagos p
              INNER JOIN socios s ON s.id_socio = p.id_socio
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
-             WHERE p.fecha_pago >= ? AND p.fecha_pago < ?
+             WHERE p.estado = 'PAGADO'
+               AND p.fecha_pago >= ? AND p.fecha_pago < ?
              GROUP BY COALESCE(NULLIF(c.nombre, ''), 'CUOTAS SIN CATEGORÍA')",
             [$monthStart, $monthEnd],
             $totals
@@ -207,7 +210,8 @@ trait ContableConsultas
              INNER JOIN socios s ON s.id_socio = p.id_socio
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
-             WHERE p.fecha_pago >= ? AND p.fecha_pago < ?
+             WHERE p.estado = 'PAGADO'
+               AND p.fecha_pago >= ? AND p.fecha_pago < ?
              GROUP BY COALESCE(NULLIF(mp.nombre, ''), 'SIN MEDIO ESPECIFICADO')",
             [$monthStart, $monthEnd],
             $totals
@@ -261,7 +265,7 @@ trait ContableConsultas
         [$start, $end] = self::rangoMes($year, $month);
         $paymentAmount = self::importePagoSql();
 
-        $where = ['p.fecha_pago >= ?', 'p.fecha_pago < ?'];
+        $where = ["p.estado = 'PAGADO'", 'p.fecha_pago >= ?', 'p.fecha_pago < ?'];
         $params = [$start, $end];
         if ($partnerType !== '') {
             $where[] = 's.tipo_socio = ?';

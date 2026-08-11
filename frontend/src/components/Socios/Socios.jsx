@@ -410,7 +410,12 @@ function PaymentCalendar({ payments = [], item }) {
     if (paymentMap.has(month)) paidDue += 1;
   }
   const pendingDue = Math.max(0, dueMonths - paidDue);
-  const paidTotal = paymentMap.size;
+  const paidTotal = Array.from(paymentMap.values()).filter(
+    (payment) => String(payment.estado || "PAGADO").toUpperCase() === "PAGADO",
+  ).length;
+  const condonedTotal = Array.from(paymentMap.values()).filter(
+    (payment) => String(payment.estado || "PAGADO").toUpperCase() === "CONDONADO",
+  ).length;
   const statusLabel =
     selectedYear > currentYear
       ? "Año futuro"
@@ -446,6 +451,9 @@ function PaymentCalendar({ payments = [], item }) {
             <i className="is-paid" /> Pagado
           </span>
           <span>
+            <i className="is-condoned" /> Condonado
+          </span>
+          <span>
             <i className="is-pending" /> Pendiente
           </span>
         </div>
@@ -457,6 +465,9 @@ function PaymentCalendar({ payments = [], item }) {
           <span className="is-success">
             <FontAwesomeIcon icon={faCheck} /> {paidTotal} pagados
           </span>
+          {condonedTotal > 0 ? (
+            <span className="is-condoned">{condonedTotal} condonados</span>
+          ) : null}
           <span className="is-danger">× {pendingDue} pendientes</span>
         </div>
       </div>
@@ -470,15 +481,21 @@ function PaymentCalendar({ payments = [], item }) {
           const future =
             selectedYear > currentYear ||
             (selectedYear === currentYear && month > currentMonth);
+          const isCondoned =
+            String(payment?.estado || "PAGADO").toUpperCase() === "CONDONADO";
           const stateClass = payment
-            ? "is-paid"
+            ? isCondoned
+              ? "is-condoned"
+              : "is-paid"
             : beforeAdmission
               ? "is-not-applicable"
               : future
                 ? "is-future"
                 : "is-pending";
           const title = payment
-            ? `${formatDate(payment.fecha_pago)} · ${formatMoney(payment.monto)} · ${payment.medio_pago || "Medio sin informar"}`
+            ? isCondoned
+              ? `Condonado el ${formatDate(payment.fecha_pago)} · Sin ingreso contable`
+              : `${formatDate(payment.fecha_pago)} · ${formatMoney(payment.monto)} · ${payment.medio_pago || "Medio sin informar"}`
             : beforeAdmission
               ? "Período anterior al alta"
               : future
@@ -1746,7 +1763,7 @@ export default function Socios({ tipo = PERSON }) {
                     : deleteModal.item.dni,
                 },
                 {
-                  label: "Pagos que se borrarán",
+                  label: "Pagos / condonaciones que se borrarán",
                   value: deleteImpact.pagos ?? "Calculando...",
                 },
                 {
