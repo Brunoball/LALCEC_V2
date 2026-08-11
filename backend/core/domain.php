@@ -221,5 +221,18 @@ function audit_change(PDO $db, array $auth, string $module, string $action, stri
 
 function duplicate_key(Throwable $error): bool
 {
-    return $error instanceof PDOException && (string)$error->getCode() === '23000';
+    if (!$error instanceof PDOException) return false;
+
+    // SQLSTATE 23000 significa "violación de integridad" en general y no
+    // necesariamente una clave duplicada. Por ejemplo, también puede ser una
+    // FK u otra restricción. Para mostrar mensajes de "ya registrado" solo
+    // aceptamos el código nativo 1062 de MySQL/MariaDB (Duplicate entry).
+    $errorInfo = $error->errorInfo ?? null;
+    if (is_array($errorInfo) && isset($errorInfo[1])) {
+        return (int)$errorInfo[1] === 1062;
+    }
+
+    // Fallback defensivo para drivers/configuraciones que no expongan
+    // errorInfo pero sí incluyan el código nativo en el mensaje.
+    return preg_match('/(?:^|\D)1062(?:\D|$).*duplicate\s+entry/i', $error->getMessage()) === 1;
 }

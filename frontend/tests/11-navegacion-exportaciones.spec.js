@@ -105,11 +105,16 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     );
     await sociosGroup.click();
     await expect(sociosGroup).toHaveAttribute('aria-expanded', 'true');
+    // El submenú usa una transición de hasta 260 ms. Esperamos a que termine
+    // antes de pulsar una opción para evitar que el enlace se mueva bajo el cursor.
+    await page.waitForTimeout(320);
     await navigation.getByRole('link', { name: 'Empresas', exact: true }).click();
     await expect(page).toHaveURL(/\/socios\/empresas$/);
 
     const categoriasGroup = navigation.getByRole('button', { name: 'Categorías', exact: true });
     await categoriasGroup.click();
+    await expect(categoriasGroup).toHaveAttribute('aria-expanded', 'true');
+    await page.waitForTimeout(320);
     await navigation.getByRole('link', { name: 'Descuentos familiares' }).click();
     await expect(page).toHaveURL(/\/categorias\/descuentos$/);
 
@@ -118,6 +123,8 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
 
     const contabilidadGroup = navigation.getByRole('button', { name: 'Contabilidad', exact: true });
     await contabilidadGroup.click();
+    await expect(contabilidadGroup).toHaveAttribute('aria-expanded', 'true');
+    await page.waitForTimeout(320);
     await navigation.getByRole('link', { name: 'Resumen', exact: true }).click();
     await expect(page).toHaveURL(/\/contable\/resumen$/);
 

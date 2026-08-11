@@ -9,7 +9,10 @@ module.exports = async function globalSetup() {
   const username = process.env.PW_USER;
   const password = process.env.PW_PASSWORD;
   if (!username || !password) {
-    throw new Error('Completá PW_USER y PW_PASSWORD en .env.test.');
+    throw new Error(
+      `Faltan credenciales para ${process.env.PW_ENVIRONMENT || 'el entorno seleccionado'}. ` +
+        'Completá PW_LOCAL_USER/PW_LOCAL_PASSWORD o PW_HOSTINGER_USER/PW_HOSTINGER_PASSWORD en .env.test.',
+    );
   }
 
   const api = await request.newContext({ ignoreHTTPSErrors: true });

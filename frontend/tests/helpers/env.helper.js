@@ -24,6 +24,58 @@ function parseEnv(text) {
   return result;
 }
 
+function isLocalApi(apiUrl) {
+  const value = String(apiUrl || '').trim();
+  if (!value) return true;
+
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch (_error) {
+    return /(^|\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i.test(value);
+  }
+}
+
+function resolveEnvironment() {
+  const apiUrl = String(process.env.PW_API_URL || 'http://localhost:3001/routes')
+    .trim()
+    .replace(/\/+$/, '');
+  const local = isLocalApi(apiUrl);
+
+  process.env.PW_API_URL = apiUrl;
+  process.env.PW_ENVIRONMENT = local ? 'local' : 'hostinger';
+
+  // Una sola PW_API_URL controla también a qué API apunta el frontend React local.
+  process.env.REACT_APP_API_URL = apiUrl;
+
+  // El frontend siempre se ejecuta local. El backend PHP solo se levanta para API local.
+  process.env.PW_START_FRONTEND = 'true';
+  process.env.PW_START_BACKEND = local ? 'true' : 'false';
+
+  if (local) {
+    process.env.PW_USER = String(process.env.PW_LOCAL_USER || process.env.PW_USER || '').trim();
+    process.env.PW_PASSWORD = String(
+      process.env.PW_LOCAL_PASSWORD || process.env.PW_PASSWORD || '',
+    );
+  } else {
+    process.env.PW_USER = String(
+      process.env.PW_HOSTINGER_USER || process.env.PW_USER || '',
+    ).trim();
+    process.env.PW_PASSWORD = String(
+      process.env.PW_HOSTINGER_PASSWORD || process.env.PW_PASSWORD || '',
+    );
+
+    // Nunca permitir limpieza SQL directa al apuntar a producción.
+    process.env.PW_ALLOW_DB_CLEANUP = 'false';
+  }
+
+  return {
+    apiUrl,
+    environment: process.env.PW_ENVIRONMENT,
+    isLocal: local,
+  };
+}
+
 function loadTestEnv(rootDir = path.resolve(__dirname, '..', '..')) {
   if (loaded) return process.env;
   const envPath = path.join(rootDir, '.env.test');
@@ -33,6 +85,7 @@ function loadTestEnv(rootDir = path.resolve(__dirname, '..', '..')) {
       if (process.env[key] === undefined) process.env[key] = value;
     }
   }
+  resolveEnvironment();
   loaded = true;
   return process.env;
 }
@@ -43,4 +96,10 @@ function envBoolean(name, fallback = false) {
   return ['1', 'true', 'yes', 'si', 'sí', 'on'].includes(value);
 }
 
-module.exports = { envBoolean, loadTestEnv, parseEnv };
+module.exports = {
+  envBoolean,
+  isLocalApi,
+  loadTestEnv,
+  parseEnv,
+  resolveEnvironment,
+};
