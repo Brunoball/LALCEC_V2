@@ -582,7 +582,7 @@ function StateHistory({ events = [] }) {
   );
 }
 
-function emptyForm(type, catalogs = {}) {
+function emptyForm(type) {
   return {
     id_socio: "",
     tipo_socio: type,
@@ -599,13 +599,8 @@ function emptyForm(type, catalogs = {}) {
     email: "",
     domicilio_alternativo: "",
     fecha_alta: today(),
-    id_categoria: catalogs.categorias?.find((item) => item.activo)?.id_categoria
-      ? String(catalogs.categorias.find((item) => item.activo).id_categoria)
-      : "",
-    id_medio_pago: catalogs.medios_pago?.find((item) => item.activo)
-      ?.id_medio_pago
-      ? String(catalogs.medios_pago.find((item) => item.activo).id_medio_pago)
-      : "",
+    id_categoria: "",
+    id_medio_pago: "",
     enviar_recordatorio: false,
     observaciones: "",
   };
@@ -652,10 +647,10 @@ function PartnerForm({
         ariaLabel="Secciones de la ficha"
       />
 
-      {activeTab === FORM_TAB_MAIN ? (
-        <EntityFormPanel
-          tabValue={FORM_TAB_MAIN}
-          idPrefix={`socio-${type.toLowerCase()}-form-tab`}
+      <EntityFormPanel
+        active={activeTab === FORM_TAB_MAIN}
+        tabValue={FORM_TAB_MAIN}
+        idPrefix={`socio-${type.toLowerCase()}-form-tab`}
           eyebrow="Ficha principal"
           title={
             isCompany ? "Identificación empresarial" : "Identificación personal"
@@ -676,7 +671,6 @@ function PartnerForm({
                   onChange={(event) =>
                     update("razon_social", upper(event.target.value))
                   }
-                  maxLength={255}
                   placeholder=" "
                   autoFocus
                 />
@@ -724,7 +718,6 @@ function PartnerForm({
                   onChange={(event) =>
                     update("apellido", upperWithoutDigits(event.target.value))
                   }
-                  maxLength={100}
                   placeholder=" "
                   autoFocus
                 />
@@ -735,7 +728,6 @@ function PartnerForm({
                   onChange={(event) =>
                     update("nombre", upperWithoutDigits(event.target.value))
                   }
-                  maxLength={100}
                   placeholder=" "
                 />
               </FloatingField>
@@ -761,11 +753,12 @@ function PartnerForm({
               max={today()}
             />
           </FloatingField>
-        </EntityFormPanel>
-      ) : (
-        <EntityFormPanel
-          tabValue={FORM_TAB_CONFIG}
-          idPrefix={`socio-${type.toLowerCase()}-form-tab`}
+      </EntityFormPanel>
+
+      <EntityFormPanel
+        active={activeTab === FORM_TAB_CONFIG}
+        tabValue={FORM_TAB_CONFIG}
+        idPrefix={`socio-${type.toLowerCase()}-form-tab`}
           eyebrow="Información complementaria"
           title="Contacto, cuota y recordatorios"
           icon={faAddressBook}
@@ -783,7 +776,6 @@ function PartnerForm({
                 onChange={(event) =>
                   update("domicilio", upper(event.target.value))
                 }
-                maxLength={isCompany ? 255 : 150}
                 placeholder=" "
               />
             </FloatingField>
@@ -811,7 +803,6 @@ function PartnerForm({
                   onChange={(event) =>
                     update("localidad", upperWithoutDigits(event.target.value))
                   }
-                  maxLength={100}
                   placeholder=" "
                 />
               </FloatingField>
@@ -842,7 +833,6 @@ function PartnerForm({
                 type="email"
                 value={form.email}
                 onChange={(event) => update("email", event.target.value)}
-                maxLength={190}
                 placeholder=" "
               />
             </FloatingField>
@@ -856,7 +846,6 @@ function PartnerForm({
                 onChange={(event) =>
                   update("domicilio_alternativo", upper(event.target.value))
                 }
-                maxLength={255}
                 placeholder=" "
               />
             </FloatingField>
@@ -938,13 +927,11 @@ function PartnerForm({
               onChange={(event) =>
                 update("observaciones", upper(event.target.value))
               }
-              maxLength={5000}
               rows={3}
               placeholder=" "
             />
           </FloatingField>
-        </EntityFormPanel>
-      )}
+      </EntityFormPanel>
     </div>
   );
 }
@@ -1130,7 +1117,7 @@ export default function Socios({ tipo = PERSON }) {
   }, [debouncedSearch, filters]);
 
   const openNew = () => {
-    setForm(emptyForm(type, catalogos));
+    setForm(emptyForm(type));
     setFormTab(FORM_TAB_MAIN);
     setModalOpen(true);
   };
@@ -1742,6 +1729,7 @@ export default function Socios({ tipo = PERSON }) {
         }
         showReason={Boolean(stateModal?.activo)}
         reasonRequired={Boolean(stateModal?.activo)}
+        reasonMaxLength={null}
         reasonLabel="Motivo de baja *"
         reasonPlaceholder="Indicá el motivo de la baja..."
         extraContent={

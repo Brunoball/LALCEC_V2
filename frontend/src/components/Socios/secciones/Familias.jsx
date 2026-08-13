@@ -238,10 +238,10 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
         ariaLabel="Secciones de la familia"
       />
 
-      {activeTab === FORM_TAB_DETAILS ? (
-        <EntityFormPanel
-          tabValue={FORM_TAB_DETAILS}
-          idPrefix="familia-form-tab"
+      <EntityFormPanel
+        active={activeTab === FORM_TAB_DETAILS}
+        tabValue={FORM_TAB_DETAILS}
+        idPrefix="familia-form-tab"
           eyebrow="Ficha principal"
           title="Identificación del grupo"
           icon={faAddressBook}
@@ -260,7 +260,6 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                   nombre: upperWithoutDigits(event.target.value),
                 }))
               }
-              maxLength={150}
               placeholder=" "
               autoFocus
             />
@@ -279,7 +278,6 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                 }))
               }
               rows={3}
-              maxLength={500}
               placeholder=" "
             />
           </FloatingField>
@@ -290,11 +288,12 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
               un solo vínculo familiar activo.
             </span>
           </div>
-        </EntityFormPanel>
-      ) : (
-        <EntityFormPanel
-          tabValue={FORM_TAB_MEMBERS}
-          idPrefix="familia-form-tab"
+      </EntityFormPanel>
+
+      <EntityFormPanel
+        active={activeTab === FORM_TAB_MEMBERS}
+        tabValue={FORM_TAB_MEMBERS}
+        idPrefix="familia-form-tab"
           bodyClassName="familias-form-panel__body--members"
         >
           <div className="familias-members-layout">
@@ -430,7 +429,6 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                         onChange={(event) =>
                           updateMember(member.id_socio, "parentesco", upperWithoutDigits(event.target.value))
                         }
-                        maxLength={50}
                         placeholder="Parentesco"
                       />
                       <input
@@ -448,7 +446,6 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                         onChange={(event) =>
                           updateMember(member.id_socio, "observaciones", upper(event.target.value))
                         }
-                        maxLength={500}
                         placeholder="Observaciones"
                       />
                     </div>
@@ -501,15 +498,13 @@ function FamilyForm({ form, setForm, catalog, activeTab, onTabChange, pendingMem
                         motivo_desvinculacion: upper(event.target.value),
                       }))
                     }
-                    maxLength={500}
                     placeholder=" "
                   />
                 </FloatingField>
               </div>
             </div>
           ) : null}
-        </EntityFormPanel>
-      )}
+      </EntityFormPanel>
     </div>
   );
 }
@@ -1085,6 +1080,7 @@ export default function Familias() {
         }
         showReason={Boolean(stateModal?.activo)}
         reasonRequired={Boolean(stateModal?.activo)}
+        reasonMaxLength={null}
         reasonLabel="Motivo de baja *"
         reasonPlaceholder="Indicá por qué se da de baja la familia..."
         extraContent={

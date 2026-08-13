@@ -18,3 +18,44 @@
 
 /* Estados de las opciones contables: baja/reactivación sin perder historial. */
 .config-contableTable__row.is-inactive{background:color-mix(in srgb,var(--gray-100,#f3f4f6) 72%,#fff);opacity:.78}.config-contableTable__row.is-inactive:hover{background:color-mix(in srgb,var(--gray-100,#f3f4f6) 88%,#fff)}.config-contableStatus.is-active{color:var(--success-700,#047857)}.config-contableStatus.is-inactive{color:var(--gray-600,#4b5563)}.config-contableUsage{gap:4px;flex-wrap:wrap}.config-contableUsage strong{color:var(--balto-midnight);font-size:10px}.config-contableActions{min-width:116px}.config-contableTable__head,.config-contableTable__row,.config-contableTable__skeletonRow{grid-template-columns:minmax(0,1.65fr) minmax(110px,.65fr) minmax(170px,.9fr) minmax(116px,.62fr)}
+
+/* Modal alineado con los demas formularios de Configuracion. */
+.config-contableModal .entity-modal__header h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.config-contableModal .entity-modal__header h2 > svg {
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+.config-contableForm .entity-floating-field > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.config-contableForm .entity-floating-field > span > svg {
+  width: 10px;
+  color: currentColor;
+}
+
+.config-contableForm__help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  color: var(--entity-modal-text);
+  background: color-mix(in srgb, var(--primary-color) 5%, #fff);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.config-contableForm__help svg {
+  color: var(--entity-modal-action);
+  font-size: 10px;
+}

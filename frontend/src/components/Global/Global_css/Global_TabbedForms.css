@@ -81,6 +81,10 @@
   animation: entityFormPanelIn 0.16s ease-out;
 }
 
+.entity-form-panel[hidden] {
+  display: none;
+}
+
 @keyframes entityFormPanelIn {
   from {
     opacity: 0;
@@ -234,7 +238,11 @@
 }
 
 .entity-floating-field.is-active > span,
-.entity-floating-field:focus-within > span {
+.entity-floating-field:focus-within > span,
+.entity-floating-field:has(> input:not(:placeholder-shown)) > span,
+.entity-floating-field:has(> textarea:not(:placeholder-shown)) > span,
+.entity-floating-field:has(> input:-webkit-autofill) > span,
+.entity-floating-field:has(> textarea:-webkit-autofill) > span {
   top: 0;
   left: 10px;
   padding: 0 5px;

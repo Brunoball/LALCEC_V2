@@ -142,6 +142,7 @@ export default function ModalEliminarGlobal({
   reasonLabel = "Motivo u observación",
   reasonPlaceholder = "Escribí una observación opcional...",
   reasonRequired = false,
+  reasonMaxLength = 500,
   initialReason = "",
   closeOnSuccess = true,
   confirmDisabled = false,
@@ -392,7 +393,7 @@ export default function ModalEliminarGlobal({
                 value={reason}
                 onChange={(event) => setReason(upper(event.target.value))}
                 placeholder={reasonPlaceholder}
-                maxLength={500}
+                maxLength={reasonMaxLength ?? undefined}
                 disabled={isLoading}
               />
             </label>

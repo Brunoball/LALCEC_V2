@@ -11,6 +11,7 @@ import {
   faList,
   faPen,
   faPowerOff,
+  faSliders,
   faTag,
   faTrashCan,
   faUser,
@@ -19,6 +20,7 @@ import { ModulePage } from "../../Global/ModulePage";
 import CrudModal from "../../Global/Modales/CrudModal";
 import ModalEliminarGlobal from "../../Global/Modales/ModalEliminarGlobal";
 import ModuleFeedback from "../../Global/ModuleFeedback";
+import { FloatingField } from "../../Global/Formularios/TabbedForm";
 import { canWrite } from "../../_shared/auth/session";
 import { upperWithoutDigits } from "../../Global/Formularios/inputSanitizers";
 import { contableApi } from "../../Contable/api/contableApi";
@@ -27,8 +29,7 @@ import "../configuracion.css";
 import "./ContableConfiguracion.css";
 
 const upper = (value) => String(value ?? "").toLocaleUpperCase("es-AR");
-const sanitizeOptionName = (type, value) =>
-  type === "PROVEEDOR" ? upper(value) : upperWithoutDigits(value);
+const sanitizeOptionName = (value) => upperWithoutDigits(value);
 
 const LIST_META = {
   PROVEEDOR: {
@@ -308,7 +309,7 @@ export default function ContableConfiguracion() {
 
   const saveItem = async (event) => {
     event.preventDefault();
-    const sanitizedName = sanitizeOptionName(form.tipo, form.nombre).trim();
+    const sanitizedName = sanitizeOptionName(form.nombre).trim();
     if (!sanitizedName) {
       setFeedback({ type: "error", message: "Ingresá un nombre válido." });
       return;
@@ -451,29 +452,51 @@ export default function ContableConfiguracion() {
 
       <CrudModal
         open={formOpen}
-        title={`${form.id_opcion ? "Editar" : "Agregar"} ${meta.label}`}
+        title={
+          <>
+            <FontAwesomeIcon
+              icon={form.id_opcion ? faPen : meta.icon}
+              aria-hidden="true"
+            />
+            <span>{`${form.id_opcion ? "Editar" : "Agregar"} ${meta.label}`}</span>
+          </>
+        }
         subtitle="La opción aparecerá inmediatamente en los formularios de Contabilidad."
         onClose={() => setFormOpen(false)}
         onSubmit={saveItem}
         saving={saving}
         submitLabel={form.id_opcion ? "Guardar cambios" : "Agregar"}
+        closeOnBackdrop={false}
+        modalClassName="config-contableModal"
       >
-        <div className="entity-form">
+        <div className="entity-form config-contableForm">
           <div className="entity-form__grid entity-form__grid--single">
-            <label className="entity-field">
-              <span>Nombre *</span>
+            <FloatingField
+              label={
+                <>
+                  <FontAwesomeIcon icon={meta.icon} aria-hidden="true" />
+                  Nombre *
+                </>
+              }
+              active={Boolean(form.nombre)}
+            >
               <input
                 value={form.nombre}
+                placeholder=" "
                 onChange={(event) => setForm((current) => ({
                   ...current,
-                  nombre: sanitizeOptionName(form.tipo, event.target.value),
+                  nombre: sanitizeOptionName(event.target.value),
                 }))}
                 maxLength={160}
                 required
                 autoFocus
               />
-            </label>
+            </FloatingField>
           </div>
+          <p className="config-contableForm__help">
+            <FontAwesomeIcon icon={faSliders} aria-hidden="true" />
+            <span>{meta.detail}</span>
+          </p>
         </div>
       </CrudModal>
 

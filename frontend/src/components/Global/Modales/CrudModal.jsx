@@ -148,7 +148,7 @@ export default function CrudModal({
         <form
           onSubmit={onSubmit}
           onClick={openDatePickerFromInput}
-          onInputCapture={uppercaseModalTextField}
+          onChangeCapture={uppercaseModalTextField}
         >
           <div
             className={`entity-modal__body ${loading ? "is-loading" : ""}`.trim()}

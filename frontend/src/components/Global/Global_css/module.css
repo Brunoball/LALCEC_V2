@@ -1350,6 +1350,7 @@
 
 .module-filter.is-active .module-floatingLabel,
 .module-filter:focus-within .module-floatingLabel,
+.module-filter:has(.module-filterControl:not(:placeholder-shown)) .module-floatingLabel,
 .module-filter--tabs .module-floatingLabel {
   top: 0;
   transform: translateY(-50%);
@@ -1772,4 +1773,3 @@
     padding-bottom: 2px;
   }
 }
-

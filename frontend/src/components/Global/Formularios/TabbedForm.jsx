@@ -83,6 +83,7 @@ export function EntityFormPanel({
   children,
   hint,
   standalone = false,
+  active = true,
   className = "",
   bodyClassName = "",
 }) {
@@ -94,6 +95,8 @@ export function EntityFormPanel({
       role={standalone ? "group" : "tabpanel"}
       aria-label={standalone ? title : undefined}
       aria-labelledby={standalone ? undefined : id}
+      hidden={!active}
+      aria-hidden={!active || undefined}
     >
       {(eyebrow || title || tag) && (
         <header className="entity-form-panel__header">
@@ -126,9 +129,23 @@ export function FloatingField({
   className = "",
   children,
 }) {
+  const hasValue = React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement(child)) return false;
+    if (!["input", "select", "textarea"].includes(child.type)) return false;
+
+    const childValue = child.props.value ?? child.props.defaultValue;
+    if (Array.isArray(childValue)) return childValue.length > 0;
+    return (
+      childValue !== undefined &&
+      childValue !== null &&
+      String(childValue).length > 0
+    );
+  });
+  const shouldFloat = active || hasValue;
+
   return (
     <label
-      className={`entity-field entity-floating-field ${wide ? "entity-field--wide" : ""} ${textarea ? "is-textarea" : ""} ${active ? "is-active" : ""} ${placeholderOnFloat ? "has-placeholder-on-float" : ""} ${className}`.trim()}
+      className={`entity-field entity-floating-field ${wide ? "entity-field--wide" : ""} ${textarea ? "is-textarea" : ""} ${shouldFloat ? "is-active" : ""} ${placeholderOnFloat ? "has-placeholder-on-float" : ""} ${className}`.trim()}
     >
       {children}
       <span>{label}</span>
