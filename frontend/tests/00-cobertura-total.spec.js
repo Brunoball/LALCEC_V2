@@ -138,6 +138,7 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Abrir perfil',
   'Cerrar perfil',
   'Perfil de usuario',
+  'Ir al inicio de sesión',
   // Cobertura de ramas que antes quedaban fuera del recorrido E2E.
   'Quitar integrante',
   'Motivo de desvinculación',
@@ -158,18 +159,23 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Pagos',
   'Costos WhatsApp',
   'Filtrar por etiqueta',
+  'Sin etiqueta',
   'Modo Bot',
   'Modo Manual',
   'Opciones del chat',
   'Editar nombre',
   'Cambiar etiqueta',
+  'Crear etiqueta',
+  'Eliminar etiqueta',
   'Ver galería',
+  'Ver imagen',
   'Marcar como no leído',
   'Marcar como leído',
   'Vaciar chat',
   'Eliminar contacto',
   'Cambiar tema',
   'Adjuntar imagen/PDF',
+  'quitar',
   'Emojis',
   'Enviar',
   'Mensajes de prioridad alta',
@@ -177,6 +183,21 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Notificaciones normales:',
   'Notificaciones urgentes:',
   'Ventana 24 horas',
+];
+
+const REQUIRED_BOT_MUTATION_ASSERTIONS = [
+  'panel_mark_seen',
+  'panel_mark_unread',
+  'panel_set_modo',
+  'panel_send',
+  'panel_send_media',
+  'editar_nombre',
+  'etiquetas_set',
+  'etiquetas_create',
+  'etiquetas_update',
+  'etiquetas_delete',
+  'vaciar_chat',
+  'eliminar_contacto',
 ];
 
 // Alcance intencional: sistema administrativo completo + Panel Bot.
@@ -227,6 +248,26 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const source = testSources();
     const missing = botFrontendEndpoints().filter((endpoint) => !source.includes(endpoint));
     expect(missing, `Endpoints del Panel Bot sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  test('cada mutación del Panel Bot se verifica dentro de un escenario y no sólo en los mocks', () => {
+    const botSpec = read(path.join(__dirname, '14-panel-bot.spec.js'));
+    const scenarioStart = botSpec.indexOf("test.describe('Panel Bot WhatsApp'");
+    expect(scenarioStart, 'No se encontró el bloque de escenarios del Panel Bot.').toBeGreaterThan(-1);
+
+    const scenarioSource = botSpec.slice(scenarioStart);
+    const missing = REQUIRED_BOT_MUTATION_ASSERTIONS.filter((endpoint) => {
+      const escaped = endpoint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const asserted = new RegExp(
+        `(?:hasRequest\\([\\s\\S]{0,120}['"]${escaped}['"]|` +
+          `item\\.endpoint\\s*===\\s*['"]${escaped}['"])`,
+      );
+      return !asserted.test(scenarioSource);
+    });
+    expect(
+      missing,
+      `Mutaciones del Panel Bot presentes sólo en mocks/helpers: ${missing.join(', ')}`,
+    ).toEqual([]);
   });
 
   test('todas las rutas de la aplicación, incluido el Panel Bot, están recorridas', () => {

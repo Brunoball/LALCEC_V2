@@ -51,6 +51,39 @@ test.describe('Login y sesión', () => {
     await expect(page.getByPlaceholder('Contraseña')).toHaveAttribute('type', 'password');
   });
 
+  test('protege el Panel Bot fuera de localhost y permite volver al inicio de sesión', async ({ browser }) => {
+    const frontendOrigin = new URL(
+      process.env.PW_BASE_URL || 'http://localhost:3000',
+    ).origin;
+    const externalOrigin = 'http://lalcec-e2e.invalid';
+    const context = await browser.newContext({ baseURL: externalOrigin });
+
+    try {
+      const page = await context.newPage();
+      await page.route(
+        (url) => url.origin === externalOrigin,
+        async (route) => {
+          const requested = new URL(route.request().url());
+          const localUrl = new URL(`${requested.pathname}${requested.search}`, frontendOrigin);
+          const response = await route.fetch({ url: localUrl.toString() });
+          await route.fulfill({ response });
+        },
+      );
+
+      await page.goto('/panel-bot');
+      await expect(
+        page.getByRole('heading', { name: 'No tenés acceso para acceder al panel' }),
+      ).toBeVisible();
+      await expect(page.getByText(/Iniciá sesión.*para abrir el Panel Bot/i)).toBeVisible();
+
+      await page.getByRole('button', { name: 'Ir al inicio de sesión' }).click();
+      await expect(page).toHaveURL(`${externalOrigin}/`);
+      await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   test('aplica atributos del formulario y restaura todas las credenciales recordadas', async ({ page }) => {
     const username = process.env.PW_USER;
     await page.addInitScript(

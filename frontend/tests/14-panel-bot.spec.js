@@ -129,6 +129,10 @@ async function installSafeBotMock(page, options = {}) {
     name: 'PW BOT TEST',
     unread: Number(options.unread || 0),
     labelId: null,
+    labels: [
+      { id_etiqueta: 91, nombre: 'PW MOCK', orden: 1, color: '#25d366' },
+    ],
+    nextLabelId: 92,
     consultasPendientes: Number(options.consultasPendientes || 0),
     prioridad: options.prioridad || 'normal',
     windowExpired: !!options.windowExpired,
@@ -141,13 +145,16 @@ async function installSafeBotMock(page, options = {}) {
 
   await mockEndpoint(page, 'panel_chats', async (request) => {
     remember('panel_chats', request);
+    const currentLabel = state.labels.find(
+      (label) => Number(label.id_etiqueta) === Number(state.labelId),
+    );
     return {
       success: true,
       chats: [
         {
           wa_id: WA_ID,
           nombre: state.name,
-          etiqueta: state.labelId ? 'PW MOCK' : '',
+          etiqueta: currentLabel?.nombre || '',
           etiqueta_id: state.labelId,
           ventana_24h: new Date(
             Date.now() - (state.windowExpired ? 30 : 0) * 60 * 60 * 1000,
@@ -238,7 +245,7 @@ async function installSafeBotMock(page, options = {}) {
     remember('etiquetas_list', request);
     return {
       success: true,
-      etiquetas: [{ id_etiqueta: 91, nombre: 'PW MOCK', orden: 1, color: '#25d366' }],
+      etiquetas: state.labels.map((label) => ({ ...label })),
     };
   });
   await mockEndpoint(page, 'editar_nombre', async (request) => {
@@ -254,15 +261,35 @@ async function installSafeBotMock(page, options = {}) {
     return { success: true };
   });
   await mockEndpoint(page, 'etiquetas_create', async (request) => {
-    remember('etiquetas_create', request, botRequestBody(request));
-    return { success: true, id_etiqueta: 92 };
+    const body = botRequestBody(request);
+    const id = state.nextLabelId;
+    state.nextLabelId += 1;
+    state.labels.push({
+      id_etiqueta: id,
+      nombre: body.nombre,
+      orden: state.labels.length + 1,
+      color: '#25d366',
+    });
+    remember('etiquetas_create', request, body);
+    return { success: true, id_etiqueta: id };
   });
   await mockEndpoint(page, 'etiquetas_update', async (request) => {
-    remember('etiquetas_update', request, botRequestBody(request));
+    const body = botRequestBody(request);
+    state.labels = state.labels.map((label) =>
+      Number(label.id_etiqueta) === Number(body.id_etiqueta)
+        ? { ...label, nombre: body.nombre }
+        : label,
+    );
+    remember('etiquetas_update', request, body);
     return { success: true };
   });
   await mockEndpoint(page, 'etiquetas_delete', async (request) => {
-    remember('etiquetas_delete', request, botRequestBody(request));
+    const body = botRequestBody(request);
+    state.labels = state.labels.filter(
+      (label) => Number(label.id_etiqueta) !== Number(body.id_etiqueta),
+    );
+    if (Number(state.labelId) === Number(body.id_etiqueta)) state.labelId = null;
+    remember('etiquetas_delete', request, body);
     return { success: true };
   });
   await mockEndpoint(page, 'vaciar_chat', async (request) => {
@@ -300,7 +327,16 @@ test.describe('Panel Bot WhatsApp', () => {
     await filterButton.click();
     const filterMenu = page.getByRole('menu', { name: 'Filtrar chats por etiqueta' });
     await expect(filterMenu).toBeVisible();
+    await filterMenu.getByRole('button', { name: /Sin etiqueta/i }).click();
+    await expect(page.locator('.wp-chatitem').filter({ hasText: WA_ID })).toBeVisible();
+
+    await filterButton.click();
+    await filterMenu.getByRole('button', { name: /PW MOCK/i }).click();
+    await expect(page.getByText('No hay chats con ese filtro.')).toBeVisible();
+
+    await filterButton.click();
     await filterMenu.getByRole('button', { name: /Todas/i }).click();
+    await expect(page.locator('.wp-chatitem').filter({ hasText: WA_ID })).toBeVisible();
 
     const oldTheme = await page.locator('html').getAttribute('data-botpanel-theme');
     await page.getByRole('button', { name: 'Cambiar tema' }).click();
@@ -328,8 +364,18 @@ test.describe('Panel Bot WhatsApp', () => {
 
     await page.getByRole('button', { name: 'Modo Bot' }).click();
     await expect.poll(() => state.mode).toBe('bot');
+    await expect.poll(() => hasRequest(
+      state,
+      'panel_set_modo',
+      (item) => item.body?.modo === 'bot',
+    )).toBeTruthy();
     await page.getByRole('button', { name: 'Modo Manual' }).click();
     await expect.poll(() => state.mode).toBe('manual');
+    await expect.poll(() => hasRequest(
+      state,
+      'panel_set_modo',
+      (item) => item.body?.modo === 'manual',
+    )).toBeTruthy();
 
     let menu = await openChatOptions(page);
     await menu.getByRole('button', { name: 'Editar nombre' }).click();
@@ -337,6 +383,11 @@ test.describe('Panel Bot WhatsApp', () => {
     await dialog.getByLabel('Nombre del contacto').fill('PW BOT MOCK EDITADO');
     await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect.poll(() => state.name).toBe('PW BOT MOCK EDITADO');
+    await expect.poll(() => hasRequest(
+      state,
+      'editar_nombre',
+      (item) => item.body?.wa_id === WA_ID && item.body?.nombre === 'PW BOT MOCK EDITADO',
+    )).toBeTruthy();
     await expect(page.locator('.wp-chat-top-name')).toHaveText('PW BOT MOCK EDITADO');
 
     menu = await openChatOptions(page);
@@ -348,6 +399,88 @@ test.describe('Panel Bot WhatsApp', () => {
       .getByRole('button', { name: 'Guardar', exact: true })
       .click();
     await expect.poll(() => state.labelId).toBe(91);
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_set',
+      (item) => item.body?.wa_id === WA_ID && item.body?.etiqueta_id === 91,
+    )).toBeTruthy();
+
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    await expect(page).toHaveURL(/\/panel$/);
+  });
+
+  test('crea, edita, elimina y desasigna etiquetas usando solamente mocks', async ({ page }) => {
+    const state = await installSafeBotMock(page);
+    await openBotTestChat(page, WA_ID);
+
+    const menu = await openChatOptions(page);
+    await menu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
+    await dialog.getByPlaceholder('Ej: Pagó / Urgente / Nuevo...').fill('pw creada');
+    await dialog.getByTitle('Crear etiqueta').click();
+
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_create',
+      (item) => item.body?.nombre === 'PW CREADA',
+    )).toBeTruthy();
+    await expect(dialog.getByLabel('Etiqueta asignada')).toHaveValue('92');
+
+    let labelRow = dialog.locator('.bp-tag-row').filter({ hasText: 'PW CREADA' });
+    await expect(labelRow).toBeVisible();
+    await labelRow.getByRole('button', { name: 'Editar', exact: true }).click();
+    const editRow = dialog.locator('.bp-tag-edit-row');
+    await expect(editRow).toBeVisible();
+    await editRow.locator('input').fill('pw editada');
+    await editRow.getByRole('button', { name: 'Guardar', exact: true }).click();
+
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_update',
+      (item) => item.body?.id_etiqueta === 92 && item.body?.nombre === 'PW EDITADA',
+    )).toBeTruthy();
+    labelRow = dialog.locator('.bp-tag-row').filter({ hasText: 'PW EDITADA' });
+    await expect(labelRow).toBeVisible();
+
+    await dialog
+      .locator('.bp-tag-actions')
+      .last()
+      .getByRole('button', { name: 'Guardar', exact: true })
+      .click();
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_set',
+      (item) => item.body?.wa_id === WA_ID && item.body?.etiqueta_id === 92,
+    )).toBeTruthy();
+    await expect.poll(() => state.labelId).toBe(92);
+
+    const reopenedMenu = await openChatOptions(page);
+    await reopenedMenu.getByRole('button', { name: 'Cambiar etiqueta' }).click();
+    const reopenedDialog = page.getByRole('dialog').filter({ hasText: 'Cambiar etiqueta' });
+    labelRow = reopenedDialog.locator('.bp-tag-row').filter({ hasText: 'PW EDITADA' });
+    await labelRow.getByRole('button', { name: 'Eliminar', exact: true }).click();
+
+    const confirm = page.getByRole('dialog').filter({ hasText: /Eliminar etiqueta/ });
+    await expect(confirm).toContainText('PW EDITADA');
+    await confirm.getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_delete',
+      (item) => item.body?.id_etiqueta === 92,
+    )).toBeTruthy();
+    await expect(reopenedDialog.getByLabel('Etiqueta asignada')).toHaveValue('');
+
+    await reopenedDialog
+      .locator('.bp-tag-actions')
+      .last()
+      .getByRole('button', { name: 'Guardar', exact: true })
+      .click();
+    await expect.poll(() => hasRequest(
+      state,
+      'etiquetas_set',
+      (item) => item.body?.wa_id === WA_ID && item.body?.etiqueta_id == null,
+    )).toBeTruthy();
   });
 
   test('recorre leído/no leído y prioridad de consulta sin alterar datos reales', async ({ page }) => {
@@ -397,6 +530,11 @@ test.describe('Panel Bot WhatsApp', () => {
     await openBotTestChat(page, WA_ID);
     await expect(page.getByRole('button', { name: 'Adjuntar imagen/PDF' })).toBeEnabled();
 
+    await page.getByTitle('Ver imagen').click();
+    let mediaViewer = page.getByRole('dialog', { name: 'Visor de archivo' });
+    await expect(mediaViewer).toContainText('pw-e2e-bot.png');
+    await mediaViewer.getByRole('button', { name: 'Cerrar' }).click();
+
     let menu = await openChatOptions(page);
     await menu.getByRole('button', { name: 'Ver galería' }).click();
     const gallery = page.getByRole('dialog', { name: 'Galería del chat' });
@@ -410,7 +548,7 @@ test.describe('Panel Bot WhatsApp', () => {
     await expect(galleryImage).toBeVisible();
     await galleryImage.click();
 
-    const mediaViewer = page.getByRole('dialog', { name: 'Visor de archivo' });
+    mediaViewer = page.getByRole('dialog', { name: 'Visor de archivo' });
     await expect(mediaViewer).toBeVisible();
     await expect(mediaViewer).toContainText('pw-e2e-bot.png');
     await mediaViewer.getByRole('button', { name: 'Cerrar' }).click();
@@ -445,6 +583,15 @@ test.describe('Panel Bot WhatsApp', () => {
       buffer: Buffer.alloc(12 * 1024 * 1024 + 1),
     });
     await expect(page.getByText(/Archivo demasiado grande/i)).toBeVisible();
+
+    await fileInput.setInputFiles({
+      name: 'pw-e2e-panel.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
+    });
+    await expect(page.getByText('pw-e2e-panel.png')).toBeVisible();
+    await page.getByRole('button', { name: 'quitar', exact: true }).click();
+    await expect(page.getByText('pw-e2e-panel.png')).toHaveCount(0);
 
     await fileInput.setInputFiles({
       name: 'pw-e2e-panel.png',

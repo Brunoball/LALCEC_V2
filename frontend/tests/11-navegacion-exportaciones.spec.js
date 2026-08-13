@@ -134,6 +134,9 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await sociosGroup.dblclick();
     await expect(page).toHaveURL(/\/socios\/personas$/);
 
+    await page.locator('.pp-brand').click();
+    await expect(page).toHaveURL(/\/panel$/);
+
     await page.goto('/socios');
     await expect(page).toHaveURL(/\/socios\/personas$/);
     await page.goto('/contable');
