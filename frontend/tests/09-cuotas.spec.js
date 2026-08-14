@@ -21,6 +21,8 @@ const familyPersonOne = personData();
 const familyPersonTwo = personData();
 const batchPersonOne = personData();
 const batchPersonTwo = personData();
+const apiPaginationPersonOne = personData();
+const apiPaginationPersonTwo = personData();
 const historicalPricePerson = personData();
 const yearRangePerson = personData();
 const family = familyData();
@@ -160,6 +162,8 @@ test.describe('Cuotas de socios y empresas', () => {
       { tipo: 'PERSONA', documento: familyPersonTwo.dni },
       { tipo: 'PERSONA', documento: batchPersonOne.dni },
       { tipo: 'PERSONA', documento: batchPersonTwo.dni },
+      { tipo: 'PERSONA', documento: apiPaginationPersonOne.dni },
+      { tipo: 'PERSONA', documento: apiPaginationPersonTwo.dni },
       { tipo: 'PERSONA', documento: historicalPricePerson.dni },
       { tipo: 'PERSONA', documento: yearRangePerson.dni },
     ]) {
@@ -563,12 +567,18 @@ test.describe('Cuotas de socios y empresas', () => {
 
     const paymentDialog = singlePaymentDialog(page, familyPersonOne);
     await expect(paymentDialog).toBeVisible();
+    const familyTab = paymentDialog.getByRole('tab', { name: /Familia/ });
+    await familyTab.click();
+    await expect(familyTab).toHaveAttribute('aria-selected', 'true');
     const familyCheck = paymentDialog.getByRole('checkbox', {
       name: 'Aplicar pago a todo el grupo familiar',
     });
     await expect(familyCheck).toBeChecked();
     await paymentDialog.getByRole('button', { name: 'Ver integrantes' }).click();
     await expect(paymentDialog).toContainText(familyPersonTwo.apellido);
+    const monthsTab = paymentDialog.getByRole('tab', { name: /Meses a pagar/ });
+    await monthsTab.click();
+    await expect(monthsTab).toHaveAttribute('aria-selected', 'true');
     await paymentDialog
       .getByLabel('Medio de pago *')
       .selectOption(String(medium.id_medio_pago));
@@ -799,6 +809,125 @@ test.describe('Cuotas de socios y empresas', () => {
         }).catch(() => undefined);
       }
     }
+  });
+
+  test('pagina la API, permite omitir catálogos y filtra deudores y pagados por medio de pago', async ({ request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const sharedSearch = `PW PAGINACION CUOTAS ${uniqueSuffix()}`;
+    const first = await createPerson(request, apiPaginationPersonOne, {
+      apellido: sharedSearch,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    const second = await createPerson(request, apiPaginationPersonTwo, {
+      apellido: sharedSearch,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    const baseParams = {
+      tipo: 'PERSONA',
+      estado: 'DEUDORES',
+      anio: currentYear,
+      mes: currentMonth,
+      buscar: sharedSearch,
+      por_pagina: 1,
+      incluir_catalogos: 0,
+    };
+    const firstPage = await apiCall(request, 'cuotas_listar', {
+      params: { ...baseParams, pagina: 1 },
+    });
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage).not.toHaveProperty('catalogos');
+    expect(firstPage.paginacion).toMatchObject({
+      pagina: 1,
+      por_pagina: 1,
+      total: 2,
+      total_paginas: 2,
+      desde: 1,
+      hasta: 1,
+      tiene_anterior: false,
+      tiene_siguiente: true,
+    });
+
+    const secondPage = await apiCall(request, 'cuotas_listar', {
+      params: { ...baseParams, pagina: 2 },
+    });
+    expect(secondPage.items).toHaveLength(1);
+    expect(secondPage.paginacion).toMatchObject({
+      pagina: 2,
+      desde: 2,
+      hasta: 2,
+      tiene_anterior: true,
+      tiene_siguiente: false,
+    });
+    expect([firstPage.items[0].id_socio, secondPage.items[0].id_socio].sort()).toEqual(
+      [first.id_socio, second.id_socio].sort(),
+    );
+
+    const clampedPage = await apiCall(request, 'cuotas_listar', {
+      params: { ...baseParams, pagina: 999 },
+    });
+    expect(clampedPage.paginacion.pagina).toBe(2);
+    expect(clampedPage.items[0].id_socio).toBe(secondPage.items[0].id_socio);
+
+    const withCatalogs = await apiCall(request, 'cuotas_listar', {
+      params: { ...baseParams, pagina: 1, incluir_catalogos: 1 },
+    });
+    expect(withCatalogs.catalogos?.medios_pago).toEqual(expect.any(Array));
+
+    const preferredMediumDebts = await apiCall(request, 'cuotas_listar', {
+      params: {
+        ...baseParams,
+        por_pagina: 100,
+        id_medio_pago: medium.id_medio_pago,
+      },
+    });
+    expect(preferredMediumDebts.paginacion.total).toBe(2);
+    const otherMediumDebts = await apiCall(request, 'cuotas_listar', {
+      params: {
+        ...baseParams,
+        por_pagina: 100,
+        id_medio_pago: 2147483647,
+      },
+    });
+    expect(otherMediumDebts.items).toEqual([]);
+    expect(otherMediumDebts.paginacion.total).toBe(0);
+
+    const payment = await apiCall(request, 'cuotas_registrar_pago', {
+      method: 'POST',
+      data: {
+        id_socio: first.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        monto: firstPage.items.find((item) => item.id_socio === first.id_socio)?.monto_sugerido ||
+          secondPage.items.find((item) => item.id_socio === first.id_socio)?.monto_sugerido,
+        id_medio_pago: medium.id_medio_pago,
+        aplicar_familia: false,
+      },
+    });
+
+    const paidByMedium = await apiCall(request, 'cuotas_listar', {
+      params: {
+        ...baseParams,
+        estado: 'PAGADOS',
+        por_pagina: 100,
+        id_medio_pago: medium.id_medio_pago,
+      },
+    });
+    expect(paidByMedium.items.map((item) => item.id_pago)).toContain(payment.item.id_pago);
+    const paidByOtherMedium = await apiCall(request, 'cuotas_listar', {
+      params: {
+        ...baseParams,
+        estado: 'PAGADOS',
+        por_pagina: 100,
+        id_medio_pago: 2147483647,
+      },
+    });
+    expect(paidByOtherMedium.paginacion.total).toBe(0);
+
+    await removePayments(request, payment.items);
   });
 
   test('valida filtros y datos obligatorios del pago', async ({ request }) => {

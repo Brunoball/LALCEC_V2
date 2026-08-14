@@ -120,6 +120,7 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Quitar comprobante',
   'Ver comprobante',
   'Selección múltiple',
+  'Seleccionando todos los registros filtrados',
   'Registrar pago',
   'Condonar cuota',
   'Condonados',
@@ -129,6 +130,8 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Ver integrantes',
   'Hay cuotas ya pagadas en la selección.',
   'Monto personalizado',
+  'Secciones del pago',
+  'Datos del pago',
   '+ Agregar',
   'Imprimir',
   'Comprobante',
@@ -217,6 +220,9 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const cuotasApiSource = read(
       path.join(SRC_ROOT, 'components', 'Cuotas', 'api', 'cuotasApi.js'),
     );
+    const cuotasHookSource = read(
+      path.join(SRC_ROOT, 'components', 'Cuotas', 'hooks', 'useCuotas.js'),
+    );
     const cuotasModalCss = read(
       path.join(SRC_ROOT, 'components', 'Cuotas', 'modales', 'CuotasModal.css'),
     );
@@ -224,7 +230,12 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(modalSizeHook).not.toContain('.animate(');
     expect(cuotasSource).toContain('React.memo(function CuotasTableRows');
     expect(cuotasSource).toContain('cuotasApi.contextosPago');
+    expect(cuotasSource).toContain('cargarTotalesEstado');
+    expect(cuotasSource).toContain('toggleAllFilteredPayments');
+    expect(cuotasSource).toContain('id_medio_pago');
     expect(cuotasApiSource).toContain('cuotas_contextos_pago');
+    expect(cuotasHookSource).toContain('incluir_catalogos: 0');
+    expect(cuotasHookSource).toContain('cuotasApi.catalogos');
     expect(cuotasModalCss).toContain('.cuotas-modal--payment.entity-modal');
     expect(cuotasModalCss).toContain('width: min(920px, 100%)');
   });

@@ -409,20 +409,25 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
             </div>
           </>
         ) : (
-          <div className="mov-gridCell cuotas-money-cell">
-            {Number(item.monto_sugerido || 0) > 0 ? (
-              <>
-                {money(item.monto_sugerido)}
-                {Number(item.porcentaje_descuento_familiar || 0) > 0 ? (
-                  <small className="cuotas-discount-note">
-                    Base {money(item.monto_base)}
-                  </small>
-                ) : null}
-              </>
-            ) : (
-              "A DEFINIR"
-            )}
-          </div>
+          <>
+            <div className="mov-gridCell is-center">
+              {item.medio_pago_preferido || "—"}
+            </div>
+            <div className="mov-gridCell cuotas-money-cell">
+              {Number(item.monto_sugerido || 0) > 0 ? (
+                <>
+                  {money(item.monto_sugerido)}
+                  {Number(item.porcentaje_descuento_familiar || 0) > 0 ? (
+                    <small className="cuotas-discount-note">
+                      Base {money(item.monto_base)}
+                    </small>
+                  ) : null}
+                </>
+              ) : (
+                "A DEFINIR"
+              )}
+            </div>
+          </>
         )}
         {!multiMode ? (
           <div className="mov-gridCell mov-gridCell--actions">
@@ -488,12 +493,14 @@ export default function Cuotas() {
   const tableBodyRef = useRef(null);
   const pendingTableScrollRef = useRef(null);
   const totalsRequestId = useRef(0);
+  const selectAllRequestId = useRef(0);
   const [tipo, setTipo] = useState("PERSONA");
   const [estado, setEstado] = useState("DEUDORES");
   const [buscar, setBuscar] = useState("");
   const [debouncedBuscar, setDebouncedBuscar] = useState("");
   const [anio, setAnio] = useState(String(currentYear));
   const [mes, setMes] = useState(String(currentMonth));
+  const [medioPago, setMedioPago] = useState("");
   const [pagina, setPagina] = useState(1);
   const [feedback, setFeedback] = useState(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -507,6 +514,7 @@ export default function Cuotas() {
   const [deleteRow, setDeleteRow] = useState(null);
   const [multiMode, setMultiMode] = useState(false);
   const [selectedPayments, setSelectedPayments] = useState({});
+  const [selectingAll, setSelectingAll] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [estadoTotales, setEstadoTotales] = useState({
@@ -530,10 +538,11 @@ export default function Cuotas() {
       buscar: debouncedBuscar,
       anio,
       mes,
+      ...(medioPago ? { id_medio_pago: medioPago } : {}),
       pagina,
       por_pagina: PAGE_SIZE,
     }),
-    [tipo, estado, debouncedBuscar, anio, mes, pagina],
+    [tipo, estado, debouncedBuscar, anio, mes, medioPago, pagina],
   );
   const {
     items,
@@ -569,9 +578,21 @@ export default function Cuotas() {
 
     try {
       const [deudoresResult, pagadosResult, condonadosResult] = await Promise.allSettled([
-        cuotasApi.listar({ ...filtrosTotales, estado: "DEUDORES" }),
-        cuotasApi.listar({ ...filtrosTotales, estado: "PAGADOS" }),
-        cuotasApi.listar({ ...filtrosTotales, estado: "CONDONADOS" }),
+        cuotasApi.listar({
+          ...filtrosTotales,
+          estado: "DEUDORES",
+          ...(medioPago ? { id_medio_pago: medioPago } : {}),
+        }),
+        cuotasApi.listar({
+          ...filtrosTotales,
+          estado: "PAGADOS",
+          ...(medioPago ? { id_medio_pago: medioPago } : {}),
+        }),
+        cuotasApi.listar({
+          ...filtrosTotales,
+          estado: "CONDONADOS",
+          ...(medioPago ? { id_medio_pago: medioPago } : {}),
+        }),
       ]);
 
       if (currentRequest !== totalsRequestId.current) return;
@@ -595,7 +616,7 @@ export default function Cuotas() {
     } catch {
       // El contador es informativo: una falla no debe bloquear la tabla principal.
     }
-  }, [filtrosTotales]);
+  }, [filtrosTotales, medioPago]);
 
   useEffect(() => {
     void cargarTotalesEstado();
@@ -646,7 +667,7 @@ export default function Cuotas() {
 
   useEffect(() => {
     setPagina(1);
-  }, [tipo, estado, debouncedBuscar, anio, mes]);
+  }, [tipo, estado, debouncedBuscar, anio, mes, medioPago]);
 
   useEffect(() => {
     if (loading || pagina <= 1) return;
@@ -727,7 +748,7 @@ export default function Cuotas() {
     [isCondoned, isPaid, isResolved],
   );
 
-  const obtenerTodosParaExportar = useCallback(async () => {
+  const obtenerTodosFiltrados = useCallback(async () => {
     const primeraRespuesta = await cuotasApi.listar({
       ...filtros,
       pagina: 1,
@@ -753,8 +774,13 @@ export default function Cuotas() {
       registros.push(...(respuesta.items || []));
     }
 
+    return registros;
+  }, [filtros]);
+
+  const obtenerTodosParaExportar = useCallback(async () => {
+    const registros = await obtenerTodosFiltrados();
     return exportRecords(registros);
-  }, [exportRecords, filtros]);
+  }, [exportRecords, obtenerTodosFiltrados]);
 
   const exportFilterDescription = [
     tipo === "EMPRESA" ? "Empresas" : "Socios",
@@ -782,6 +808,8 @@ export default function Cuotas() {
     availableMonthIds.every((monthId) => selectedMonthIds.includes(monthId));
   const selectedItems = Object.values(selectedPayments);
   const selectedCount = selectedItems.length;
+  const allFilteredPaymentsSelected =
+    totalRegistros > 0 && selectedCount >= totalRegistros;
   const entityLabel = tipo === "EMPRESA" ? "empresa" : "socio";
   const previewPaymentContext =
     paymentContext ||
@@ -836,6 +864,8 @@ export default function Cuotas() {
           );
 
   const clearMultipleSelection = () => {
+    selectAllRequestId.current += 1;
+    setSelectingAll(false);
     setSelectedPayments({});
     setMultiMode(false);
   };
@@ -958,7 +988,9 @@ export default function Cuotas() {
       meses: base.meses || [],
       monto: partner ? String(partner.monto_sugerido || "") : "",
       montos_por_mes: {},
-      id_medio_pago: "",
+      id_medio_pago: String(
+        partner?.id_medio_pago ?? partner?.id_medio_pago_preferido ?? "",
+      ),
       aplicar_familia: false,
     };
     setPaymentForm(next);
@@ -986,7 +1018,12 @@ export default function Cuotas() {
     const resolved = {
       ...next,
       monto: String(row?.monto_sugerido || partner?.monto_sugerido || ""),
-      id_medio_pago: "",
+      id_medio_pago: String(
+        row?.id_medio_pago_preferido ??
+          partner?.id_medio_pago ??
+          partner?.id_medio_pago_preferido ??
+          "",
+      ),
     };
     setPaymentForm(resolved);
     setPaymentOpen(true);
@@ -1009,11 +1046,23 @@ export default function Cuotas() {
     setFeedback(null);
     setPaymentMode("multiple");
     setPaymentContext(null);
+    const selectedPreferredPaymentMethods = selectedItems.map((item) =>
+      String(item.id_medio_pago_preferido ?? item.id_medio_pago ?? ""),
+    );
+    const preferredPaymentMethodIds = Array.from(
+      new Set(selectedPreferredPaymentMethods.filter(Boolean)),
+    );
+    const sharedPreferredPaymentMethod =
+      selectedPreferredPaymentMethods.length > 0 &&
+      selectedPreferredPaymentMethods.every(Boolean) &&
+      preferredPaymentMethodIds.length === 1
+        ? preferredPaymentMethodIds[0]
+        : "";
     setPaymentForm({
       ...emptyForm(),
       anio,
       mes,
-      id_medio_pago: "",
+      id_medio_pago: sharedPreferredPaymentMethod,
       pagos: selectedItems.map((item) => {
         const amountOptions = Array.isArray(item.opciones_monto)
           ? item.opciones_monto
@@ -1632,6 +1681,41 @@ export default function Cuotas() {
     clearMultipleSelection();
   };
 
+  const toggleAllFilteredPayments = async () => {
+    if (allFilteredPaymentsSelected) {
+      setSelectedPayments({});
+      return;
+    }
+
+    const requestId = ++selectAllRequestId.current;
+    setSelectingAll(true);
+    try {
+      const records = await obtenerTodosFiltrados();
+      if (requestId !== selectAllRequestId.current) return;
+
+      setSelectedPayments(
+        Object.fromEntries(
+          records.map((item) => [selectionKey(item), item]),
+        ),
+      );
+    } catch (err) {
+      if (requestId !== selectAllRequestId.current) return;
+      setFeedback({
+        type: "error",
+        message:
+          err.message ||
+          "No se pudieron seleccionar todos los registros filtrados.",
+      });
+    } finally {
+      if (requestId === selectAllRequestId.current) setSelectingAll(false);
+    }
+  };
+
+  const setPaymentMethodFilter = (value) => {
+    setMedioPago(value);
+    clearMultipleSelection();
+  };
+
   const pageFilters = [
     {
       key: "tipo",
@@ -1732,6 +1816,19 @@ export default function Cuotas() {
       })),
       className: "cuotas-month-filter",
     },
+    {
+      key: "medio_pago",
+      type: "select",
+      label: "Medio de pago",
+      placeholder: "Todos",
+      value: medioPago,
+      onChange: setPaymentMethodFilter,
+      options: (catalogos.medios_pago || []).map((item) => ({
+        value: item.id_medio_pago,
+        label: item.nombre,
+      })),
+      className: "cuotas-payment-method-filter",
+    },
   ];
 
   const tableLabel = `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : isCondoned ? "condonadas" : "adeudadas"}`;
@@ -1739,6 +1836,7 @@ export default function Cuotas() {
     tipo === "EMPRESA" ? "Empresa" : "Socio",
     "Categoría",
     "Período",
+    "Medio de pago",
     "Importe",
     "Acciones",
   ];
@@ -1749,7 +1847,7 @@ export default function Cuotas() {
         "Período",
         "Estado",
         "Fecha",
-        "Medio",
+        "Medio de pago",
         "Importe",
         "Acciones",
       ]
@@ -1796,6 +1894,7 @@ export default function Cuotas() {
                     : "Selección múltiple",
                   icon: faUserGroup,
                   onClick: toggleMultipleMode,
+                  disabled: selectingAll,
                   className: multiMode
                     ? "mov-btn--danger cuotas-multiple-action"
                     : "mov-btn--primary cuotas-multiple-action",
@@ -1824,7 +1923,7 @@ export default function Cuotas() {
             persistente
             cerrarConEscape={false}
             cerrarConInteraccion={false}
-            cierreDeshabilitado={saving}
+            cierreDeshabilitado={saving || selectingAll}
             onClose={cancelMultipleSelection}
             className="cuotas-selection-toast"
             ariaLabelCerrar="Cancelar selección múltiple"
@@ -1835,7 +1934,9 @@ export default function Cuotas() {
                   seleccionada{selectedCount === 1 ? "" : "s"}
                 </strong>
                 <span>
-                  Hacé clic en cualquier parte de una fila para seleccionarla.
+                  {selectingAll
+                    ? "Seleccionando todos los registros filtrados…"
+                    : "Hacé clic en una fila o seleccioná todos los resultados."}
                 </span>
               </div>
             }
@@ -1843,9 +1944,21 @@ export default function Cuotas() {
               <>
                 <button
                   type="button"
+                  className="mov-btn mov-btn--ghost cuotas-select-all-toast-btn"
+                  onClick={toggleAllFilteredPayments}
+                  disabled={!totalRegistros || saving || selectingAll}
+                >
+                  {selectingAll
+                    ? "Seleccionando…"
+                    : allFilteredPaymentsSelected
+                      ? "Deseleccionar todos"
+                      : "Seleccionar todos"}
+                </button>
+                <button
+                  type="button"
                   className="mov-btn mov-btn--ghost"
                   onClick={() => setSelectedPayments({})}
-                  disabled={!selectedCount || saving}
+                  disabled={!selectedCount || saving || selectingAll}
                 >
                   Limpiar
                 </button>
@@ -1853,7 +1966,7 @@ export default function Cuotas() {
                   type="button"
                   className="mov-btn mov-btn--primary"
                   onClick={openMultiplePayment}
-                  disabled={!selectedCount || saving}
+                  disabled={!selectedCount || saving || selectingAll}
                 >
                   Continuar ({selectedCount})
                 </button>
@@ -1984,6 +2097,7 @@ export default function Cuotas() {
                 type="button"
                 className={`mov-btn cuotas-lower-action cuotas-multiple-action ${multiMode ? "mov-btn--danger" : "mov-btn--primary"}`}
                 onClick={toggleMultipleMode}
+                disabled={selectingAll}
               >
                 <FontAwesomeIcon icon={faUserGroup} />
                 {multiMode ? "Cancelar selección" : "Selección múltiple"}

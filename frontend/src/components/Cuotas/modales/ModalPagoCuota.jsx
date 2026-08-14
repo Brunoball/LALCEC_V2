@@ -3,10 +3,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
   faChevronDown,
+  faCreditCard,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import CrudModal from "../../Global/Modales/CrudModal";
-import { FloatingField } from "../../Global/Formularios/TabbedForm";
+import {
+  EntityFormPanel,
+  EntityTabs,
+  FloatingField,
+} from "../../Global/Formularios/TabbedForm";
 import "./CuotasModal.css";
 
 const formatOptionDate = (value) => {
@@ -134,13 +139,17 @@ export default function ModalPagoCuota({
 }) {
   const [familyExpanded, setFamilyExpanded] = useState(false);
   const [extraPaymentYears, setExtraPaymentYears] = useState([]);
+  const [activePaymentTab, setActivePaymentTab] = useState("meses");
 
   useEffect(() => {
     setFamilyExpanded(false);
   }, [paymentOpen, paymentForm.id_socio, paymentForm.anio]);
 
   useEffect(() => {
-    if (paymentOpen) setExtraPaymentYears([]);
+    if (paymentOpen) {
+      setExtraPaymentYears([]);
+      setActivePaymentTab("meses");
+    }
   }, [paymentOpen]);
 
   const modalPaymentYearOptions = useMemo(
@@ -206,6 +215,40 @@ export default function ModalPagoCuota({
     familyPaidPeriodsByMember.values(),
   ).some((periods) => periods.length > 0);
 
+  const paymentTabs = [
+    {
+      value: "meses",
+      label: "Meses a pagar",
+      icon: faCalendarDays,
+      badge: selectedMonthIds.length || null,
+    },
+    {
+      value: "datos",
+      label: "Datos del pago",
+      icon: faCreditCard,
+    },
+    {
+      value: "familia",
+      label: "Familia",
+      icon: faUsers,
+      badge:
+        tipo === "PERSONA" && family?.cantidad_integrantes
+          ? family.cantidad_integrantes
+          : null,
+    },
+  ];
+
+  const handleSubmit = (event) => {
+    if (paymentMode === "single") {
+      if (!paymentForm.fecha_pago || !paymentForm.id_medio_pago) {
+        setActivePaymentTab("meses");
+      } else if (!selectedMonthIds.length) {
+        setActivePaymentTab("meses");
+      }
+    }
+    submitPayment(event);
+  };
+
   return (
     <CrudModal
       open={paymentOpen}
@@ -246,7 +289,7 @@ export default function ModalPagoCuota({
         )
       }
       onClose={closePayment}
-      onSubmit={submitPayment}
+      onSubmit={handleSubmit}
       saving={saving}
       loading={paymentMode === "single" && contextLoading}
       loadingLabel="Cargando datos del pago..."
@@ -282,7 +325,23 @@ export default function ModalPagoCuota({
     >
       {paymentMode === "single" ? (
         <>
-          {tipo === "PERSONA" ? (
+          <EntityTabs
+            tabs={paymentTabs}
+            value={activePaymentTab}
+            onChange={setActivePaymentTab}
+            idPrefix="cuotas-payment-tab"
+            ariaLabel="Secciones del pago"
+            className="cuotas-payment-tabs"
+          />
+
+          <EntityFormPanel
+            tabValue="familia"
+            idPrefix="cuotas-payment-tab"
+            active={activePaymentTab === "familia"}
+            className="cuotas-payment-tab-panel"
+            bodyClassName="cuotas-payment-tab-panel__body"
+          >
+            {tipo === "PERSONA" ? (
             <div className="cuotas-payment-top-context">
               {family ? (
                 <section
@@ -423,13 +482,69 @@ export default function ModalPagoCuota({
                     </div>
                   </div>
                 </section>
-              ) : null}
+              ) : (
+                <div className="cuotas-no-family">
+                  El socio seleccionado no pertenece a un grupo familiar activo.
+                </div>
+              )}
             </div>
-          ) : null}
+            ) : (
+              <div className="cuotas-no-family">
+                Los pagos de empresas no se aplican a grupos familiares.
+              </div>
+            )}
+          </EntityFormPanel>
 
-          <div
-            className={`cuotas-payment-main-row ${tipo !== "PERSONA" ? "is-date-only" : ""}`.trim()}
+          <EntityFormPanel
+            tabValue="meses"
+            idPrefix="cuotas-payment-tab"
+            active={activePaymentTab === "meses"}
+            className="cuotas-payment-tab-panel"
+            bodyClassName="cuotas-payment-tab-panel__body"
           >
+            <aside className="cuotas-payment-date-card">
+              <div className="cuotas-payment-date-card__header">
+                <span>Datos del pago</span>
+                <small>Completá la fecha y el medio de pago.</small>
+              </div>
+
+              <div className="cuotas-payment-date-card__fields">
+                <div className="cuotas-payment-date-method-row">
+                  <FloatingField
+                    label="Fecha de pago *"
+                    active={Boolean(paymentForm.fecha_pago)}
+                  >
+                    <input
+                      type="date"
+                      value={paymentForm.fecha_pago}
+                      onChange={(event) => updatePaymentDate(event.target.value)}
+                      aria-label="Fecha de pago *"
+                    />
+                  </FloatingField>
+
+                  <FloatingField label="Medio de pago *" active>
+                    <select
+                      value={paymentForm.id_medio_pago}
+                      onChange={(event) =>
+                        setPaymentForm((current) => ({
+                          ...current,
+                          id_medio_pago: event.target.value,
+                        }))
+                      }
+                      aria-label="Medio de pago *"
+                    >
+                      <option value="">Seleccionar...</option>
+                      {(catalogos.medios_pago || []).map((item) => (
+                        <option key={item.id_medio_pago} value={item.id_medio_pago}>
+                          {item.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </FloatingField>
+                </div>
+              </div>
+            </aside>
+
             <section
               className="cuotas-period-group cuotas-period-selector"
               aria-label="Meses a pagar"
@@ -508,151 +623,120 @@ export default function ModalPagoCuota({
               </div>
             </section>
 
-            <aside className="cuotas-payment-date-card">
-              <div className="cuotas-payment-date-card__header">
-                <span>Datos del pago</span>
-                <small>Completá la fecha, el monto y el medio de pago.</small>
-              </div>
+          </EntityFormPanel>
 
-              <div className="cuotas-payment-date-card__fields">
-                <div className="cuotas-payment-date-method-row">
-                  <FloatingField
-                    label="Fecha de pago *"
-                    active={Boolean(paymentForm.fecha_pago)}
-                  >
-                    <input
-                      type="date"
-                      value={paymentForm.fecha_pago}
-                      onChange={(event) => updatePaymentDate(event.target.value)}
-                      aria-label="Fecha de pago *"
-                    />
-                  </FloatingField>
+          <EntityFormPanel
+            tabValue="datos"
+            idPrefix="cuotas-payment-tab"
+            active={activePaymentTab === "datos"}
+            className="cuotas-payment-tab-panel"
+            bodyClassName="cuotas-payment-tab-panel__body"
+          >
 
-                  <FloatingField label="Medio de pago *" active>
-                    <select
-                      value={paymentForm.id_medio_pago}
-                      onChange={(event) =>
-                        setPaymentForm((current) => ({
-                          ...current,
-                          id_medio_pago: event.target.value,
-                        }))
-                      }
-                      aria-label="Medio de pago *"
-                    >
-                      <option value="">Seleccionar...</option>
-                      {(catalogos.medios_pago || []).map((item) => (
-                        <option key={item.id_medio_pago} value={item.id_medio_pago}>
-                          {item.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </FloatingField>
+            {selectedMonthIds.length ? (
+              <div className="cuotas-month-amount-editor">
+                <div className="cuotas-month-amount-editor__title">
+                  <span>Importe por mes</span>
+                  <small>
+                    {paymentForm.aplicar_familia && family
+                      ? "Monto del socio; al cambiarlo se cobra individual."
+                      : "Actual o histórico según el período."}
+                  </small>
                 </div>
 
-                {selectedMonthIds.length ? (
-                  <div className="cuotas-month-amount-editor">
-                    <div className="cuotas-month-amount-editor__title">
-                      <span>Importe por mes</span>
-                      <small>
-                        {paymentForm.aplicar_familia && family
-                          ? "Monto del socio; al cambiarlo se cobra individual."
-                          : "Actual o histórico según el período."}
-                      </small>
-                    </div>
+                <div className="cuotas-month-amount-editor__list">
+                  {selectedMonthIds.map((monthId) => {
+                    const period = paymentPeriods[monthId];
+                    const principalForMonth = period?.context?.principal || null;
+                    const options = Array.isArray(principalForMonth?.opciones_monto)
+                      ? principalForMonth.opciones_monto
+                      : [];
+                    const amountState = paymentForm.montos_por_mes?.[monthId] || {};
+                    const monthLabel =
+                      monthOptions.find(
+                        (item) => String(item.id_mes) === String(monthId),
+                      )?.nombre || `Mes ${monthId}`;
 
-                    <div className="cuotas-month-amount-editor__list">
-                      {selectedMonthIds.map((monthId) => {
-                        const period = paymentPeriods[monthId];
-                        const principalForMonth = period?.context?.principal || null;
-                        const options = Array.isArray(principalForMonth?.opciones_monto)
-                          ? principalForMonth.opciones_monto
-                          : [];
-                        const amountState =
-                          paymentForm.montos_por_mes?.[monthId] || {};
-                        const monthLabel =
-                          monthOptions.find(
-                            (item) => String(item.id_mes) === String(monthId),
-                          )?.nombre || `Mes ${monthId}`;
+                    return (
+                      <section
+                        className="cuotas-month-amount-row"
+                        key={`amount-${paymentForm.anio}-${monthId}`}
+                      >
+                        <div className="cuotas-month-amount-row__head">
+                          <strong>{monthLabel}</strong>
+                          <span>{money(amountState.monto || 0)}</span>
+                        </div>
 
-                        return (
-                          <section
-                            className="cuotas-month-amount-row"
-                            key={`amount-${paymentForm.anio}-${monthId}`}
+                        <label className="cuotas-month-amount-field">
+                          <span>Monto</span>
+                          <select
+                            value={
+                              options.length
+                                ? amountState.opcion_id || options[0]?.id || ""
+                                : ""
+                            }
+                            disabled={Boolean(amountState.personalizado)}
+                            onChange={(event) =>
+                              updateMonthAmountOption(monthId, event.target.value)
+                            }
+                            aria-label={`Monto de categoría para ${monthLabel}`}
                           >
-                            <div className="cuotas-month-amount-row__head">
-                              <strong>{monthLabel}</strong>
-                              <span>{money(amountState.monto || 0)}</span>
-                            </div>
-
-                            <label className="cuotas-month-amount-field">
-                              <span>Monto</span>
-                              <select
-                                value={
-                                  options.length
-                                    ? amountState.opcion_id || options[0]?.id || ""
-                                    : ""
-                                }
-                                disabled={Boolean(amountState.personalizado)}
-                                onChange={(event) =>
-                                  updateMonthAmountOption(monthId, event.target.value)
-                                }
-                                aria-label={`Monto de categoría para ${monthLabel}`}
-                              >
-                                {options.length ? (
-                                  options.map((option) => (
-                                    <option key={option.id} value={option.id}>
-                                      {money(option.monto)} · {amountOptionPeriodLabel(option)}
-                                    </option>
-                                  ))
-                                ) : (
-                                  <option value="">
-                                    {money(
-                                      principalForMonth?.monto_sugerido ||
-                                        principalForMonth?.monto_base ||
-                                        0,
-                                    )}
-                                  </option>
+                            {options.length ? (
+                              options.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {money(option.monto)} · {amountOptionPeriodLabel(option)}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="">
+                                {money(
+                                  principalForMonth?.monto_sugerido ||
+                                    principalForMonth?.monto_base ||
+                                    0,
                                 )}
-                              </select>
-                            </label>
+                              </option>
+                            )}
+                          </select>
+                        </label>
 
-                            <label className="cuotas-custom-amount-toggle">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(amountState.personalizado)}
-                                onChange={(event) =>
-                                  toggleMonthCustomAmount(monthId, event.target.checked)
-                                }
-                              />
-                              <span>Monto personalizado</span>
-                            </label>
+                        <label className="cuotas-custom-amount-toggle">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(amountState.personalizado)}
+                            onChange={(event) =>
+                              toggleMonthCustomAmount(monthId, event.target.checked)
+                            }
+                          />
+                          <span>Monto personalizado</span>
+                        </label>
 
-                            {amountState.personalizado ? (
-                              <FloatingField label="Monto personalizado *" active>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  pattern="[0-9]*[.,]?[0-9]{0,2}"
-                                  value={amountState.monto ?? ""}
-                                  onChange={(event) =>
-                                    updateMonthCustomAmount(monthId, event.target.value)
-                                  }
-                                  aria-label={`Monto personalizado para ${monthLabel}`}
-                                  placeholder="0,00"
-                                  autoFocus={selectedMonthIds.length === 1}
-                                />
-                              </FloatingField>
-                            ) : null}
-                          </section>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
+                        {amountState.personalizado ? (
+                          <FloatingField label="Monto personalizado *" active>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              pattern="[0-9]*[.,]?[0-9]{0,2}"
+                              value={amountState.monto ?? ""}
+                              onChange={(event) =>
+                                updateMonthCustomAmount(monthId, event.target.value)
+                              }
+                              aria-label={`Monto personalizado para ${monthLabel}`}
+                              placeholder="0,00"
+                              autoFocus={selectedMonthIds.length === 1}
+                            />
+                          </FloatingField>
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </div>
               </div>
-            </aside>
-          </div>
+            ) : (
+              <div className="cuotas-no-family">
+                Seleccioná uno o más meses para configurar el importe de cada cuota.
+              </div>
+            )}
+          </EntityFormPanel>
         </>
       ) : (
         <>

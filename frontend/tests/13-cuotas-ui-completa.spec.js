@@ -19,6 +19,7 @@ const batchPersonTwo = personData();
 const batchPersonNoDni = personData();
 let batchPersonNoDniId = null;
 const multiMonthPerson = personData();
+const multiAmountPerson = personData();
 const paginationPerson = personData();
 const historicalPricePerson = personData();
 const familyUiPersonOne = personData();
@@ -139,6 +140,12 @@ async function selectPreferredMedium(dialog) {
   if (!(await medium.inputValue())) await medium.selectOption({ index: 1 });
 }
 
+async function selectPaymentTab(dialog, name) {
+  const tab = dialog.getByRole('tab', { name });
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 async function expectReceiptPopup(page, trigger) {
   await page.context().addInitScript(() => {
     window.print = () => undefined;
@@ -184,6 +191,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       batchPersonOne,
       batchPersonTwo,
       multiMonthPerson,
+      multiAmountPerson,
       paginationPerson,
       historicalPricePerson,
       familyUiPersonOne,
@@ -557,6 +565,79 @@ test.describe('Cuotas completas desde la interfaz', () => {
     expect(paidCount).toBe(2);
   });
 
+  test('registra varios meses con importes personalizados independientes desde las pestañas del pago', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await createPerson(request, multiAmountPerson, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    await page.goto('/cuotas');
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(multiAmountPerson.dni);
+    await debtRow(page, multiAmountPerson)
+      .getByRole('button', { name: /Registrar pago de/i })
+      .click();
+
+    const dialog = singlePaymentDialog(page, multiAmountPerson);
+    await expect(dialog.getByRole('tab', { name: /Meses a pagar/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await dialog.getByRole('button', {
+      name: new RegExp(`${monthNames[secondaryMonth - 1]} ${currentYear}: disponible`, 'i'),
+    }).click();
+
+    await selectPaymentTab(dialog, 'Datos del pago');
+    const expectedAmounts = new Map([
+      [currentMonth, 111.11],
+      [secondaryMonth, 222.22],
+    ]);
+
+    for (const [month, amount] of expectedAmounts) {
+      const monthLabel = monthNames[month - 1];
+      const amountRow = dialog
+        .locator('.cuotas-month-amount-row')
+        .filter({ hasText: monthLabel });
+      await expect(amountRow).toBeVisible();
+      await amountRow.getByRole('checkbox', { name: 'Monto personalizado' }).check();
+      await amountRow.getByLabel(`Monto personalizado para ${monthLabel}`).fill(String(amount));
+    }
+
+    await selectPaymentTab(dialog, /Meses a pagar/);
+    await selectPreferredMedium(dialog);
+    const requestPromise = page.waitForRequest((requestEvent) => {
+      const url = new URL(requestEvent.url());
+      return url.searchParams.get('action') === 'cuotas_registrar_pagos';
+    });
+    await dialog.getByRole('button', { name: 'Registrar 2 cuotas' }).click();
+
+    const paymentRequest = await requestPromise;
+    const payload = paymentRequest.postDataJSON();
+    expect(payload.pagos).toHaveLength(2);
+    for (const payment of payload.pagos) {
+      expect(Number(payment.monto)).toBeCloseTo(expectedAmounts.get(Number(payment.mes)), 2);
+    }
+
+    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
+    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    await receipt.getByText('Cerrar', { exact: true }).click();
+
+    for (const [month, amount] of expectedAmounts) {
+      const paid = await apiCall(request, 'cuotas_listar', {
+        params: {
+          tipo: 'PERSONA',
+          estado: 'PAGADOS',
+          anio: currentYear,
+          mes: month,
+          buscar: multiAmountPerson.dni,
+        },
+      });
+      expect(paid.items).toHaveLength(1);
+      expect(Number(paid.items[0].monto)).toBeCloseTo(amount, 2);
+    }
+  });
+
   test('muestra el monto desde el primer mes, preselecciona el histórico correcto y permite un monto personalizado', async ({ page, request }) => {
     const historicalCategory = await createHistoricalCategory(request);
     const { medium } = await activeCategoryAndMedium(request);
@@ -574,6 +655,12 @@ test.describe('Cuotas completas desde la interfaz', () => {
 
     const dialog = singlePaymentDialog(page, historicalPricePerson);
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('tablist', { name: 'Secciones del pago' })).toBeVisible();
+    await expect(dialog.getByRole('tab', { name: /Meses a pagar/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await selectPaymentTab(dialog, 'Datos del pago');
 
     const currentLabel = monthNamesUpper[currentMonth - 1];
     const currentAmountSelect = dialog.getByLabel(`Monto de categoría para ${currentLabel}`);
@@ -582,6 +669,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(currentAmountSelect.locator('option:checked')).toContainText(/actual/i);
     await expect(dialog.getByRole('checkbox', { name: 'Monto personalizado' })).toBeVisible();
 
+    await selectPaymentTab(dialog, /Meses a pagar/);
     if (historicalYear !== currentYear) {
       await dialog.getByRole('button', { name: `Año ${currentYear}` }).click();
       await dialog.getByRole('option', { name: String(historicalYear), exact: true }).click();
@@ -596,6 +684,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       name: new RegExp(`${monthNames[historicalMonth - 1]} ${historicalYear}: disponible`, 'i'),
     }).click();
 
+    await selectPaymentTab(dialog, 'Datos del pago');
     const historicalAmountSelect = dialog.getByLabel(`Monto de categoría para ${historicalLabel}`);
     await expect(historicalAmountSelect).toBeVisible();
     await expect(historicalAmountSelect.locator('option:checked')).toContainText(/1\.200,00/);
@@ -676,6 +765,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       .click();
 
     const dialog = singlePaymentDialog(page, familyUiPersonOne);
+    await selectPaymentTab(dialog, /Familia/);
     const familyCard = dialog.getByRole('region', { name: 'Grupo familiar del socio' });
     await expect(familyCard).toBeVisible();
     await expect(familyCard).toContainText(uiFamily.nombre);
@@ -687,15 +777,19 @@ test.describe('Cuotas completas desde la interfaz', () => {
     const currentMonthButton = dialog.getByRole('button', {
       name: new RegExp(`${monthNames[currentMonth - 1]} ${currentYear}:`, 'i'),
     });
+    await selectPaymentTab(dialog, /Meses a pagar/);
     await currentMonthButton.click();
+    await selectPaymentTab(dialog, /Familia/);
     await expect(familyCard).toBeVisible();
     await expect(familyCheck).toBeDisabled();
+    await selectPaymentTab(dialog, /Meses a pagar/);
     await currentMonthButton.click();
 
     await dialog.getByRole('button', {
       name: new RegExp(`${monthNames[secondaryMonth - 1]} ${currentYear}: disponible`, 'i'),
     }).click();
 
+    await selectPaymentTab(dialog, /Familia/);
     await expect(familyCheck).toBeEnabled();
     await expect(familyCheck).toBeChecked();
     await expect(dialog.getByText('Hay cuotas ya pagadas en la selección.')).toBeVisible();
@@ -708,6 +802,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(paidMember).toContainText('Pagó');
     await expect(paidMember).toContainText('PAGADO');
 
+    await selectPaymentTab(dialog, /Meses a pagar/);
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar pago familiar (3 cuotas)' }).click();
     const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
@@ -776,7 +871,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(page.getByLabel('Año').locator(`option[value="${addedYear}"]`)).toHaveCount(1);
   });
 
-  test('pagina cuotas con número, Anterior y Siguiente', async ({ page, request }) => {
+  test('muestra contadores, filtra por medio y selecciona todas las páginas antes de paginar y exportar', async ({ page, request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);
     const saved = await createPerson(request, paginationPerson, {
       id_categoria: category.id_categoria,
@@ -794,18 +889,28 @@ test.describe('Cuotas completas desde la interfaz', () => {
     const template = real.items.find((item) => item.id_socio === saved.id_socio) || real.items[0];
     expect(template).toBeTruthy();
 
+    const listRequests = [];
+    const totalsByState = { DEUDORES: 101, PAGADOS: 7, CONDONADOS: 3 };
     await page.route(/api\.php\?action=cuotas_listar(?:&|$)/, async (route) => {
       const url = new URL(route.request().url());
+      listRequests.push(Object.fromEntries(url.searchParams));
       const requestedPage = Number(url.searchParams.get('pagina') || 1);
+      const perPage = Number(url.searchParams.get('por_pagina') || 100);
+      const requestedState = url.searchParams.get('estado') || 'DEUDORES';
+      const total = totalsByState[requestedState] || 0;
       const makeItem = (index) => ({
         ...template,
         id_socio: 800000 + index,
         documento: String(60000000 + index),
         denominacion: `CUOTA PAGINA ${String(index).padStart(3, '0')}`,
       });
-      const items = requestedPage === 1
-        ? Array.from({ length: 100 }, (_, index) => makeItem(index + 1))
-        : [makeItem(101)];
+      const offset = (requestedPage - 1) * perPage;
+      const pageSize = Math.max(0, Math.min(perPage, total - offset));
+      const items = Array.from({ length: pageSize }, (_, index) => makeItem(offset + index + 1));
+
+      if (requestedPage === 2 && perPage === 100) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
 
       await route.fulfill({
         status: 200,
@@ -813,22 +918,60 @@ test.describe('Cuotas completas desde la interfaz', () => {
         body: JSON.stringify({
           exito: true,
           items,
-          resumen: { ...(real.resumen || {}), total: 101 },
+          resumen: { ...(real.resumen || {}), total },
           periodo: real.periodo,
-          catalogos: real.catalogos,
           paginacion: {
             pagina: requestedPage,
-            por_pagina: 100,
-            total: 101,
-            total_paginas: 2,
-            desde: requestedPage === 1 ? 1 : 101,
-            hasta: requestedPage === 1 ? 100 : 101,
+            por_pagina: perPage,
+            total,
+            total_paginas: total ? Math.ceil(total / perPage) : 0,
+            desde: total ? offset + 1 : 0,
+            hasta: total ? offset + items.length : 0,
           },
         }),
       });
     });
 
     await page.goto('/cuotas');
+    await expect(page.getByLabel('101 deudores')).toBeVisible();
+    await expect(page.getByLabel('7 pagados')).toBeVisible();
+    await expect(page.getByLabel('3 condonados')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Selección múltiple' }).first().click();
+    await page.getByRole('button', { name: 'Seleccionar todos', exact: true }).click();
+    await expect(
+      page.getByText('Seleccionando todos los registros filtrados…'),
+    ).toBeVisible();
+    await expect(page.getByText('101 cuotas seleccionadas')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continuar (101)', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Deseleccionar todos', exact: true })).toBeVisible();
+    expect(
+      listRequests.some(
+        (query) =>
+          query.estado === 'DEUDORES' &&
+          query.pagina === '2' &&
+          query.por_pagina === '100' &&
+          query.incluir_catalogos === '0',
+      ),
+    ).toBe(true);
+
+    await page.getByRole('button', { name: 'Deseleccionar todos', exact: true }).click();
+    await expect(page.getByText('0 cuotas seleccionadas')).toBeVisible();
+    await page
+      .getByRole('table', { name: /Cuotas de socios adeudadas/i })
+      .getByRole('checkbox', { name: /Seleccionar cuota de/i })
+      .first()
+      .check();
+    await expect(page.getByText('1 cuota seleccionada')).toBeVisible();
+
+    await page.getByLabel('Medio de pago', { exact: true }).selectOption(
+      String(medium.id_medio_pago),
+    );
+    await expect(page.getByText(/cuotas? seleccionadas?/i)).toHaveCount(0);
+    await expect.poll(() =>
+      listRequests.some((query) => query.id_medio_pago === String(medium.id_medio_pago)),
+    ).toBe(true);
+
     const pagination = page.getByRole('navigation', { name: 'Paginación de cuotas' });
     await expect(pagination).toContainText('1–100 de 101');
     await pagination.getByRole('button', { name: '2', exact: true }).click();

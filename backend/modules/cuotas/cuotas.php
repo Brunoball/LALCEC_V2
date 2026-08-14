@@ -114,6 +114,7 @@ final class Cuotas
         $mes = self::validMonth($filters['mes'] ?? $now->format('n'));
         $buscar = clean_text($filters['buscar'] ?? '', 120, false);
         $categoria = self::optionalPositiveId($filters['categoria'] ?? null);
+        $medioPago = self::optionalPositiveId($filters['id_medio_pago'] ?? null);
         $periodEnd = self::periodEnd($anio, $mes);
         $page = max(1, (int)($filters['pagina'] ?? 1));
         $perPage = max(1, min(200, (int)($filters['por_pagina'] ?? 100)));
@@ -144,6 +145,13 @@ final class Cuotas
         if ($categoria !== null) {
             $where[] = 's.id_categoria = ?';
             $params[] = $categoria;
+        }
+
+        if ($medioPago !== null) {
+            $where[] = $estado === 'DEUDORES'
+                ? 's.id_medio_pago = ?'
+                : 'p.id_medio_pago = ?';
+            $params[] = $medioPago;
         }
 
         $searchFilter = build_search_filter(

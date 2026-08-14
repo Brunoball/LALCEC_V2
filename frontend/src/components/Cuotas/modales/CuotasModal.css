@@ -1569,3 +1569,40 @@ html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-fam
 html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-family-paid-badge {
   background: rgb(22 101 52 / 0.38);
 }
+
+/* Navegación del modal de pago: cada etapa mantiene su contenido aislado. */
+.cuotas-payment-tabs {
+  margin-inline: 0;
+}
+
+.cuotas-payment-tab-panel {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cuotas-payment-tab-panel__body {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+}
+
+.cuotas-payment-tab-panel .cuotas-payment-top-context .cuotas-family-card {
+  margin-bottom: 0;
+}
+
+.cuotas-payment-tab-panel .cuotas-month-amount-editor {
+  margin-top: 2px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--balto-action) 14%, var(--mov-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--balto-action) 2%, #fff);
+}
+
+@media (max-width: 600px) {
+  .cuotas-payment-tabs {
+    gap: 16px;
+  }
+}

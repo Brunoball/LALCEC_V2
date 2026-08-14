@@ -28,9 +28,10 @@
      reduce el ancho disponible, primero ceden Búsqueda, Año y Mes. */
   grid-template-columns:
     minmax(330px, 360px)
-    minmax(120px, 250px)
+    minmax(100px, 220px)
     minmax(82px, 120px)
-    minmax(92px, 120px);
+    minmax(92px, 120px)
+    minmax(130px, 160px);
 }
 
 .cuotas-head-filters .module-filter--tabs {
@@ -107,11 +108,16 @@
 }
 
 .cuotas-head-filters .cuotas-year-filter,
-.cuotas-head-filters .cuotas-month-filter {
+.cuotas-head-filters .cuotas-month-filter,
+.cuotas-head-filters .cuotas-payment-method-filter {
   width: 100%;
   min-width: 0;
   max-width: 120px;
   justify-self: stretch;
+}
+
+.cuotas-head-filters .cuotas-payment-method-filter {
+  max-width: 160px;
 }
 
 .cuotas-page .module-card .cuotas-table > .entity-table-wrap {
@@ -217,12 +223,13 @@
 
 .cuotas-grid--debt {
   grid-template-columns:
-    minmax(280px, 1.8fr)
+    minmax(250px, 1.65fr)
     minmax(130px, 0.82fr)
     minmax(130px, 0.82fr)
-    minmax(140px, 0.9fr)
+    minmax(135px, 0.82fr)
+    minmax(128px, 0.78fr)
     minmax(100px, 0.58fr);
-  min-width: 880px;
+  min-width: 1015px;
 }
 
 .cuotas-grid--paid {
@@ -233,7 +240,7 @@
     minmax(120px, 0.72fr)
     minmax(115px, 0.72fr)
     minmax(130px, 0.82fr)
-    minmax(120px, 0.75fr)
+    minmax(112px, 0.66fr)
     minmax(100px, 0.56fr);
   min-width: 1160px;
 }
@@ -241,11 +248,12 @@
 .cuotas-grid--selecting {
   grid-template-columns:
     44px
-    minmax(280px, 1.8fr)
+    minmax(250px, 1.65fr)
     minmax(130px, 0.82fr)
     minmax(130px, 0.82fr)
-    minmax(140px, 0.9fr);
-  min-width: 850px;
+    minmax(135px, 0.82fr)
+    minmax(128px, 0.78fr);
+  min-width: 885px;
 }
 
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
@@ -253,7 +261,9 @@
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
   > .mov-gridCell--head:nth-child(3),
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
-  > .mov-gridCell--head:nth-child(5),
+  > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
+  > .mov-gridCell--head:nth-child(6),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(2),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(3),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(4),
@@ -263,16 +273,18 @@
 .cuotas-grid--selecting.mov-gridTable--head
   > .mov-gridCell--head:nth-child(3),
 .cuotas-grid--selecting.mov-gridTable--head
-  > .mov-gridCell--head:nth-child(4) {
+  > .mov-gridCell--head:nth-child(4),
+.cuotas-grid--selecting.mov-gridTable--head
+  > .mov-gridCell--head:nth-child(5) {
   justify-content: center;
   text-align: center;
 }
 
 .cuotas-grid--debt:not(.cuotas-grid--selecting).mov-gridTable--head
-  > .mov-gridCell--head:nth-child(4),
+  > .mov-gridCell--head:nth-child(5),
 .cuotas-grid--paid.mov-gridTable--head > .mov-gridCell--head:nth-child(7),
 .cuotas-grid--selecting.mov-gridTable--head
-  > .mov-gridCell--head:nth-child(5) {
+  > .mov-gridCell--head:nth-child(6) {
   justify-content: flex-end;
   text-align: right;
 }
@@ -510,9 +522,10 @@
     flex-basis: auto;
     grid-template-columns:
       minmax(300px, 330px)
-      minmax(100px, 220px)
+      minmax(80px, 150px)
       minmax(78px, 105px)
-      minmax(88px, 110px);
+      minmax(88px, 110px)
+      minmax(120px, 140px);
   }
 
   .cuotas-head-filters .module-filter--tabs {
@@ -541,6 +554,11 @@
   .cuotas-head-filters .cuotas-month-filter {
     grid-column: 3;
     justify-self: start;
+  }
+
+  .cuotas-head-filters .cuotas-payment-method-filter {
+    grid-column: 1 / -1;
+    max-width: none;
   }
 }
 
@@ -598,7 +616,8 @@
   .cuotas-head-filters .module-filter--tabs,
   .cuotas-head-filters .cuotas-search-filter,
   .cuotas-head-filters .cuotas-year-filter,
-  .cuotas-head-filters .cuotas-month-filter {
+  .cuotas-head-filters .cuotas-month-filter,
+  .cuotas-head-filters .cuotas-payment-method-filter {
     flex: 1 1 100%;
     width: 100%;
     min-width: 0;
@@ -616,7 +635,7 @@
     minmax(100px, 0.72fr)
     minmax(120px, 0.75fr)
     minmax(130px, 0.8fr)
-    minmax(130px, 0.82fr);
+    minmax(120px, 0.74fr);
   min-width: 920px;
 }
 
@@ -725,8 +744,8 @@
 }
 
 .cuotas-selection-toast {
-  width: min(760px, calc(100vw - 32px));
-  max-width: 760px;
+  width: min(780px, calc(100vw - 32px));
+  max-width: 780px;
   border-color: color-mix(
     in srgb,
     var(--balto-action, #b52d35) 30%,
@@ -766,6 +785,29 @@
   min-height: 36px;
   padding: 0 13px;
   white-space: nowrap;
+}
+
+.cuotas-selection-toast .cuotas-select-all-toast-btn {
+  border-color: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 58%,
+    transparent
+  );
+  color: var(--balto-action, #b52d35);
+  background: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 12%,
+    #fff
+  );
+  box-shadow: 0 4px 12px -9px var(--balto-action, #b52d35);
+  font-weight: 800;
+}
+
+.cuotas-selection-toast .cuotas-select-all-toast-btn:hover:not(:disabled),
+.cuotas-selection-toast .cuotas-select-all-toast-btn:focus-visible:not(:disabled) {
+  border-color: var(--balto-action, #b52d35);
+  color: #fff;
+  background: var(--balto-action, #b52d35);
 }
 
 .cuotas-context-loading,
@@ -1185,6 +1227,22 @@ html[data-theme="oscuro"] .cuotas-selection-toast {
   ) !important;
 }
 
+html[data-theme="oscuro"]
+  .cuotas-selection-toast
+  .cuotas-select-all-toast-btn {
+  border-color: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 70%,
+    #fff
+  );
+  color: color-mix(in srgb, var(--balto-action, #b52d35) 45%, #fff);
+  background: color-mix(
+    in srgb,
+    var(--balto-action, #b52d35) 22%,
+    var(--balto-bg)
+  );
+}
+
 html[data-theme="oscuro"] .cuotas-select-cell input:not(:checked),
 html[data-theme="oscuro"] .cuotas-family-toggle input:not(:checked) {
   border-color: #64748b;
@@ -1225,6 +1283,7 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
     order: 4;
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
     margin: 8px 0 0;
     padding-left: 34px;
   }
@@ -1235,6 +1294,12 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
 
   .cuotas-selection-toast .toast-actions .mov-btn {
     flex: 1 1 0;
+  }
+
+  .cuotas-selection-toast
+    .toast-actions
+    .cuotas-select-all-toast-btn {
+    flex-basis: 100%;
   }
 
   .cuotas-family-members article {
