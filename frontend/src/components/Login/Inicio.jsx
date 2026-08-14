@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { apiPost } from "../_shared/api/apiClient";
 import { saveSession } from "../_shared/auth/session";
-import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
+import lalcecBanner from "../../imagenes/lalcec_banner.png";
 import "./inicio.css";
 
 const APP_NAME = "Gestión de Socios";
@@ -93,15 +93,11 @@ export default function Inicio() {
         <section className="ini_brand-panel">
           <div className="ini_brand-glow" aria-hidden="true" />
           <div className="ini_brand-content">
-            <div className="ini_brand-logo--placeholder" aria-label="LALCEC San Francisco Córdoba">
-              <div className="brand-mark brand-mark--image">
-                <img src={logoLalcec} alt="Logo LALCEC San Francisco" />
-              </div>
-              <div className="brand-word">
-                <strong className="brand-word-title">Lalcec</strong>
-                <span>San Francisco Córdoba</span>
-              </div>
-            </div>
+            <img
+              className="ini_brand-logo"
+              src={lalcecBanner}
+              alt="LALCEC San Francisco Córdoba"
+            />
             <div className="ini_brand-copy">
               <h2>Administración simple y centralizada</h2>
               <p>Gestión de socios simple y ordenada: cuotas, familias, categorías, contabilidad y WhatsApp en un solo sistema.</p>

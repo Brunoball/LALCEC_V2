@@ -123,7 +123,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 20px;
+  gap: 0;
 }
 
 .ini_brand-kicker,
@@ -155,7 +155,8 @@
 }
 
 .ini_brand-copy {
-  max-width: 420px;
+  max-width: 440px;
+  padding: 0 13px;
 }
 
 .ini_brand-copy h2 {
