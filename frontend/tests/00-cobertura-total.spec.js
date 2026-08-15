@@ -27,6 +27,18 @@ function testSources() {
     .join('\n');
 }
 
+function scenarioSources() {
+  return walk(__dirname, (file) => {
+    const name = path.basename(file);
+    return (
+      name !== path.basename(__filename) &&
+      (name.endsWith('.spec.js') || name === 'auth.setup.js' || name === 'auth.teardown.js')
+    );
+  })
+    .map(read)
+    .join('\n');
+}
+
 function backendActions() {
   const modulesRoot = path.join(BACKEND_ROOT, 'modules');
   const routeFiles = walk(
@@ -146,7 +158,11 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Quitar integrante',
   'Motivo de desvinculación',
   'Exportar cuotas',
-  'Exportar todas las cuotas filtradas',
+  'Exportar página actual',
+  'Exportar todos los resultados',
+  'Imprimir todos',
+  'Seleccionar meses',
+  'Deseleccionar todos',
   'Paginación de ingresos',
   'Paginación de egresos',
   'Detalle mensual contable',
@@ -226,6 +242,11 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const cuotasModalCss = read(
       path.join(SRC_ROOT, 'components', 'Cuotas', 'modales', 'CuotasModal.css'),
     );
+    const cuotasPaymentModal = read(
+      path.join(SRC_ROOT, 'components', 'Cuotas', 'modales', 'ModalPagoCuota.jsx'),
+    );
+    const apiHelperSource = read(path.join(__dirname, 'helpers', 'api.helper.js'));
+    const authFixtureSource = read(path.join(__dirname, 'fixtures', 'auth.fixture.js'));
 
     expect(modalSizeHook).not.toContain('.animate(');
     expect(cuotasSource).toContain('React.memo(function CuotasTableRows');
@@ -238,11 +259,21 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(cuotasHookSource).toContain('cuotasApi.catalogos');
     expect(cuotasModalCss).toContain('.cuotas-modal--payment.entity-modal');
     expect(cuotasModalCss).toContain('width: min(920px, 100%)');
+    expect(cuotasSource).not.toContain('handlePrintRegister');
+    expect(cuotasSource).not.toContain('cuotas-register-action');
+    expect(cuotasSource).toContain('LEGACY_RECEIPT_STYLES');
+    expect(cuotasSource).toContain('gcuotas-talon-socio');
+    expect(cuotasSource).toContain('gcuotas-talon-cobrador');
+    expect(cuotasPaymentModal).toContain('unavailable && !paid');
+    expect(cuotasModalCss).toContain('border: 1px solid #16a34a !important');
+    expect(apiHelperSource).toContain('async function ensureAuthSession');
+    expect(apiHelperSource).toContain('await ensureAuthSession(requestContext)');
+    expect(authFixtureSource).toContain('await ensureAuthSession(request)');
   });
 
   test('cada acción registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {
     expect(fs.existsSync(BACKEND_ROOT), `No se encontró el backend en ${BACKEND_ROOT}`).toBe(true);
-    const source = testSources();
+    const source = scenarioSources();
     const missing = backendActions().filter((action) => !source.includes(action));
     expect(missing, `Acciones backend sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
   });
@@ -250,7 +281,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
   test('cada acción usada por el frontend administrativo existe en el backend y está cubierta', () => {
     const backend = backendActions();
     const frontend = frontendApiActions();
-    const source = testSources();
+    const source = scenarioSources();
     expect(frontend.filter((action) => !backend.includes(action))).toEqual([]);
     expect(frontend.filter((action) => !source.includes(action))).toEqual([]);
   });
@@ -282,13 +313,13 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
   });
 
   test('todas las rutas de la aplicación, incluido el Panel Bot, están recorridas', () => {
-    const source = testSources();
+    const source = scenarioSources();
     const missing = applicationRoutes().filter((route) => !source.includes(route));
     expect(missing, `Rutas sin prueba: ${missing.join(', ')}`).toEqual([]);
   });
 
   test('las acciones visibles principales tienen un recorrido E2E declarado', () => {
-    const source = testSources();
+    const source = scenarioSources();
     const missing = REQUIRED_UI_ACTION_MARKERS.filter((marker) => !source.includes(marker));
     expect(missing, `Acciones visuales sin prueba: ${missing.join(', ')}`).toEqual([]);
   });

@@ -601,7 +601,7 @@ export default function ModalPagoCuota({
                     <button
                       type="button"
                       key={`${paymentForm.anio}-${monthId}`}
-                      className={`mescuot_periodo-card cuotas-payment-month-card ${selected ? "mescuot_seleccionado is-selected" : ""} ${paid ? "is-paid" : ""} ${unavailable ? "is-unavailable" : ""} ${disabled && !contextLoading ? "is-disabled" : ""}`.trim()}
+                      className={`mescuot_periodo-card cuotas-payment-month-card ${selected ? "mescuot_seleccionado is-selected" : ""} ${paid ? "is-paid" : ""} ${unavailable && !paid ? "is-unavailable is-disabled" : ""}`.trim()}
                       onClick={() => togglePaymentMonth(monthId)}
                       disabled={disabled}
                       aria-pressed={selected}

@@ -25,6 +25,8 @@ const historicalPricePerson = personData();
 const familyUiPersonOne = personData();
 const familyUiPersonTwo = personData();
 const futureYearPerson = personData();
+const printAllPerson = personData();
+const paidMonthCardPerson = personData();
 const uiFamily = familyData();
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -168,6 +170,23 @@ function singlePaymentDialog(page, person) {
   });
 }
 
+async function expectSuccessfulPaymentReceipt(page, paymentCount = 1) {
+  const title = paymentCount === 1
+    ? 'Registro de pagos'
+    : `Registro de ${paymentCount} pagos`;
+  const successMessage = paymentCount === 1
+    ? /Pago realizado con éxito/i
+    : new RegExp(`${paymentCount} pagos realizados con éxito`, 'i');
+  const receipt = page.getByRole('dialog', { name: title, exact: true });
+
+  await expect(receipt).toBeVisible();
+  await expect(receipt).toContainText(successMessage);
+  await expect(
+    receipt.getByRole('region', { name: 'Información del comprobante' }),
+  ).toBeVisible();
+  return receipt;
+}
+
 test.describe.configure({ timeout: 90000 });
 
 test.describe('Cuotas completas desde la interfaz', () => {
@@ -197,6 +216,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
       familyUiPersonOne,
       familyUiPersonTwo,
       futureYearPerson,
+      printAllPerson,
+      paidMonthCardPerson,
     ]) {
       await cleanupPerson(request, person);
     }
@@ -246,8 +267,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(paymentDialog);
     await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
     await expectReceiptPopup(page, () => receipt.getByRole('button', { name: 'Comprobante' }).click());
     await captureDownload(
       page,
@@ -351,8 +371,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(paymentDialog);
     await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     await page.getByRole('tab', { name: 'Pagados' }).click();
@@ -454,8 +473,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar 2 pagos' }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
+    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     const expectedAmounts = new Map([
@@ -544,9 +562,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar 2 cuotas' }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
-    await expect(receipt.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
+    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     let paidCount = 0;
@@ -619,8 +635,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       expect(Number(payment.monto)).toBeCloseTo(expectedAmounts.get(Number(payment.mes)), 2);
     }
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     for (const [month, amount] of expectedAmounts) {
@@ -706,8 +721,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     const paid = await apiCall(request, 'cuotas_listar', {
@@ -805,9 +819,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPaymentTab(dialog, /Meses a pagar/);
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar pago familiar (3 cuotas)' }).click();
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
-    await expect(receipt.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
+    const receipt = await expectSuccessfulPaymentReceipt(page, 3);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     for (const [person, month] of [
@@ -863,12 +875,150 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
-    const receipt = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receipt).toContainText(/Pago realizado con éxito/i);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     await page.reload();
     await expect(page.getByLabel('Año').locator(`option[value="${addedYear}"]`)).toHaveCount(1);
+  });
+
+  test('imprime todos con el comprobante antiguo, recorre el selector de meses y mantiene las acciones en su ubicación responsiva', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await createPerson(request, printAllPerson, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto('/cuotas');
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(printAllPerson.dni);
+    await expect(debtRow(page, printAllPerson)).toBeVisible();
+
+    const lowerActions = page.getByLabel('Acciones de cuotas');
+    const printAllButton = lowerActions.getByRole('button', {
+      name: 'Imprimir todos',
+      exact: true,
+    });
+    const headerExport = page.locator('.module-card__head .cuotas-export-action');
+    const lowerExport = lowerActions.locator('.cuotas-export-action');
+
+    await expect(printAllButton).toBeVisible();
+    await expect(headerExport).toBeVisible();
+    await expect(lowerExport).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Registro', exact: true })).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(headerExport).toBeHidden();
+    await expect(lowerExport).toBeVisible();
+    await expect(printAllButton).toBeVisible();
+
+    await printAllButton.click();
+    let monthDialog = page.getByRole('dialog', { name: 'Seleccionar meses' });
+    await expect(monthDialog).toBeVisible();
+    expect(
+      await monthDialog.evaluate((element) => element.parentElement?.parentElement === document.body),
+    ).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(monthDialog).toBeHidden();
+
+    await printAllButton.click();
+    monthDialog = page.getByRole('dialog', { name: 'Seleccionar meses' });
+    const currentMonthCheckbox = monthDialog.getByRole('checkbox', {
+      name: monthNamesUpper[currentMonth - 1],
+    });
+    const secondaryMonthCheckbox = monthDialog.getByRole('checkbox', {
+      name: monthNamesUpper[secondaryMonth - 1],
+    });
+    await expect(currentMonthCheckbox).toBeChecked();
+    await expect(monthDialog).toContainText('1 seleccionado');
+
+    await monthDialog.getByRole('button', { name: 'Seleccionar todos' }).click();
+    await expect(monthDialog.getByRole('checkbox')).toHaveCount(12);
+    for (const checkbox of await monthDialog.getByRole('checkbox').all()) {
+      await expect(checkbox).toBeChecked();
+    }
+    await expect(monthDialog).toContainText('12 seleccionados');
+
+    await monthDialog.getByRole('button', { name: 'Deseleccionar todos' }).click();
+    await expect(monthDialog.getByText('Ninguno seleccionado')).toBeVisible();
+    await expect(monthDialog.getByRole('button', { name: 'Imprimir' })).toBeDisabled();
+
+    await currentMonthCheckbox.locator('xpath=ancestor::label').click();
+    await secondaryMonthCheckbox.locator('xpath=ancestor::label').click();
+    await expect(currentMonthCheckbox).toBeChecked();
+    await expect(secondaryMonthCheckbox).toBeChecked();
+    await expect(monthDialog).toContainText('2 seleccionados');
+
+    await page.context().addInitScript(() => {
+      window.print = () => undefined;
+    });
+    const popupPromise = page.waitForEvent('popup');
+    await monthDialog.getByRole('button', { name: 'Imprimir' }).click();
+    const popup = await popupPromise;
+    const receipt = popup.locator('.gcuotas-comprobante');
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Afiliado:/i);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(printAllPerson.apellido);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Período:/i);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Total\s*\$/i);
+    await expect(receipt.locator('.gcuotas-talon-cobrador')).toContainText(/Nombre y Apellido:/i);
+    await expect(popup.locator('.receipt')).toHaveCount(0);
+    await expect(monthDialog).toBeHidden();
+    await popup.close();
+  });
+
+  test('identifica un período pagado con borde verde de un píxel sin heredar el estado gris', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const saved = await createPerson(request, paidMonthCardPerson, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    const paidContext = await apiCall(request, 'cuotas_contexto_pago', {
+      params: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+      },
+    });
+    await apiCall(request, 'cuotas_registrar_pago', {
+      method: 'POST',
+      data: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        monto: paidContext.principal.monto_sugerido,
+        id_medio_pago: medium.id_medio_pago,
+        aplicar_familia: false,
+      },
+    });
+
+    await page.goto('/cuotas');
+    await page.getByLabel('Mes', { exact: true }).selectOption(String(secondaryMonth));
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(paidMonthCardPerson.dni);
+    await debtRow(page, paidMonthCardPerson)
+      .getByRole('button', { name: /Registrar pago de/i })
+      .click();
+
+    const dialog = singlePaymentDialog(page, paidMonthCardPerson);
+    await selectPaymentTab(dialog, /Meses a pagar/);
+    const paidMonthButton = dialog.getByRole('button', {
+      name: new RegExp(`${monthNames[currentMonth - 1]} ${currentYear}: pagado`, 'i'),
+    });
+
+    await expect(paidMonthButton).toBeDisabled();
+    await expect(paidMonthButton).toHaveClass(/is-paid/);
+    await expect(paidMonthButton).not.toHaveClass(/is-unavailable/);
+    await expect(paidMonthButton).not.toHaveClass(/is-disabled/);
+    await expect(paidMonthButton).toHaveCSS('border-top-width', '1px');
+    await expect(paidMonthButton).toHaveCSS('border-top-style', 'solid');
+    await expect(paidMonthButton).toHaveCSS('border-top-color', 'rgb(22, 163, 74)');
+
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(dialog).toBeHidden();
   });
 
   test('muestra contadores, filtra por medio y selecciona todas las páginas antes de paginar y exportar', async ({ page, request }) => {
@@ -967,7 +1117,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await page.getByLabel('Medio de pago', { exact: true }).selectOption(
       String(medium.id_medio_pago),
     );
-    await expect(page.getByText(/cuotas? seleccionadas?/i)).toHaveCount(0);
+    await expect(page.getByText('1 cuota seleccionada')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continuar (1)', exact: true })).toBeEnabled();
     await expect.poll(() =>
       listRequests.some((query) => query.id_medio_pago === String(medium.id_medio_pago)),
     ).toBe(true);
@@ -986,8 +1137,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await exportButton.click();
     let exportDialog = page.getByRole('dialog', { name: 'Exportar cuotas' });
     await expect(exportDialog).toBeVisible();
-    await expect(exportDialog.getByRole('radio', { name: /Exportar esta página/i })).toBeVisible();
-    await expect(exportDialog.getByRole('radio', { name: /Exportar todas las cuotas filtradas/i })).toBeVisible();
+    await expect(exportDialog.getByRole('radio', { name: /^Exportar página actual\b/i })).toBeVisible();
+    await expect(exportDialog.getByRole('radio', { name: /^Exportar todos los resultados\b/i })).toBeVisible();
     await exportDialog.getByRole('button', { name: 'Cancelar' }).click();
     await expect(exportDialog).toBeHidden();
 
@@ -1012,13 +1163,13 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await exportFromGlobalModal(page, {
       openButton: exportButton,
       format: 'Excel',
-      scope: 'Exportar esta página',
+      scope: 'Exportar página actual',
       expectedExtension: '.xlsx',
     });
     await exportFromGlobalModal(page, {
       openButton: exportButton,
       format: 'PDF',
-      scope: 'Exportar todas las cuotas filtradas',
+      scope: 'Exportar todos los resultados',
       expectedExtension: '.pdf',
     });
   });

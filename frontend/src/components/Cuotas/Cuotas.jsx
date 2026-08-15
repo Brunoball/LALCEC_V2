@@ -106,7 +106,106 @@ const escapePrintHtml = (value) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const printReceiptsBatch = ({ printWindow, records, entityType, filterLabel }) => {
+const LEGACY_RECEIPT_STYLES = `
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative;
+    transform: rotate(90deg);
+    transform-origin: top left;
+    left: 70%;
+    top: 0;
+  }
+  .gcuotas-contenedor {
+    width: 210mm;
+    margin: 10mm 0;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+  .gcuotas-comprobante {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    box-sizing: border-box;
+  }
+  .gcuotas-talon-socio {
+    width: 60%;
+    padding-left: 12.5mm;
+    padding-top: 13mm;
+  }
+  .gcuotas-talon-cobrador {
+    width: 60mm;
+    padding-left: 5.5mm;
+    padding-top: 16mm;
+  }
+  p {
+    margin-top: 5px;
+    font-size: 13px;
+  }
+  .gcuotas-monto-unit {
+    font-weight: 400 !important;
+  }
+  .gcuotas-total-wrap {
+    font-weight: 700 !important;
+  }
+  .gcuotas-monto-total {
+    font-weight: 400 !important;
+  }
+`;
+
+const printableAmount = (value) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const groupLegacyReceiptRecords = (records) => {
+  const groups = new Map();
+
+  records.forEach((item, index) => {
+    const key = String(
+      item.id_socio ??
+        item.id_empresa ??
+        item.documento ??
+        item.denominacion ??
+        `registro-${index}`,
+    );
+    const amount = printableAmount(
+      item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0,
+    );
+    const period = item.periodo_impresion || item.periodo || "—";
+    const current = groups.get(key);
+
+    if (current) {
+      if (!current.periods.includes(period)) current.periods.push(period);
+      current.total += amount;
+      if (!current.unitAmount && amount) current.unitAmount = amount;
+      return;
+    }
+
+    groups.set(key, {
+      item,
+      periods: [period],
+      unitAmount: amount,
+      total: amount,
+    });
+  });
+
+  return Array.from(groups.values());
+};
+
+const printReceiptsBatch = ({ printWindow, records, entityType }) => {
   if (!printWindow || printWindow.closed) {
     throw new Error("No se pudo abrir la ventana de impresión.");
   }
@@ -114,209 +213,73 @@ const printReceiptsBatch = ({ printWindow, records, entityType, filterLabel }) =
     throw new Error("No hay comprobantes para los meses seleccionados.");
   }
 
-  const receipts = records
-    .map((item, index) => {
+  const isCompany = entityType === "EMPRESA";
+  const groupedRecords = groupLegacyReceiptRecords(records);
+  const receipts = groupedRecords
+    .map(({ item, periods, unitAmount, total }) => {
+      const denomination =
+        item.denominacion ||
+        (isCompany
+          ? item.razon_social
+          : `${item.apellido || ""} ${item.nombre || ""}`.trim()) ||
+        "—";
+      const address = item.domicilio || item.domicilio_2 || item.direccion || "N/A";
+      const category = item.categoria || "";
+      const paymentMethod =
+        item.medio_pago || item.medio_pago_preferido || "No especificado";
       const status = String(item.estado || "PENDIENTE").toUpperCase();
-      const amount = money(
-        item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0,
-      );
-      const receiptNumber =
-        item.codigo_operacion ||
-        item.numero_comprobante ||
-        (item.id_pago ? `PAGO-${item.id_pago}` : `CUOTA-${index + 1}`);
+      const amountDetail =
+        periods.length > 1
+          ? `<span class="gcuotas-monto-unit">$${unitAmount}</span>
+             &nbsp;&nbsp;
+             <span class="gcuotas-total-wrap">
+               Total <span class="gcuotas-monto-total">$${total}</span>
+             </span>`
+          : `<span class="gcuotas-monto-unit">$${unitAmount}</span>`;
+      const statusLine =
+        status === "PAGADO" || status === "CONDONADO"
+          ? `<p><strong>Estado:</strong> ${escapePrintHtml(status)}</p>`
+          : "";
 
       return `
-        <section class="receipt">
-          <header class="receipt__header">
-            <div>
-              <strong>LALCEC San Francisco</strong>
-              <span>Comprobante de cuota</span>
+        <div class="gcuotas-contenedor">
+          <div class="gcuotas-comprobante">
+            <div class="gcuotas-talon-socio">
+              <p><strong>${isCompany ? "Empresa:" : "Afiliado:"}</strong> ${escapePrintHtml(denomination)}</p>
+              <p><strong>Domicilio:</strong> ${escapePrintHtml(address)}</p>
+              <p><strong>Categoría / Monto:</strong> ${escapePrintHtml(category)} / ${amountDetail}</p>
+              <p><strong>Período:</strong> ${escapePrintHtml(periods.join(", "))}</p>
+              <p><strong>Medio de Pago:</strong> ${escapePrintHtml(paymentMethod)}</p>
+              ${statusLine}
+              <p>Por consultas comunicarse al 03564-15205778</p>
+              <p>Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
             </div>
-            <span class="receipt__status">${escapePrintHtml(status)}</span>
-          </header>
 
-          <div class="receipt__meta">
-            <span>Comprobante</span>
-            <strong>${escapePrintHtml(receiptNumber)}</strong>
+            <div class="gcuotas-talon-cobrador">
+              <p><strong>${isCompany ? "Empresa:" : "Nombre y Apellido:"}</strong> ${escapePrintHtml(denomination)}</p>
+              <p><strong>Categoría / Monto:</strong> ${escapePrintHtml(category)} / ${amountDetail}</p>
+              <p><strong>Período:</strong> ${escapePrintHtml(periods.join(", "))}</p>
+              <p><strong>Medio de Pago:</strong> ${escapePrintHtml(paymentMethod)}</p>
+              ${statusLine}
+            </div>
           </div>
-
-          <div class="receipt__person">
-            <span>${entityType === "EMPRESA" ? "Empresa" : "Socio/a"}</span>
-            <strong>${escapePrintHtml(item.denominacion || "—")}</strong>
-            <small>${escapePrintHtml(item.documento || "Sin documento informado")}</small>
-          </div>
-
-          <dl class="receipt__details">
-            <div><dt>Categoría</dt><dd>${escapePrintHtml(item.categoria || "—")}</dd></div>
-            <div><dt>Período</dt><dd>${escapePrintHtml(item.periodo_impresion || item.periodo || "—")}</dd></div>
-            <div><dt>Fecha de pago</dt><dd>${escapePrintHtml(item.fecha_pago ? formatDate(item.fecha_pago) : "—")}</dd></div>
-            <div><dt>Medio de pago</dt><dd>${escapePrintHtml(item.medio_pago || "—")}</dd></div>
-            <div><dt>Domicilio</dt><dd>${escapePrintHtml(item.domicilio_2 || item.domicilio || item.direccion || "—")}</dd></div>
-            <div><dt>Cobrador</dt><dd>${escapePrintHtml(item.cobrador || "—")}</dd></div>
-          </dl>
-
-          <div class="receipt__total">
-            <span>Importe</span>
-            <strong>${escapePrintHtml(amount)}</strong>
-          </div>
-
-          <footer class="receipt__footer">
-            <span>Emitido desde el módulo de Cuotas</span>
-            <span>${escapePrintHtml(filterLabel)}</span>
-          </footer>
-        </section>`;
+        </div>`;
     })
     .join("");
 
   printWindow.document.open();
-  printWindow.document.write(`<!doctype html>
-    <html lang="es">
+  printWindow.document.write(`
+    <html>
       <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Comprobantes de cuotas</title>
-        <style>
-          * { box-sizing: border-box; }
-          @page { size: A4 portrait; margin: 12mm; }
-          body { margin: 0; color: #172033; background: #eef3f9; font-family: Arial, Helvetica, sans-serif; }
-          .receipt { width: 100%; min-height: 273mm; padding: 15mm; break-after: page; page-break-after: always; background: #fff; border: 1px solid #d7e0eb; }
-          .receipt:last-child { break-after: auto; page-break-after: auto; }
-          .receipt__header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding-bottom: 18px; border-bottom: 3px solid #2457a7; }
-          .receipt__header div { display: grid; gap: 5px; }
-          .receipt__header strong { color: #173f7a; font-size: 24px; }
-          .receipt__header span { color: #667085; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; }
-          .receipt__status { padding: 8px 12px; color: #173f7a !important; background: #eaf2ff; border: 1px solid #b9d1f5; border-radius: 999px; font-weight: 700; }
-          .receipt__meta { display: flex; justify-content: space-between; margin: 24px 0 18px; padding: 12px 14px; background: #f6f8fb; border-radius: 10px; }
-          .receipt__meta span { color: #667085; }
-          .receipt__person { display: grid; gap: 6px; margin-bottom: 24px; }
-          .receipt__person span, dt { color: #667085; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-          .receipt__person strong { color: #172033; font-size: 25px; }
-          .receipt__person small { color: #475467; font-size: 14px; }
-          .receipt__details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; border: 1px solid #d7e0eb; border-radius: 12px; background: #d7e0eb; }
-          .receipt__details div { min-height: 76px; padding: 14px; background: #fff; }
-          dt { margin-bottom: 8px; }
-          dd { margin: 0; font-size: 16px; font-weight: 600; }
-          .receipt__total { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; padding: 18px 20px; color: #fff; background: #173f7a; border-radius: 12px; }
-          .receipt__total span { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; }
-          .receipt__total strong { font-size: 28px; }
-          .receipt__footer { display: grid; gap: 6px; margin-top: 30px; padding-top: 16px; color: #667085; border-top: 1px solid #d7e0eb; font-size: 11px; text-align: center; }
-          @media print { body { background: #fff; } .receipt { border: 0; } }
-        </style>
+        <title>Comprobantes de Pago</title>
+        <style>${LEGACY_RECEIPT_STYLES}</style>
       </head>
       <body>${receipts}</body>
     </html>`);
   printWindow.document.close();
   printWindow.focus();
   printWindow.setTimeout(() => printWindow.print(), 250);
-};
-
-const printRegisterReport = ({
-  printWindow,
-  records,
-  entityType,
-  statusLabel,
-  year,
-  monthLabel,
-  paymentMethodLabel,
-  searchTerm,
-}) => {
-  if (!printWindow || printWindow.closed) {
-    throw new Error("No se pudo abrir la ventana de impresión.");
-  }
-  if (!Array.isArray(records) || records.length === 0) {
-    throw new Error("No hay registros para imprimir con los filtros actuales.");
-  }
-
-  const documentLabel = entityType === "EMPRESA" ? "CUIT" : "DNI";
-  const rows = records
-    .map((item, index) => {
-      const amountValue =
-        item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0;
-      const amount =
-        Number(amountValue) > 0 ? money(amountValue) : "A DEFINIR";
-      const paymentMethod =
-        item.medio_pago || item.medio_pago_preferido || "—";
-
-      return `<tr>
-        <td class="is-number">${index + 1}</td>
-        <td>${escapePrintHtml(item.denominacion || "SIN DENOMINACIÓN")}</td>
-        <td>${escapePrintHtml(item.documento || "—")}</td>
-        <td>${escapePrintHtml(item.categoria || "SIN CATEGORÍA")}</td>
-        <td>${escapePrintHtml(paymentMethod)}</td>
-        <td class="is-amount">${escapePrintHtml(amount)}</td>
-      </tr>`;
-    })
-    .join("");
-
-  const filterDetails = [
-    paymentMethodLabel ? `Medio de pago: ${paymentMethodLabel}` : null,
-    searchTerm ? `Búsqueda: ${searchTerm}` : null,
-  ]
-    .filter(Boolean)
-    .map((detail) => `<span>${escapePrintHtml(detail)}</span>`)
-    .join("");
-
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html>
-    <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Registro de cuotas</title>
-        <style>
-          * { box-sizing: border-box; }
-          @page { size: A4 landscape; margin: 12mm; }
-          body { margin: 0; color: #0f172a; background: #fff; font-family: Arial, Helvetica, sans-serif; }
-          .report-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 3px solid #f97316; }
-          .report-title { margin: 0; color: #0f172a; font-size: 24px; }
-          .report-subtitle { margin: 5px 0 0; color: #475569; font-size: 13px; }
-          .report-total { color: #c2410c; font-size: 13px; font-weight: 700; white-space: nowrap; }
-          .report-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-          .report-filters:empty { display: none; }
-          .report-filters span { padding: 6px 9px; border: 1px solid #fed7aa; border-radius: 999px; color: #9a3412; background: #fff7ed; font-size: 11px; font-weight: 700; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-          th, td { padding: 8px 9px; border: 1px solid #cbd5e1; vertical-align: middle; }
-          th { color: #fff; background: #f97316; font-size: 10px; letter-spacing: .045em; text-align: left; text-transform: uppercase; }
-          td { color: #1e293b; font-size: 10.5px; overflow-wrap: anywhere; }
-          tbody tr:nth-child(even) { background: #fff7ed; }
-          th:nth-child(1), td:nth-child(1) { width: 42px; }
-          th:nth-child(3), td:nth-child(3) { width: 110px; }
-          th:nth-child(4), td:nth-child(4) { width: 150px; }
-          th:nth-child(5), td:nth-child(5) { width: 135px; }
-          th:nth-child(6), td:nth-child(6) { width: 115px; }
-          .is-number { text-align: center; }
-          .is-amount { font-weight: 700; text-align: right; white-space: nowrap; }
-          .report-footer { margin-top: 12px; color: #64748b; font-size: 9px; text-align: right; }
-        </style>
-      </head>
-      <body>
-        <header class="report-header">
-          <div>
-            <h1 class="report-title">Registro de cuotas</h1>
-            <p class="report-subtitle">${escapePrintHtml(statusLabel)} · ${escapePrintHtml(entityType === "EMPRESA" ? "Empresas" : "Socios")} · ${escapePrintHtml(monthLabel)} ${escapePrintHtml(year)}</p>
-          </div>
-          <strong class="report-total">${records.length} ${records.length === 1 ? "registro" : "registros"}</strong>
-        </header>
-        <div class="report-filters">${filterDetails}</div>
-        <table>
-          <thead>
-            <tr>
-              <th>N.º</th>
-              <th>${entityType === "EMPRESA" ? "Empresa" : "Socio/a"}</th>
-              <th>${documentLabel}</th>
-              <th>Categoría</th>
-              <th>Medio de pago</th>
-              <th>Importe</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <div class="report-footer">Emitido desde el módulo de Cuotas</div>
-      </body>
-    </html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.setTimeout(() => printWindow.print(), 250);
+  return groupedRecords.length;
 };
 
 const isTruthyFlag = (value) =>
@@ -735,7 +698,6 @@ export default function Cuotas() {
   const [printMonthsOpen, setPrintMonthsOpen] = useState(false);
   const [selectedPrintMonths, setSelectedPrintMonths] = useState([]);
   const [printingAll, setPrintingAll] = useState(false);
-  const [printingRegister, setPrintingRegister] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [estadoTotales, setEstadoTotales] = useState({
     DEUDORES: null,
@@ -1058,93 +1020,6 @@ export default function Cuotas() {
     setPrintMonthsOpen(true);
   }, [loading, mes, totalRegistros]);
 
-  const handlePrintRegister = useCallback(async () => {
-    if (loading || printingAll || printingRegister || totalRegistros <= 0) {
-      setFeedback({
-        type: "warning",
-        message: loading
-          ? "Esperá a que terminen de cargarse las cuotas."
-          : "No hay registros para imprimir con los filtros actuales.",
-      });
-      return;
-    }
-
-    const printWindow = window.open("", "_blank", "width=1100,height=760");
-    if (!printWindow) {
-      setFeedback({
-        type: "error",
-        message:
-          "El navegador bloqueó la ventana de impresión. Habilitá las ventanas emergentes e intentá nuevamente.",
-      });
-      return;
-    }
-
-    printWindow.document.write(
-      "<!doctype html><html><head><meta charset=\"utf-8\"><title>Preparando registro</title></head><body style=\"font-family:Arial,sans-serif;padding:32px\">Preparando registro…</body></html>",
-    );
-    printWindow.document.close();
-    setPrintingRegister(true);
-
-    try {
-      const records = await obtenerTodosFiltrados();
-      const selectedMonth = (catalogos.meses?.length
-        ? catalogos.meses
-        : DEFAULT_MONTHS
-      ).find((item) => String(item.id_mes) === String(mes));
-      const selectedPaymentMethod = (catalogos.medios_pago || []).find(
-        (item) => String(item.id_medio_pago) === String(medioPago),
-      );
-
-      printRegisterReport({
-        printWindow,
-        records,
-        entityType: tipo,
-        statusLabel: isPaid
-          ? "Pagados"
-          : isCondoned
-            ? "Condonados"
-            : "Deudores",
-        year: anio,
-        monthLabel:
-          selectedMonth?.nombre ||
-          DEFAULT_MONTHS[Number(mes) - 1]?.nombre ||
-          "Período",
-        paymentMethodLabel: selectedPaymentMethod?.nombre || "",
-        searchTerm: debouncedBuscar,
-      });
-
-      setFeedback({
-        type: "success",
-        message: `Se preparó el registro con ${records.length} ${records.length === 1 ? "fila" : "filas"}.`,
-        duration: 4200,
-      });
-    } catch (error) {
-      if (!printWindow.closed) printWindow.close();
-      setFeedback({
-        type: "error",
-        message: error?.message || "No se pudo preparar el registro.",
-        duration: 5200,
-      });
-    } finally {
-      setPrintingRegister(false);
-    }
-  }, [
-    anio,
-    catalogos.medios_pago,
-    catalogos.meses,
-    debouncedBuscar,
-    isCondoned,
-    isPaid,
-    loading,
-    medioPago,
-    mes,
-    obtenerTodosFiltrados,
-    printingAll,
-    printingRegister,
-    tipo,
-    totalRegistros,
-  ]);
-
   const handlePrintAll = useCallback(async () => {
     if (!selectedPrintMonths.length || printingAll) return;
 
@@ -1187,24 +1062,16 @@ export default function Cuotas() {
         );
       }
 
-      printReceiptsBatch({
+      const receiptCount = printReceiptsBatch({
         printWindow,
         records,
         entityType: tipo,
-        filterLabel: [
-          tipo === "EMPRESA" ? "Empresas" : "Socios",
-          isPaid ? "Pagados" : isCondoned ? "Condonados" : "Adeudados",
-          `Año ${anio}`,
-          buscar ? `Búsqueda: ${buscar}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
       });
 
       setPrintMonthsOpen(false);
       setFeedback({
         type: "success",
-        message: `Se prepararon ${records.length} comprobantes para imprimir.`,
+        message: `Se prepararon ${receiptCount} comprobantes para imprimir.`,
         duration: 4200,
       });
     } catch (error) {
@@ -1219,7 +1086,6 @@ export default function Cuotas() {
     }
   }, [
     anio,
-    buscar,
     isCondoned,
     isPaid,
     obtenerTodosFiltrados,
@@ -2563,24 +2429,9 @@ export default function Cuotas() {
           >
             <button
               type="button"
-              className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-register-action"
-              onClick={handlePrintRegister}
-              disabled={
-                loading || printingAll || printingRegister || totalRegistros === 0
-              }
-              title="Imprimir registro del período"
-            >
-              <FontAwesomeIcon icon={faPrint} />
-              {printingRegister ? "Preparando…" : "Registro"}
-            </button>
-
-            <button
-              type="button"
               className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-print-all-action"
               onClick={openPrintAll}
-              disabled={
-                loading || printingAll || printingRegister || totalRegistros === 0
-              }
+              disabled={loading || printingAll || totalRegistros === 0}
               title="Imprimir todos los comprobantes"
             >
               <FontAwesomeIcon icon={faPrint} />

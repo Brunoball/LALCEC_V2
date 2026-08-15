@@ -323,6 +323,14 @@ test.describe('Panel Bot WhatsApp', () => {
     const state = await installSafeBotMock(page, { mode: 'manual' });
     await openBotTestChat(page, WA_ID);
 
+    const chatSearch = page.getByPlaceholder('Buscar por nombre, número, mensaje…');
+    await expect(chatSearch).toBeVisible();
+    await chatSearch.fill('CONTACTO QUE NO EXISTE');
+    await expect(page.getByText('No hay chats con ese filtro.')).toBeVisible();
+    await chatSearch.fill(WA_ID);
+    await expect(page.locator('.wp-chatitem').filter({ hasText: WA_ID })).toBeVisible();
+    await chatSearch.fill('');
+
     const filterButton = page.getByRole('button', { name: /Filtrar por etiqueta/i });
     await filterButton.click();
     const filterMenu = page.getByRole('menu', { name: 'Filtrar chats por etiqueta' });
@@ -377,6 +385,7 @@ test.describe('Panel Bot WhatsApp', () => {
       (item) => item.body?.modo === 'manual',
     )).toBeTruthy();
 
+    await expect(page.getByRole('button', { name: 'Opciones del chat' })).toBeVisible();
     let menu = await openChatOptions(page);
     await menu.getByRole('button', { name: 'Editar nombre' }).click();
     let dialog = page.getByRole('dialog').filter({ hasText: 'Editar nombre' });

@@ -1,12 +1,12 @@
 const path = require('path');
 const base = require('@playwright/test');
-const { readAuthSession, normalizedApiBase } = require('../helpers/api.helper');
+const { ensureAuthSession, normalizedApiBase } = require('../helpers/api.helper');
 const { SESSION_KEY } = require('../helpers/auth.helper');
 const { normalizedBotApiBase } = require('../helpers/bot.helper');
 
 const test = base.test.extend({
-  page: async ({ page }, use, testInfo) => {
-    const session = readAuthSession();
+  page: async ({ page, request }, use, testInfo) => {
+    const session = await ensureAuthSession(request);
     const appOrigin = new URL(process.env.PW_BASE_URL || 'http://localhost:3000').origin;
     const isBotSpec = path.basename(testInfo.file || '') === '14-panel-bot.spec.js';
     await page.addInitScript(

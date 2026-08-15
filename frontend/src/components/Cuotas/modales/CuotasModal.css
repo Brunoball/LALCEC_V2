@@ -1708,16 +1708,17 @@ html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-fam
   color: var(--mescuot_primary-dark);
 }
 
-.cuotas-month-grid .cuotas-payment-month-card.is-paid {
-  border: 2px solid #22c55e;
+.cuotas-modal--payment .cuotas-month-grid button.cuotas-payment-month-card.is-paid,
+.cuotas-modal--payment .cuotas-month-grid button.cuotas-payment-month-card.is-paid:disabled {
+  border: 1px solid #16a34a !important;
   color: #166534;
   background: #ecfdf3;
-  box-shadow: 0 0 0 1px rgb(34 197 94 / 0.12);
+  box-shadow: none;
   opacity: 1;
 }
 
-.cuotas-payment-month-card.is-paid .mescuot_checkmark {
-  border-color: #16a34a;
+.cuotas-modal--payment .cuotas-payment-month-card.is-paid .mescuot_checkmark {
+  border-color: #16a34a !important;
   background: #f0fdf4;
 }
 
@@ -1725,6 +1726,18 @@ html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-fam
 .cuotas-month-grid .cuotas-payment-month-card.is-paid .cuotas-payment-month-card__meta small,
 .cuotas-month-grid .cuotas-payment-month-card.is-paid .cuotas-payment-month-card__meta > span {
   color: #166534;
+}
+
+html[data-theme="oscuro"]
+  .cuotas-modal--payment
+  .cuotas-month-grid
+  button.cuotas-payment-month-card.is-paid,
+html[data-theme="oscuro"]
+  .cuotas-modal--payment
+  .cuotas-month-grid
+  button.cuotas-payment-month-card.is-paid:disabled {
+  border-color: #4ade80 !important;
+  box-shadow: none;
 }
 
 .cuotas-month-grid .cuotas-payment-month-card.is-unavailable,

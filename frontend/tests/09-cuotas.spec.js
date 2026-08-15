@@ -584,10 +584,10 @@ test.describe('Cuotas de socios y empresas', () => {
       .selectOption(String(medium.id_medio_pago));
     await paymentDialog.getByRole('button', { name: /Registrar pago familiar \(2 cuotas\)/ }).click();
 
-    const receiptDialog = page.getByRole('dialog', { name: 'Registro de pagos' });
-    await expect(receiptDialog).toContainText(/Pago realizado con éxito/i);
+    const receiptDialog = page.getByRole('dialog', { name: /Registro de 2 pagos/i });
+    await expect(receiptDialog).toContainText(/2 pagos realizados con éxito/i);
     await expect(receiptDialog.getByRole('region', { name: 'Información del comprobante' })).toBeVisible();
-    await expect(receiptDialog.getByRole('button', { name: 'Comprobante' })).toBeVisible();
+    await expect(receiptDialog.getByRole('button', { name: 'Comprobantes', exact: true })).toBeVisible();
     await expect(receiptDialog.getByRole('button', { name: 'PDF', exact: true })).toBeVisible();
     await receiptDialog.getByText('Cerrar', { exact: true }).click();
 

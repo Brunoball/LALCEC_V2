@@ -244,7 +244,6 @@
   transform: none;
 }
 
-.cuotas-lower-actions .cuotas-register-action.mov-btn--primary,
 .cuotas-lower-actions .cuotas-print-all-action.mov-btn--primary,
 .cuotas-lower-actions .cuotas-multiple-action.mov-btn--primary {
   border-color: transparent;
@@ -254,8 +253,6 @@
   font-weight: 600;
 }
 
-.cuotas-lower-actions
-  .cuotas-register-action.mov-btn--primary:hover:not(:disabled),
 .cuotas-lower-actions
   .cuotas-print-all-action.mov-btn--primary:hover:not(:disabled),
 .cuotas-lower-actions
@@ -280,8 +277,6 @@
 }
 
 .cuotas-lower-actions
-  .cuotas-register-action.mov-btn--primary:focus-visible,
-.cuotas-lower-actions
   .cuotas-print-all-action.mov-btn--primary:focus-visible,
 .cuotas-lower-actions
   .cuotas-multiple-action.mov-btn--primary:focus-visible {
@@ -294,7 +289,6 @@
     );
 }
 
-.cuotas-lower-actions .cuotas-register-action svg,
 .cuotas-lower-actions .cuotas-print-all-action svg,
 .cuotas-lower-actions .cuotas-multiple-action svg {
   font-size: 12px;

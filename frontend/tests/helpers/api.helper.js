@@ -34,6 +34,40 @@ function readAuthSession() {
   return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8'));
 }
 
+let authRecoveryPromise = null;
+
+async function ensureAuthSession(requestContext) {
+  try {
+    const session = readAuthSession();
+    if (session?.token) return session;
+  } catch (_error) {
+    // El proyecto de teardown puede borrar la sesión antes que otros proyectos.
+    // En ese caso, la siguiente prueba debe poder reconstruirla por sí sola.
+  }
+
+  if (!authRecoveryPromise) {
+    authRecoveryPromise = (async () => {
+      const username = String(process.env.PW_USER || '').trim();
+      const password = String(process.env.PW_PASSWORD || '');
+      if (!username || !password) {
+        throw new Error(
+          `No existe la sesión de testing: ${AUTH_FILE}. ` +
+            'Tampoco se configuraron PW_USER y PW_PASSWORD para regenerarla.',
+        );
+      }
+
+      const session = await createApiSession(requestContext, { username, password });
+      fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
+      fs.writeFileSync(AUTH_FILE, JSON.stringify(session, null, 2), 'utf8');
+      return session;
+    })().finally(() => {
+      authRecoveryPromise = null;
+    });
+  }
+
+  return authRecoveryPromise;
+}
+
 async function parseResponse(response) {
   const text = await response.text();
   try {
@@ -48,7 +82,9 @@ async function parseResponse(response) {
 async function apiResult(requestContext, action, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const hasSessionOverride = Object.prototype.hasOwnProperty.call(options, 'session');
-  const session = hasSessionOverride ? options.session : readAuthSession();
+  const session = hasSessionOverride
+    ? options.session
+    : await ensureAuthSession(requestContext);
   const headers = {
     Accept: 'application/json',
     ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
@@ -341,6 +377,7 @@ module.exports = {
   expectApiError,
   findSocioByDocument,
   findUserByUsername,
+  ensureAuthSession,
   normalizedApiBase,
   readAuditActions,
   readAuthSession,
