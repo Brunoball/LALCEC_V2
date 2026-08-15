@@ -10,9 +10,11 @@ import {
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../Global/ModulePage";
+import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import GlobalDivTable from "../Global/GlobalDivTable";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
 import ModalComprobantePago from "../Global/Modales/ModalComprobantePago";
+import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import ModuleFeedback from "../Global/ModuleFeedback";
 import Toast from "../Global/Toast";
 import { canWrite } from "../_shared/auth/session";
@@ -734,6 +736,7 @@ export default function Cuotas() {
   const [selectedPrintMonths, setSelectedPrintMonths] = useState([]);
   const [printingAll, setPrintingAll] = useState(false);
   const [printingRegister, setPrintingRegister] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [estadoTotales, setEstadoTotales] = useState({
     DEUDORES: null,
     PAGADOS: null,
@@ -947,6 +950,68 @@ export default function Cuotas() {
   const isPaid = estado === "PAGADOS";
   const isCondoned = estado === "CONDONADOS";
   const isResolved = isPaid || isCondoned;
+  const exportStatusLabel = isPaid
+    ? "Pagados"
+    : isCondoned
+      ? "Condonados"
+      : "Deudores";
+  const selectedMonthLabel =
+    monthOptions.find((item) => String(item.id_mes) === String(mes))?.nombre ||
+    DEFAULT_MONTHS[Number(mes) - 1]?.nombre ||
+    "Período";
+  const selectedPaymentMethodLabel = (catalogos.medios_pago || []).find(
+    (item) => String(item.id_medio_pago) === String(medioPago),
+  )?.nombre;
+  const exportFilterSubtitle = [
+    tipo === "EMPRESA" ? "Empresas" : "Socios",
+    exportStatusLabel,
+    `${selectedMonthLabel} ${anio}`,
+    selectedPaymentMethodLabel
+      ? `Medio de pago: ${selectedPaymentMethodLabel}`
+      : null,
+    debouncedBuscar ? `Búsqueda: ${debouncedBuscar}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const exportColumns = useMemo(
+    () => [
+      {
+        label: tipo === "EMPRESA" ? "Empresa" : "Socio/a",
+        value: (item) => item.denominacion || "SIN DENOMINACIÓN",
+      },
+      {
+        label: tipo === "EMPRESA" ? "CUIT" : "DNI",
+        value: (item) => item.documento || "—",
+      },
+      {
+        label: "Categoría",
+        value: (item) => item.categoria || "SIN CATEGORÍA",
+      },
+      { label: "Período", value: (item) => item.periodo || "—" },
+      { label: "Estado", value: () => exportStatusLabel },
+      {
+        label: "Fecha",
+        value: (item) =>
+          isResolved
+            ? formatDate(item.fecha_pago || item.fecha_condonacion)
+            : "—",
+      },
+      {
+        label: "Medio de pago",
+        value: (item) =>
+          item.medio_pago || item.medio_pago_preferido || "—",
+      },
+      {
+        label: "Importe",
+        value: (item) => {
+          const amount =
+            item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0;
+          return Number(amount) > 0 ? money(amount) : "A DEFINIR";
+        },
+      },
+    ],
+    [exportStatusLabel, isResolved, tipo],
+  );
   const obtenerTodosFiltrados = useCallback(async (filterOverrides = {}) => {
     const requestFilters = { ...filtros, ...filterOverrides };
     const primeraRespuesta = await cuotasApi.listar({
@@ -2263,6 +2328,18 @@ export default function Cuotas() {
     if (multiMode) clearMultipleSelection();
     else setMultiMode(true);
   };
+  const openExport = () => {
+    if (loading || totalRegistros <= 0) {
+      setFeedback({
+        type: "warning",
+        message: loading
+          ? "Esperá a que terminen de cargarse las cuotas."
+          : "No hay registros para exportar con los filtros actuales.",
+      });
+      return;
+    }
+    setExportOpen(true);
+  };
 
   return (
     <>
@@ -2274,6 +2351,16 @@ export default function Cuotas() {
         tabsInTitle
         headLeftClassName="cuotas-header-row"
         headFiltersContainerClassName="cuotas-head-filters"
+        headerActions={
+          <BotonExportarGlobal
+            className="cuotas-export-action"
+            label="Exportar"
+            loading={loading}
+            disabled={totalRegistros === 0}
+            onClick={openExport}
+            title="Exportar cuotas"
+          />
+        }
         secondaryActions={
           !isResolved && writable
             ? [
@@ -2500,6 +2587,15 @@ export default function Cuotas() {
               Imprimir todos
             </button>
 
+            <BotonExportarGlobal
+              className="mov-btn--compact cuotas-lower-action cuotas-export-action"
+              label="Exportar"
+              loading={loading}
+              disabled={totalRegistros === 0}
+              onClick={openExport}
+              title="Exportar cuotas"
+            />
+
             {writable && !isResolved ? (
               <button
                 type="button"
@@ -2514,6 +2610,34 @@ export default function Cuotas() {
           </div>
         </div>
       </ModulePage>
+
+      <ModalExportarGlobal
+        open={exportOpen}
+        loading={loading}
+        title="Exportar cuotas"
+        subtitle="Elegí el formato y si querés exportar la página actual o todos los resultados filtrados."
+        tituloArchivo={`Cuotas - ${exportStatusLabel}`}
+        subtituloArchivoActual={`${exportFilterSubtitle} · Página ${pagina} de ${Math.max(1, totalPaginas)}`}
+        subtituloArchivoTodos={exportFilterSubtitle}
+        nombreArchivo={`cuotas_${tipo.toLowerCase()}_${estado.toLowerCase()}_${anio}_${mes}`}
+        columnas={exportColumns}
+        registrosActuales={itemsPagina}
+        obtenerRegistrosTodos={obtenerTodosFiltrados}
+        cantidadActual={itemsPagina.length}
+        totalTodos={totalRegistros}
+        alcanceActualLabel="Exportar página actual"
+        alcanceActualDescription="Descarga únicamente los registros visibles en esta página."
+        alcanceTodosLabel="Exportar todos los resultados"
+        alcanceTodosDescription="Descarga todos los registros que coinciden con los filtros actuales."
+        note="La exportación respeta el tipo, estado, período, medio de pago y búsqueda seleccionados."
+        onClose={() => setExportOpen(false)}
+        onSuccess={(message) =>
+          setFeedback({ type: "success", message, duration: 4200 })
+        }
+        onError={(message) =>
+          setFeedback({ type: "error", message, duration: 5200 })
+        }
+      />
 
       {printMonthsOpen ? (
         <ModalMesCuotas

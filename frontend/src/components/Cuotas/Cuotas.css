@@ -300,6 +300,7 @@
   font-size: 12px;
 }
 
+.cuotas-lower-actions .cuotas-export-action,
 .cuotas-lower-actions .cuotas-multiple-action {
   display: none;
 }
@@ -522,6 +523,7 @@
     gap: 6px;
   }
 
+  .cuotas-lower-actions .cuotas-export-action,
   .cuotas-lower-actions .cuotas-multiple-action {
     display: inline-flex;
   }
