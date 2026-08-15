@@ -32,7 +32,7 @@ trait SociosConsultas
                 p.apellido, p.nombre, p.dni, p.domicilio, p.numero_domicilio,
                 p.localidad, p.telefono, p.email,
                 e.razon_social, e.cuit, e.domicilio, e.telefono, e.email,
-                c.nombre, mp.nombre, f.nombre
+                c.nombre, mp.nombre, f.nombre, s.motivo_baja, s.fecha_baja
             ) LIKE {param}"],
             150,
             'buscar_socio'

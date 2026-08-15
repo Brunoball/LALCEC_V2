@@ -103,6 +103,44 @@
   text-align: center;
 }
 
+/* La pestaña Bajas prioriza exclusivamente la información de la baja. */
+.socios-grid--persona.socios-grid--bajas,
+.socios-grid--empresa.socios-grid--bajas {
+  grid-template-columns:
+    minmax(0, 1.75fr)
+    minmax(0, 0.75fr)
+    minmax(0, 0.85fr)
+    minmax(0, 2.2fr)
+    minmax(0, 0.82fr);
+}
+
+.socios-grid--bajas > :nth-child(2),
+.socios-grid--bajas > :nth-child(3),
+.socios-grid--bajas > :nth-child(5) {
+  justify-content: center;
+  text-align: center;
+}
+
+.socios-baja-date {
+  white-space: nowrap;
+}
+
+.socios-baja-reason {
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+}
+
+.socios-baja-reason span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 
 .socios-category-cell {
   flex-direction: column;
@@ -163,6 +201,10 @@
 
   .socios-grid {
     min-width: 980px;
+  }
+
+  .socios-grid--bajas {
+    min-width: 760px;
   }
 }
 

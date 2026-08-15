@@ -180,6 +180,28 @@ const COMPANY_EXPORT_COLUMNS = [
   },
 ];
 
+const PERSON_INACTIVE_EXPORT_COLUMNS = [
+  { label: "N.º", value: (_item, index) => index + 1 },
+  { label: "Socio", key: "denominacion" },
+  { label: "DNI", value: (item) => item.dni || "—" },
+  { label: "Fecha de baja", value: (item) => formatDate(item.fecha_baja) },
+  {
+    label: "Motivo de baja",
+    value: (item) => item.motivo_baja || "SIN MOTIVO REGISTRADO",
+  },
+];
+
+const COMPANY_INACTIVE_EXPORT_COLUMNS = [
+  { label: "N.º", value: (_item, index) => index + 1 },
+  { label: "Empresa", key: "denominacion" },
+  { label: "CUIT", value: (item) => item.cuit || "—" },
+  { label: "Fecha de baja", value: (item) => formatDate(item.fecha_baja) },
+  {
+    label: "Motivo de baja",
+    value: (item) => item.motivo_baja || "SIN MOTIVO REGISTRADO",
+  },
+];
+
 function matchesSocioSearch(item, query) {
   return matchesEverySearchTerm(
     [
@@ -195,6 +217,8 @@ function matchesSocioSearch(item, query) {
       item.numero_domicilio,
       item.telefono,
       item.email,
+      item.fecha_baja,
+      item.motivo_baja,
     ]
       .filter((value) => value !== undefined && value !== null && value !== "")
       .join(" "),
@@ -237,6 +261,7 @@ function paginationItems(currentPage, totalPages) {
 const SociosRows = memo(function SociosRows({
   items,
   isCompany,
+  isInactive,
   categoryAmounts,
   writable,
   onHistory,
@@ -246,53 +271,73 @@ const SociosRows = memo(function SociosRows({
 }) {
   return items.map((item) => (
     <div
-      className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
+      className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"} ${isInactive ? "socios-grid--bajas" : ""}`.trim()}
       role="row"
       key={item.id_socio}
     >
-      <div className="mov-gridCell entity-main-cell">
-        <strong>{item.denominacion}</strong>
-        <small>
-          {[item.localidad, item.domicilio, item.numero_domicilio]
-            .filter(Boolean)
-            .join(" · ") || "SIN DOMICILIO"}
-        </small>
-      </div>
-      <div className="mov-gridCell is-strong">
-        {isCompany ? item.cuit || "—" : item.dni || "—"}
-      </div>
-      <div className="mov-gridCell socios-category-cell socios-category-cell--inline">
-        {item.categoria ? (
-          <>
-            <span className="mov-categoryChip">{item.categoria}</span>
-            <small className="socios-category-amount">
-              {formatMoney(
-                item.monto_cuota ??
-                  categoryAmounts?.[String(item.id_categoria)],
-              )}
+      {isInactive ? (
+        <>
+          <div className="mov-gridCell entity-main-cell">
+            <strong>{item.denominacion}</strong>
+            <small>REGISTRO DADO DE BAJA</small>
+          </div>
+          <div className="mov-gridCell is-strong">
+            {isCompany ? item.cuit || "—" : item.dni || "—"}
+          </div>
+          <div className="mov-gridCell socios-baja-date">
+            <strong>{formatDate(item.fecha_baja)}</strong>
+          </div>
+          <div className="mov-gridCell socios-baja-reason">
+            <span>{item.motivo_baja || "SIN MOTIVO REGISTRADO"}</span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mov-gridCell entity-main-cell">
+            <strong>{item.denominacion}</strong>
+            <small>
+              {[item.localidad, item.domicilio, item.numero_domicilio]
+                .filter(Boolean)
+                .join(" · ") || "SIN DOMICILIO"}
             </small>
-          </>
-        ) : (
-          "—"
-        )}
-      </div>
-      <div className="mov-gridCell entity-main-cell">
-        <span>{item.telefono || "—"}</span>
-        <small>{item.email || ""}</small>
-      </div>
-      <div className="mov-gridCell">
-        <span
-          className={`socios-reminder-chip ${item.enviar_recordatorio ? "is-enabled" : "is-disabled"}`}
-          title={
-            item.enviar_recordatorio
-              ? "Incluido en los recordatorios de pago del bot de WhatsApp"
-              : "No recibe recordatorios de pago por WhatsApp"
-          }
-        >
-          <FontAwesomeIcon icon={faBell} />
-          <span>{item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}</span>
-        </span>
-      </div>
+          </div>
+          <div className="mov-gridCell is-strong">
+            {isCompany ? item.cuit || "—" : item.dni || "—"}
+          </div>
+          <div className="mov-gridCell socios-category-cell socios-category-cell--inline">
+            {item.categoria ? (
+              <>
+                <span className="mov-categoryChip">{item.categoria}</span>
+                <small className="socios-category-amount">
+                  {formatMoney(
+                    item.monto_cuota ??
+                      categoryAmounts?.[String(item.id_categoria)],
+                  )}
+                </small>
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+          <div className="mov-gridCell entity-main-cell">
+            <span>{item.telefono || "—"}</span>
+            <small>{item.email || ""}</small>
+          </div>
+          <div className="mov-gridCell">
+            <span
+              className={`socios-reminder-chip ${item.enviar_recordatorio ? "is-enabled" : "is-disabled"}`}
+              title={
+                item.enviar_recordatorio
+                  ? "Incluido en los recordatorios de pago del bot de WhatsApp"
+                  : "No recibe recordatorios de pago por WhatsApp"
+              }
+            >
+              <FontAwesomeIcon icon={faBell} />
+              <span>{item.enviar_recordatorio ? "WHATSAPP" : "SIN AVISO"}</span>
+            </span>
+          </div>
+        </>
+      )}
       <div className="mov-gridCell mov-gridCell--actions">
         <div className="mov-actionsInline">
           <button
@@ -305,14 +350,16 @@ const SociosRows = memo(function SociosRows({
           </button>
           {writable ? (
             <>
-              <button
-                className="mov-iconBtn"
-                type="button"
-                title="Editar"
-                onClick={() => onEdit(item)}
-              >
-                <FontAwesomeIcon icon={faPen} />
-              </button>
+              {!isInactive ? (
+                <button
+                  className="mov-iconBtn"
+                  type="button"
+                  title="Editar"
+                  onClick={() => onEdit(item)}
+                >
+                  <FontAwesomeIcon icon={faPen} />
+                </button>
+              ) : null}
               <button
                 className={`mov-iconBtn socios-state-action ${
                   item.activo ? "is-deactivation" : "is-reactivation"
@@ -1071,16 +1118,25 @@ export default function Socios({ tipo = PERSON }) {
   const title = isCompany ? "Empresas" : "Socios";
   const singular = isCompany ? "empresa" : "socio";
   const createTitle = isCompany ? "Nueva empresa" : "Nuevo socio";
-  const exportColumns = isCompany
-    ? COMPANY_EXPORT_COLUMNS
-    : PERSON_EXPORT_COLUMNS;
+  const isInactive = status === "INACTIVO";
+  const exportColumns = isInactive
+    ? isCompany
+      ? COMPANY_INACTIVE_EXPORT_COLUMNS
+      : PERSON_INACTIVE_EXPORT_COLUMNS
+    : isCompany
+      ? COMPANY_EXPORT_COLUMNS
+      : PERSON_EXPORT_COLUMNS;
   const exportFilterDescription = useMemo(() => {
     const selectedCategory = (catalogos.categorias || []).find(
       (item) => String(item.id_categoria) === String(category),
     );
     return [
       status === "INACTIVO" ? "Bajas" : "Activos",
-      selectedCategory ? `Categoría: ${selectedCategory.nombre}` : "Todas las categorías",
+      status === "INACTIVO"
+        ? null
+        : selectedCategory
+          ? `Categoría: ${selectedCategory.nombre}`
+          : "Todas las categorías",
       debouncedSearch ? `Búsqueda: ${debouncedSearch}` : null,
     ]
       .filter(Boolean)
@@ -1261,6 +1317,7 @@ export default function Socios({ tipo = PERSON }) {
       onChange: (value) => {
         saveSharedPartnerStatus(value);
         setStatus(value);
+        if (value === "INACTIVO") setCategory("");
         setPage(1);
       },
       options: [
@@ -1276,21 +1333,25 @@ export default function Socios({ tipo = PERSON }) {
       value: search,
       onChange: setSearch,
     },
-    {
-      key: "categoria",
-      label: "Categoría",
-      type: "select",
-      placeholder: "Todas",
-      value: category,
-      onChange: (value) => {
-        setCategory(value);
-        setPage(1);
-      },
-      options: (catalogos.categorias || []).map((item) => ({
-        value: item.id_categoria,
-        label: `${item.nombre}${item.activo ? "" : " (BAJA)"}`,
-      })),
-    },
+    ...(isInactive
+      ? []
+      : [
+          {
+            key: "categoria",
+            label: "Categoría",
+            type: "select",
+            placeholder: "Todas",
+            value: category,
+            onChange: (value) => {
+              setCategory(value);
+              setPage(1);
+            },
+            options: (catalogos.categorias || []).map((item) => ({
+              value: item.id_categoria,
+              label: `${item.nombre}${item.activo ? "" : " (BAJA)"}`,
+            })),
+          },
+        ]),
   ];
 
   const info = historyModal?.data;
@@ -1332,29 +1393,37 @@ export default function Socios({ tipo = PERSON }) {
           className={`socios-table ${Number(paginacion?.total || 0) > 0 ? "has-bottom-pagination" : ""}`.trim()}
           bodyClassName="entity-table-wrap"
           bodyRef={tableBodyRef}
-          gridClassName={`socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"}`}
+          gridClassName={`socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"} ${isInactive ? "socios-grid--bajas" : ""}`.trim()}
           ariaLabel={`Listado de ${title.toLowerCase()}`}
           loading={loading}
           loadingLabel={`Cargando ${title.toLowerCase()}...`}
           skeletonRows={7}
           columns={
-            isCompany
+            isInactive
               ? [
-                  "Empresa",
-                  "CUIT",
-                  "Categoría",
-                  "Contacto",
-                  "Recordatorio",
+                  isCompany ? "Empresa" : "Socio",
+                  isCompany ? "CUIT" : "DNI",
+                  "Fecha de baja",
+                  "Motivo de baja",
                   "Acciones",
                 ]
-              : [
-                  "Socio",
-                  "DNI",
-                  "Categoría",
-                  "Contacto",
-                  "Recordatorio",
-                  "Acciones",
-                ]
+              : isCompany
+                ? [
+                    "Empresa",
+                    "CUIT",
+                    "Categoría",
+                    "Contacto",
+                    "Recordatorio",
+                    "Acciones",
+                  ]
+                : [
+                    "Socio",
+                    "DNI",
+                    "Categoría",
+                    "Contacto",
+                    "Recordatorio",
+                    "Acciones",
+                  ]
           }
         >
           {!loading && !error && !visibleItems.length ? (
@@ -1367,6 +1436,7 @@ export default function Socios({ tipo = PERSON }) {
           <SociosRows
             items={visibleItems}
             isCompany={isCompany}
+            isInactive={isInactive}
             categoryAmounts={categoryAmounts}
             writable={writable}
             onHistory={openHistory}

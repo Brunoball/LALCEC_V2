@@ -172,8 +172,30 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Registro dado de baja correctamente.');
 
     await page.getByRole('tab', { name: 'Bajas' }).click();
+    const sociosTable = page.getByRole('table', { name: 'Listado de socios' });
+    await expect(sociosTable.getByRole('columnheader')).toHaveText([
+      'Socio',
+      'DNI',
+      'Fecha de baja',
+      'Motivo de baja',
+      'Acciones',
+    ]);
+    await expect(page.getByLabel('Categoría')).toHaveCount(0);
+
     row = tableRow(page, 'Listado de socios', person.dni);
     await expect(row).toBeVisible();
+    await expect(row).toContainText('PRUEBA DE BAJA AUTOMÁTICA');
+    const expectedBajaDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC' }).format(
+      new Date(`${todayIso()}T00:00:00Z`),
+    );
+    await expect(row).toContainText(expectedBajaDate);
+    await expect(row).not.toContainText('WHATSAPP');
+    await expect(row.getByTitle('Editar')).toHaveCount(0);
+
+    await search.fill('PRUEBA DE BAJA AUTOMÁTICA');
+    await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
+    await search.fill(person.dni);
+    row = tableRow(page, 'Listado de socios', person.dni);
     await row.getByTitle('Reactivar').click();
     stateDialog = page.getByRole('dialog').filter({ hasText: /Reactivar socio/i });
     await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
@@ -240,7 +262,19 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Registro dado de baja correctamente.');
 
     await page.getByRole('tab', { name: 'Bajas' }).click();
+    const empresasTable = page.getByRole('table', { name: 'Listado de empresas' });
+    await expect(empresasTable.getByRole('columnheader')).toHaveText([
+      'Empresa',
+      'CUIT',
+      'Fecha de baja',
+      'Motivo de baja',
+      'Acciones',
+    ]);
+    await expect(page.getByLabel('Categoría')).toHaveCount(0);
+
     row = tableRow(page, 'Listado de empresas', company.cuit);
+    await expect(row).toContainText('BAJA E2E DE EMPRESA');
+    await expect(row.getByTitle('Editar')).toHaveCount(0);
     await row.getByTitle('Reactivar').click();
     stateDialog = page.getByRole('dialog').filter({ hasText: /Reactivar empresa/i });
     await stateDialog.getByRole('button', { name: 'Reactivar' }).click();
