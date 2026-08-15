@@ -170,6 +170,7 @@ export function calcWindow(ventana24hTs, nowTs) {
 }
 
 export const isImageMime = (mime) => /^image\//i.test(String(mime || ""));
+export const isAudioMime = (mime) => /^audio\//i.test(String(mime || ""));
 export const isPdfMime = (mime) =>
   String(mime || "").toLowerCase() === "application/pdf";
 
@@ -181,6 +182,16 @@ export const inferMimeFromUrl = (url) => {
   if (u.includes(".webp")) return "image/webp";
   if (u.includes(".gif")) return "image/gif";
   if (u.includes(".jpg") || u.includes(".jpeg")) return "image/jpeg";
+  if (u.includes(".ogg") || u.includes(".opus")) return "audio/ogg";
+  if (u.includes(".mp3")) return "audio/mpeg";
+  if (u.includes(".wav")) return "audio/wav";
+  if (u.includes(".m4a") || u.includes(".aac")) return "audio/mp4";
+  if (u.includes(".webm")) return "audio/webm";
+
+  // Compatibilidad con audios históricos que WhatsApp entregó sin mime_type
+  // y el backend anterior guardó con extensión .bin.
+  if (u.includes("/usuarios/audios/") && u.includes(".bin")) return "audio/ogg";
+
   return "";
 };
 

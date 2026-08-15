@@ -25,6 +25,7 @@ import {
   calcWindow,
   inferMimeFromUrl,
   inferNameFromUrl,
+  isAudioMime,
   isImageMime,
   isPdfMime,
   normStr,
@@ -409,6 +410,8 @@ const BotPanel = () => {
                 ? "document"
                 : isImageMime(mime)
                 ? "image"
+                : isAudioMime(mime)
+                ? "audio"
                 : "file"
               : "text");
 
