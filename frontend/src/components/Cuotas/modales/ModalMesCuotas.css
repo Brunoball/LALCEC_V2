@@ -1,0 +1,265 @@
+:root {
+  --mescuot_primary: #fb923c;
+  --mescuot_primary-hover: #f97316;
+  --mescuot_primary-light: #fff7ed;
+  --mescuot_primary-light-hover: #ffedd5;
+  --mescuot_primary-dark: #c2410c;
+
+  --mescuot_secondary: #6B7280;
+  --mescuot_secondary-hover: #4B5563;
+
+  --mescuot_success: #10B981;
+  --mescuot_success-hover: #059669;
+  --mescuot_success-light: #D1FAE5;
+  --mescuot_danger: #EF4444;
+  --mescuot_warning: #F59E0B;
+
+  --mescuot_white: #FFFFFF;
+  --mescuot_gray-50: #F9FAFB;
+  --mescuot_gray-100: #F3F4F6;
+  --mescuot_gray-200: #E5E7EB;
+  --mescuot_gray-300: #D1D5DB;
+  --mescuot_gray-400: #9CA3AF;
+  --mescuot_gray-500: #6B7280;
+  --mescuot_gray-600: #4B5563;
+  --mescuot_gray-700: #374151;
+  --mescuot_gray-800: #1F2937;
+  --mescuot_gray-900: #111827;
+
+  --mescuot_border-radius: 8px;
+  --mescuot_border-radius-lg: 12px;
+
+  --mescuot_shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --mescuot_shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --mescuot_shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --mescuot_shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --mescuot_shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.mescuot_overlay {
+  z-index: 999999;
+}
+
+.mescuot_contenido {
+  --entity-modal-action: var(--balto-action, var(--primary-color));
+}
+
+.mescuot_header {
+  background: var(--entity-modal-action);
+}
+
+.mescuot_periodos-section {
+  margin: 0;
+}
+
+.mescuot_section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mescuot_section-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.mescuot_section-title {
+  margin: 0;
+  color: var(--entity-modal-ink, var(--mescuot_gray-700));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.mescuot_selection-info {
+  color: var(--entity-modal-text, var(--mescuot_gray-500));
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.mescuot_select-all-btn {
+  height: 34px;
+  min-height: 34px;
+  padding-inline: 11px;
+  border-radius: 10px;
+  color: var(--entity-modal-action);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mescuot_periodos-grid-container {
+  min-height: auto;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.mescuot_periodos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: .5rem;
+  align-content: flex-start;
+  margin-bottom: 0;
+}
+.mescuot_periodo-card {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: var(--mescuot_border-radius);
+  background-color: var(--mescuot_white);
+  border: 1px solid var(--mescuot_gray-200);
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  overflow: hidden;
+  min-height: 54px;
+}
+.mescuot_periodo-card:hover {
+  border-color: var(--mescuot_primary);
+  box-shadow: var(--mescuot_shadow-sm);
+}
+.mescuot_periodo-card.mescuot_seleccionado {
+  background-color: var(--mescuot_primary-light);
+  border-color: var(--mescuot_primary);
+}
+.mescuot_periodo-checkbox {
+  position: relative;
+  margin-right: .5rem;
+  z-index: 1;
+}
+.mescuot_periodo-checkbox input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+.mescuot_checkmark {
+  position: relative;
+  height: 1rem;
+  width: 1rem;
+  background-color: var(--mescuot_white);
+  border: 1px solid var(--mescuot_gray-300);
+  border-radius: 4px;
+  transition: all .2s;
+}
+.mescuot_periodo-card:hover .mescuot_checkmark { border-color: var(--mescuot_primary); }
+.mescuot_periodo-checkbox input:checked ~ .mescuot_checkmark {
+  background-color: var(--mescuot_primary);
+  border-color: var(--mescuot_primary);
+}
+.mescuot_checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 5px;
+  top: 2px;
+  width: 3px;
+  height: 6px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.mescuot_periodo-checkbox input:checked ~ .mescuot_checkmark:after { display: block; }
+.mescuot_periodo-label {
+  flex-grow: 1;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--mescuot_gray-800);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1;
+  gap: 0.5rem;
+  text-transform: uppercase;
+}
+
+.mescuot_footer {
+  align-items: center;
+}
+
+.mescuot_footer-left {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+}
+
+.mescuot_footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mescuot_action-btn {
+  min-width: 112px;
+}
+
+@media (min-width: 400px) {
+  .mescuot_periodos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: .75rem;
+  }
+}
+
+@media (min-width: 600px) {
+  .mescuot_periodos-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+}
+
+/* ===== Vista móvil (≤480px): 2 columnas, contenedor más bajo ===== */
+@media (max-width: 480px) {
+  .mescuot_periodos-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: .5rem !important;
+  }
+
+  .mescuot_periodo-card {
+    padding: .6rem;
+    min-height: 48px;
+  }
+  .mescuot_periodo-label {
+    font-size: .8rem;
+  }
+
+  .mescuot_footer {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .mescuot_footer-left {
+    width: 100%;
+  }
+
+  .mescuot_footer-right {
+    width: 100%;
+  }
+
+  .mescuot_action-btn {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
+/* ===== Web (≥769px): 3 columnas fijas + separador inferior ===== */
+@media (min-width: 769px) {
+  .mescuot_periodos-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .mescuot_periodos-grid::after {
+    content: "";
+    display: block;
+    height: 12px;
+    grid-column: 1 / -1;
+  }
+}
+.gcuotas-talon-socio p,
+.gcuotas-talon-cobrador p {
+  font-weight: 400;
+}
+
+.gcuotas-monto-total {
+  font-weight: 700 !important;
+}

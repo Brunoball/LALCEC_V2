@@ -12,6 +12,7 @@ import {
   EntityTabs,
   FloatingField,
 } from "../../Global/Formularios/TabbedForm";
+import "./ModalMesCuotas.css";
 import "./CuotasModal.css";
 
 const formatOptionDate = (value) => {
@@ -600,22 +601,32 @@ export default function ModalPagoCuota({
                     <button
                       type="button"
                       key={`${paymentForm.anio}-${monthId}`}
-                      className={`${selected ? "is-selected" : ""} ${paid ? "is-paid" : ""} ${unavailable ? "is-unavailable" : ""} ${disabled && !contextLoading ? "is-disabled" : ""}`.trim()}
+                      className={`mescuot_periodo-card cuotas-payment-month-card ${selected ? "mescuot_seleccionado is-selected" : ""} ${paid ? "is-paid" : ""} ${unavailable ? "is-unavailable" : ""} ${disabled && !contextLoading ? "is-disabled" : ""}`.trim()}
                       onClick={() => togglePaymentMonth(monthId)}
                       disabled={disabled}
                       aria-pressed={selected}
                       aria-label={`${item.nombre} ${paymentForm.anio}: ${paid ? "pagado" : unavailable ? "no disponible" : selected ? "seleccionado" : "disponible"}`}
                     >
-                      <strong>{item.nombre}</strong>
-                      <small>{paymentForm.anio}</small>
-                      <span>
-                        {paid
-                          ? "Pagado"
-                          : unavailable
-                            ? "No disponible"
-                            : selected
-                              ? "Seleccionado"
-                              : "Disponible"}
+                      <span
+                        className="mescuot_periodo-checkbox"
+                        aria-hidden="true"
+                      >
+                        <span className="mescuot_checkmark" />
+                      </span>
+                      <span className="mescuot_periodo-label">
+                        <strong>{item.nombre}</strong>
+                        <span className="cuotas-payment-month-card__meta">
+                          <small>{paymentForm.anio}</small>
+                          <span>
+                            {paid
+                              ? "Pagado"
+                              : unavailable
+                                ? "No disponible"
+                                : selected
+                                  ? "Seleccionado"
+                                  : "Disponible"}
+                          </span>
+                        </span>
                       </span>
                     </button>
                   );

@@ -1606,3 +1606,187 @@ html[data-theme="oscuro"] .cuotas-family-card .cuotas-family-members .cuotas-fam
     gap: 16px;
   }
 }
+
+/*
+ * El selector de meses del pago reutiliza la tarjeta visual de
+ * "Imprimir todos", conserva año/estado y diferencia los períodos pagados.
+ */
+.cuotas-month-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 12px;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.mescuot_periodo-card {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0.75rem;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--mescuot_gray-200);
+  border-radius: var(--mescuot_border-radius);
+  color: var(--mescuot_gray-800);
+  background: var(--mescuot_white);
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  opacity: 1;
+  transition: all 0.2s;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.mescuot_periodo-card:hover:not(:disabled) {
+  border-color: var(--mescuot_primary);
+  background: var(--mescuot_white);
+  box-shadow: var(--mescuot_shadow-sm);
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.mescuot_periodo-card.mescuot_seleccionado,
+.cuotas-month-grid .cuotas-payment-month-card.mescuot_periodo-card.is-selected {
+  border-color: var(--mescuot_primary);
+  background: var(--mescuot_primary-light);
+  box-shadow: none;
+}
+
+.cuotas-payment-month-card .mescuot_periodo-checkbox {
+  flex: 0 0 auto;
+}
+
+.cuotas-payment-month-card .mescuot_checkmark {
+  border-color: var(--mescuot_gray-300);
+  background: var(--mescuot_white);
+}
+
+.cuotas-payment-month-card.is-selected .mescuot_checkmark {
+  border-color: var(--mescuot_primary);
+}
+
+.cuotas-month-grid .cuotas-payment-month-card .mescuot_periodo-label {
+  color: var(--mescuot_gray-800);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: normal;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card .mescuot_periodo-label > strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cuotas-payment-month-card__meta {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 1px;
+  justify-items: end;
+  margin-left: 0.5rem;
+  line-height: 1.1;
+  text-transform: none;
+}
+
+.cuotas-payment-month-card__meta small {
+  color: var(--mescuot_gray-500);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.cuotas-payment-month-card__meta > span {
+  color: var(--mescuot_gray-500);
+  font-size: 0.72rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.is-selected .cuotas-payment-month-card__meta small,
+.cuotas-month-grid .cuotas-payment-month-card.is-selected .cuotas-payment-month-card__meta > span {
+  color: var(--mescuot_primary-dark);
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.is-paid {
+  border: 2px solid #22c55e;
+  color: #166534;
+  background: #ecfdf3;
+  box-shadow: 0 0 0 1px rgb(34 197 94 / 0.12);
+  opacity: 1;
+}
+
+.cuotas-payment-month-card.is-paid .mescuot_checkmark {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.is-paid .mescuot_periodo-label,
+.cuotas-month-grid .cuotas-payment-month-card.is-paid .cuotas-payment-month-card__meta small,
+.cuotas-month-grid .cuotas-payment-month-card.is-paid .cuotas-payment-month-card__meta > span {
+  color: #166534;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.is-unavailable,
+.cuotas-month-grid .cuotas-payment-month-card.is-disabled:not(.is-paid) {
+  border-color: var(--mescuot_gray-300);
+  color: var(--mescuot_gray-600);
+  background: var(--mescuot_gray-100);
+  box-shadow: none;
+  opacity: 0.78;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card.is-unavailable .mescuot_periodo-label,
+.cuotas-month-grid .cuotas-payment-month-card.is-disabled:not(.is-paid) .mescuot_periodo-label,
+.cuotas-month-grid .cuotas-payment-month-card.is-unavailable .cuotas-payment-month-card__meta small,
+.cuotas-month-grid .cuotas-payment-month-card.is-unavailable .cuotas-payment-month-card__meta > span,
+.cuotas-month-grid .cuotas-payment-month-card.is-disabled:not(.is-paid) .cuotas-payment-month-card__meta small,
+.cuotas-month-grid .cuotas-payment-month-card.is-disabled:not(.is-paid) .cuotas-payment-month-card__meta > span {
+  color: var(--mescuot_gray-600);
+}
+
+.cuotas-month-grid .cuotas-payment-month-card:disabled {
+  cursor: not-allowed;
+}
+
+.cuotas-month-grid .cuotas-payment-month-card:disabled .mescuot_periodo-label {
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .cuotas-month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .cuotas-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 8px;
+  }
+
+  .cuotas-month-grid .cuotas-payment-month-card.mescuot_periodo-card {
+    min-height: 48px;
+    padding: 0.6rem;
+  }
+
+  .cuotas-month-grid .cuotas-payment-month-card .mescuot_periodo-label {
+    align-items: flex-start;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.8rem;
+  }
+
+  .cuotas-payment-month-card__meta {
+    display: flex;
+    gap: 4px;
+    margin-left: 0;
+  }
+
+  .cuotas-payment-month-card__meta small,
+  .cuotas-payment-month-card__meta > span {
+    font-size: 0.62rem;
+  }
+}

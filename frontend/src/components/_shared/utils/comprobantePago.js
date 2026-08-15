@@ -58,6 +58,12 @@ export const normalizePaymentReceipt = (source = {}) => {
       line.id ||
       line.id_linea ||
       `${index}-${line.periodo || line.concepto || "linea"}`,
+    codigo: firstValue(
+      line.codigo_operacion,
+      line.numero_comprobante,
+      line.codigo,
+      line.id_pago,
+    ),
     socio:
       line.socio ||
       line.denominacion ||
@@ -139,6 +145,41 @@ export const normalizePaymentReceipt = (source = {}) => {
   };
 };
 
+export const normalizePaymentReceipts = (source = {}) => {
+  const explicitReceipts = Array.isArray(source)
+    ? source
+    : Array.isArray(source?.comprobantes)
+      ? source.comprobantes
+      : Array.isArray(source?.operacion?.comprobantes)
+        ? source.operacion.comprobantes
+        : null;
+
+  if (explicitReceipts?.length) {
+    return explicitReceipts.flatMap((receipt) =>
+      normalizePaymentReceipts(receipt),
+    );
+  }
+
+  const receipt = normalizePaymentReceipt(source);
+  if (receipt.lineas.length <= 1) return [receipt];
+
+  return receipt.lineas.map((line, index) => ({
+    ...receipt,
+    codigo:
+      line.codigo ||
+      (receipt.codigo
+        ? `${receipt.codigo}-${String(index + 1).padStart(2, "0")}`
+        : ""),
+    socios: line.socio || receipt.socios,
+    medio: line.medio || receipt.medio,
+    domicilio: line.domicilio || receipt.domicilio,
+    cobrador: line.cobrador || receipt.cobrador,
+    montoBase: Number(line.montoBase || line.monto || 0),
+    monto: Number(line.monto || 0),
+    lineas: [line],
+  }));
+};
+
 const receiptDisplayData = (source) => {
   const receipt = normalizePaymentReceipt(source);
   const categories = uniqueValues(receipt.lineas.map((line) => line.categoria));
@@ -211,10 +252,13 @@ const receiptBodyHtml = (source) => {
 };
 
 export const paymentReceiptHtml = (source, options = {}) => {
-  const receipt = normalizePaymentReceipt(source);
+  const receipts = normalizePaymentReceipts(source);
+  const receipt = receipts[0] || normalizePaymentReceipt(source);
   const outputLabel = options.pdf
     ? "Guardar como PDF"
-    : "Imprimir comprobante";
+    : receipts.length > 1
+      ? "Imprimir comprobantes"
+      : "Imprimir comprobante";
 
   return `<!doctype html>
   <html lang="es">
@@ -236,7 +280,7 @@ export const paymentReceiptHtml = (source, options = {}) => {
         }
         body {
           width: 210mm;
-          height: 297mm;
+          min-height: 297mm;
           margin: 0;
           padding: 0;
           font-family: Arial, sans-serif;
@@ -256,8 +300,13 @@ export const paymentReceiptHtml = (source, options = {}) => {
         .gcuotas-contenedor {
           width: 210mm;
           margin: 10mm 0;
+          break-after: page;
           page-break-after: always;
           box-sizing: border-box;
+        }
+        .gcuotas-contenedor:last-child {
+          break-after: auto;
+          page-break-after: auto;
         }
         .gcuotas-comprobante {
           width: 100%;
@@ -309,7 +358,7 @@ export const paymentReceiptHtml = (source, options = {}) => {
       <div class="print-actions">
         <button type="button" onclick="window.print()">${outputLabel}</button>
       </div>
-      ${receiptBodyHtml(source)}
+      ${receipts.map((item) => receiptBodyHtml(item)).join("")}
     </body>
   </html>`;
 };
@@ -606,10 +655,11 @@ const paymentReceiptPdfContent = (source, { hasLogo = false } = {}) => {
 
 export const downloadPaymentReceiptPdf = async (source) => {
   try {
-    const receipt = normalizePaymentReceipt(source);
+    const receipts = normalizePaymentReceipts(source);
+    const receipt = receipts[0] || normalizePaymentReceipt(source);
     const logo = await loadReceiptLogo();
-    const content = paymentReceiptPdfContent(source, { hasLogo: Boolean(logo) });
-    const imageObjectNumber = logo ? 7 : null;
+    const pageObjectNumbers = receipts.map((_, index) => 5 + index * 2);
+    const imageObjectNumber = logo ? 5 + receipts.length * 2 : null;
     const resources = imageObjectNumber
       ? `/Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo ${imageObjectNumber} 0 R >>`
       : "/Font << /F1 3 0 R /F2 4 0 R >>";
@@ -617,18 +667,30 @@ export const downloadPaymentReceiptPdf = async (source) => {
     const objects = [
       null,
       "<< /Type /Catalog /Pages 2 0 R >>",
-      "<< /Type /Pages /Kids [5 0 R] /Count 1 >>",
+      `<< /Type /Pages /Kids [${pageObjectNumbers
+        .map((objectNumber) => `${objectNumber} 0 R`)
+        .join(" ")}] /Count ${receipts.length} >>`,
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
       "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << ${resources} >> /Contents 6 0 R >>`,
-      `<< /Length ${pdfByteLength(content)} >>\nstream\n${content}\nendstream`,
     ];
+
+    receipts.forEach((item, index) => {
+      const pageObjectNumber = pageObjectNumbers[index];
+      const contentObjectNumber = pageObjectNumber + 1;
+      const content = paymentReceiptPdfContent(item, {
+        hasLogo: Boolean(logo),
+      });
+
+      objects[pageObjectNumber] =
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << ${resources} >> /Contents ${contentObjectNumber} 0 R >>`;
+      objects[contentObjectNumber] =
+        `<< /Length ${pdfByteLength(content)} >>\nstream\n${content}\nendstream`;
+    });
 
     if (logo) {
       const imageStream = bytesToBinaryString(logo.bytes);
-      objects.push(
-        `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n${imageStream}\nendstream`,
-      );
+      objects[imageObjectNumber] =
+        `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n${imageStream}\nendstream`;
     }
 
     const blob = new Blob([pdfBinary(objects)], { type: "application/pdf" });
@@ -638,7 +700,9 @@ export const downloadPaymentReceiptPdf = async (source) => {
       .replace(/[^a-zA-Z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
     anchor.href = url;
-    anchor.download = `comprobante_pago_${safeCode || "pago"}.pdf`;
+    anchor.download = `${
+      receipts.length > 1 ? "comprobantes_pago" : "comprobante_pago"
+    }_${safeCode || "pago"}.pdf`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();

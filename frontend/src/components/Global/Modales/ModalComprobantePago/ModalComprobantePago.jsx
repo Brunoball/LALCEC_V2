@@ -2,7 +2,10 @@ import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFilePdf, faPrint } from "@fortawesome/free-solid-svg-icons";
 import CrudModal from "../CrudModal";
-import { normalizePaymentReceipt } from "../../../_shared/utils/comprobantePago";
+import {
+  normalizePaymentReceipt,
+  normalizePaymentReceipts,
+} from "../../../_shared/utils/comprobantePago";
 import "./ModalComprobantePago.css";
 
 const money = (value) =>
@@ -28,17 +31,35 @@ export default function ModalComprobantePago({
 }) {
   if (!open || !comprobante) return null;
 
-  const receipt = normalizePaymentReceipt(comprobante);
-  const isWaiver = receipt.estado === "CONDONADO";
+  const summaryReceipt = normalizePaymentReceipt(comprobante);
+  const receipts = normalizePaymentReceipts(comprobante);
+  const receipt = receipts[0] || summaryReceipt;
+  const receiptCount = receipts.length;
+  const isBatch = receiptCount > 1;
+  const isWaiver = receipts.every((item) => item.estado === "CONDONADO");
+  const total = receipts.reduce(
+    (amount, item) => amount + Number(item.monto || 0),
+    0,
+  );
 
   return (
     <CrudModal
       open={open}
-      title={isWaiver ? "Registro de condonación" : "Registro de pagos"}
+      title={
+        isBatch
+          ? isWaiver
+            ? `Registro de ${receiptCount} condonaciones`
+            : `Registro de ${receiptCount} pagos`
+          : isWaiver
+            ? "Registro de condonación"
+            : "Registro de pagos"
+      }
       subtitle={
-        receipt.codigo
-          ? `Operación ${receipt.codigo}`
-          : "La operación fue registrada correctamente."
+        isBatch
+          ? "Se generó un comprobante individual por cada pago."
+          : receipt.codigo
+            ? `Operación ${receipt.codigo}`
+            : "La operación fue registrada correctamente."
       }
       onClose={onClose}
       hideCancel
@@ -51,8 +72,18 @@ export default function ModalComprobantePago({
         aria-label="Información del comprobante"
       >
         <article>
-          <span>{receipt.tipoEntidad === "EMPRESA" ? "Empresa" : "Socio"}</span>
-          <strong>{receipt.socios}</strong>
+          <span>
+            {isBatch
+              ? "Comprobantes"
+              : receipt.tipoEntidad === "EMPRESA"
+                ? "Empresa"
+                : "Socio"}
+          </span>
+          <strong>
+            {isBatch
+              ? `${receiptCount} comprobantes · uno por página`
+              : receipt.socios}
+          </strong>
         </article>
         <article>
           <span>Fecha de pago</span>
@@ -62,19 +93,27 @@ export default function ModalComprobantePago({
 
       <section className="payment-receipt-success" role="status">
         <h2>
-          ¡{isWaiver ? "Condonación realizada" : "Pago realizado"} con éxito!
+          {isBatch
+            ? `¡${receiptCount} ${
+                isWaiver ? "condonaciones realizadas" : "pagos realizados"
+              } con éxito!`
+            : `¡${
+                isWaiver ? "Condonación realizada" : "Pago realizado"
+              } con éxito!`}
         </h2>
         <p>
           {loading
             ? "Estamos completando los datos del comprobante."
-            : "Podés generar el comprobante ahora mismo."}
+            : isBatch
+              ? "Al imprimir o descargar el PDF, cada pago ocupará una página separada."
+              : "Podés generar el comprobante ahora mismo."}
         </p>
       </section>
 
       <div className="payment-receipt-footer">
         <div className="payment-receipt-total-pill">
           <span>Total:</span>
-          <strong>{money(receipt.monto)}</strong>
+          <strong>{money(total)}</strong>
         </div>
 
         <div className="payment-receipt-actions">
@@ -91,7 +130,7 @@ export default function ModalComprobantePago({
             onClick={onPrint}
           >
             <FontAwesomeIcon icon={faPrint} />
-            Comprobante
+            {isBatch ? "Comprobantes" : "Comprobante"}
           </button>
           <button
             className="mov-btn payment-receipt-actions__pdf"
