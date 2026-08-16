@@ -26,6 +26,7 @@ const familyUiPersonOne = personData();
 const familyUiPersonTwo = personData();
 const futureYearPerson = personData();
 const printAllPerson = personData();
+const noAddressPrintPerson = personData();
 const paidMonthCardPerson = personData();
 const uiFamily = familyData();
 const now = new Date();
@@ -52,6 +53,7 @@ const monthNames = [
 const monthNamesUpper = monthNames.map((name) => name.toUpperCase());
 const pad2 = (value) => String(value).padStart(2, '0');
 const historicalCategoryName = `PW E2E CAT CUOTAS UI ${historicalPricePerson.suffix}`;
+const defaultTestAddress = 'CALLE PLAYWRIGHT 123';
 
 async function createHistoricalCategory(request) {
   const oldAmount = '1200.00';
@@ -148,7 +150,7 @@ async function selectPaymentTab(dialog, name) {
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
-async function expectReceiptPopup(page, trigger) {
+async function expectReceiptPopup(page, trigger, expectedAddress = defaultTestAddress) {
   await page.context().addInitScript(() => {
     window.print = () => undefined;
   });
@@ -160,6 +162,15 @@ async function expectReceiptPopup(page, trigger) {
   const receipt = popup.locator('.gcuotas-comprobante[aria-label="Comprobante de pago"]');
   await expect(receipt).toBeVisible();
   await expect(receipt).toContainText(/Estado:\s*PAGADO/i);
+  const addressLine = receipt.locator('p').filter({ hasText: /Domicilio:/i });
+  await expect(addressLine).toHaveCount(1);
+  if (expectedAddress === '-') {
+    await expect(addressLine).toHaveText(/Domicilio:\s*-\s*$/i);
+  } else {
+    await expect(addressLine).toContainText(expectedAddress);
+    await expect(addressLine).not.toContainText(`${expectedAddress} 123`);
+  }
+  await expect(addressLine).not.toContainText(/N\/?A|Domicilio no registrado/i);
   await popup.close();
 }
 
@@ -217,6 +228,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       familyUiPersonTwo,
       futureYearPerson,
       printAllPerson,
+      noAddressPrintPerson,
       paidMonthCardPerson,
     ]) {
       await cleanupPerson(request, person);
@@ -960,12 +972,78 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(receipt).toHaveCount(1);
     await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Afiliado:/i);
     await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(printAllPerson.apellido);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Domicilio:/i);
+    await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(defaultTestAddress);
+    await expect(receipt.locator('.gcuotas-talon-socio')).not.toContainText(/Domicilio:\s*N\/?A/i);
+    await expect(receipt.locator('.gcuotas-talon-socio')).not.toContainText(`${defaultTestAddress} 123`);
     await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Período:/i);
     await expect(receipt.locator('.gcuotas-talon-socio')).toContainText(/Total\s*\$/i);
     await expect(receipt.locator('.gcuotas-talon-cobrador')).toContainText(/Nombre y Apellido:/i);
     await expect(popup.locator('.receipt')).toHaveCount(0);
     await expect(monthDialog).toBeHidden();
     await popup.close();
+  });
+
+  test('usa un guion en todos los comprobantes cuando el socio no tiene domicilio', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await createPerson(request, noAddressPrintPerson, {
+      fecha_alta: `${currentYear}-01-01`,
+      domicilio: '',
+      numero_domicilio: '',
+      domicilio_alternativo: '',
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    await page.goto('/cuotas');
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(noAddressPrintPerson.dni);
+    let row = debtRow(page, noAddressPrintPerson);
+    await expect(row).toBeVisible();
+
+    const printAllButton = page
+      .getByLabel('Acciones de cuotas')
+      .getByRole('button', { name: 'Imprimir todos', exact: true });
+    await printAllButton.click();
+    const monthDialog = page.getByRole('dialog', { name: 'Seleccionar meses' });
+    await expect(monthDialog).toBeVisible();
+
+    await page.context().addInitScript(() => {
+      window.print = () => undefined;
+    });
+    const batchPopupPromise = page.waitForEvent('popup');
+    await monthDialog.getByRole('button', { name: 'Imprimir' }).click();
+    const batchPopup = await batchPopupPromise;
+    await batchPopup.waitForLoadState('domcontentloaded');
+    const batchAddressLine = batchPopup
+      .locator('.gcuotas-talon-socio p')
+      .filter({ hasText: /Domicilio:/i });
+    await expect(batchAddressLine).toHaveText(/Domicilio:\s*-\s*$/i);
+    await expect(batchAddressLine).not.toContainText(/N\/?A|Domicilio no registrado/i);
+    await batchPopup.close();
+
+    row = debtRow(page, noAddressPrintPerson);
+    await row.getByRole('button', { name: /Registrar pago de/i }).click();
+    const paymentDialog = singlePaymentDialog(page, noAddressPrintPerson);
+    await expect(paymentDialog).toBeVisible();
+    await selectPreferredMedium(paymentDialog);
+    await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
+
+    const paymentReceipt = await expectSuccessfulPaymentReceipt(page);
+    await expectReceiptPopup(
+      page,
+      () => paymentReceipt.getByRole('button', { name: 'Comprobante' }).click(),
+      '-',
+    );
+    await paymentReceipt.getByText('Cerrar', { exact: true }).click();
+
+    await page.getByRole('tab', { name: 'Pagados' }).click();
+    row = paidRow(page, noAddressPrintPerson);
+    await expect(row).toBeVisible();
+    await expectReceiptPopup(
+      page,
+      () => row.getByRole('button', { name: /Imprimir comprobante de/i }).click(),
+      '-',
+    );
   });
 
   test('identifica un período pagado con borde verde de un píxel sin heredar el estado gris', async ({ page, request }) => {

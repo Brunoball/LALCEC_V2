@@ -123,6 +123,15 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'PDF',
   'Nuevo socio',
   'Nueva empresa',
+  'Medio de pago',
+  'Estado de cuotas',
+  'Avisos',
+  'AL DÍA',
+  'DEBE 1-2 MESES',
+  'DEBE 3 MESES O MÁS',
+  'CON AVISO',
+  'SIN AVISO',
+  'Referencia de estado de pago',
   'Nueva familia',
   'Ver ficha e historial',
   'Ver integrantes e historial',
@@ -281,6 +290,35 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(authFixtureSource).toContain('await ensureAuthSession(request)');
   });
 
+  test('la huella E2E de sesiones ignora solamente el heartbeat ultimo_uso y conserva los campos sensibles', () => {
+    const cleanupSource = read(
+      path.join(BACKEND_ROOT, 'modules', 'testing_cleanup', 'testing_cleanup.php'),
+    );
+    const sessionSnapshot = cleanupSource.match(
+      /'sis_sesiones'\s*=>\s*"([^"]+)"/,
+    );
+
+    expect(sessionSnapshot, 'No se encontró la consulta de huella para sis_sesiones.').not.toBeNull();
+    const sql = sessionSnapshot[1];
+
+    // El heartbeat cambia por uso legítimo del sistema y no debe producir falsos positivos.
+    expect(sql).not.toContain('ultimo_uso');
+    expect(sql).not.toContain('SELECT s.*');
+
+    // Todo lo que sí puede afectar seguridad/autenticación permanece dentro de la huella.
+    for (const field of [
+      's.idSesion',
+      's.session_key',
+      's.idUsuario',
+      's.expira_en',
+      's.ip',
+      's.user_agent',
+      's.activo',
+    ]) {
+      expect(sql, `La huella de sis_sesiones dejó de proteger ${field}.`).toContain(field);
+    }
+  });
+
   test('cada acción funcional registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {
     expect(fs.existsSync(BACKEND_ROOT), `No se encontró el backend en ${BACKEND_ROOT}`).toBe(true);
     const source = scenarioSources();
@@ -296,6 +334,57 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const registered = [...E2E_INFRA_ACTIONS].filter((action) => backend.has(action));
     const missing = registered.filter((action) => !source.includes(action));
     expect(missing, `Infraestructura E2E sin uso declarado: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  test('los filtros y el semáforo de deuda de Socios/Empresas conservan su contrato frontend-backend', () => {
+    const sociosSource = read(path.join(SRC_ROOT, 'components', 'Socios', 'Socios.jsx'));
+    const sociosCss = read(path.join(SRC_ROOT, 'components', 'Socios', 'Socios.css'));
+    const sociosBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'socios', 'socios_consultas.php'),
+    );
+
+    for (const marker of [
+      'key: "medio_pago"',
+      'key: "estado_cuota"',
+      'key: "recordatorio"',
+      'AL DÍA',
+      'DEBE 1-2 MESES',
+      'DEBE 3 MESES O MÁS',
+      'CON AVISO',
+      'SIN AVISO',
+      'data-payment-status',
+      'Referencia de estado de pago',
+    ]) {
+      expect(sociosSource, `Falta contrato UI de Socios/Empresas: ${marker}`).toContain(marker);
+    }
+
+    for (const marker of [
+      '.socios-payment-health-row.is-paid-up::before',
+      '.socios-payment-health-row.is-warning::before',
+      '.socios-payment-health-row.is-danger::before',
+      '.socios-payment-health-legend',
+      '.socios-payment-health-legend i.is-paid-up',
+      '.socios-payment-health-legend i.is-warning',
+      '.socios-payment-health-legend i.is-danger',
+    ]) {
+      expect(sociosCss, `Falta estilo del semáforo de deuda: ${marker}`).toContain(marker);
+    }
+
+    for (const marker of [
+      "$filters['medio_pago']",
+      "$filters['recordatorio']",
+      "$filters['estado_cuota']",
+      "s.enviar_recordatorio = 1",
+      "s.enviar_recordatorio = 0",
+      'BETWEEN 1 AND 2',
+      '>= 3',
+      'cuotas_pendientes',
+      "estado_cuota_label'] = 'AL DÍA'",
+      "estado_cuota_label'] = 'DEBE 1-2 MESES'",
+      "estado_cuota_label'] = 'DEBE 3 MESES O MÁS'",
+    ]) {
+      expect(sociosBackend, `Falta contrato backend del filtro de deuda/avisos: ${marker}`).toContain(marker);
+    }
   });
 
   test('cada acción usada por el frontend administrativo existe en el backend y está cubierta', () => {

@@ -182,6 +182,8 @@ final class Cuotas
                     ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 c.monto_cuota AS monto_actual,
                 mp_preferido.nombre AS medio_pago_preferido,
@@ -343,6 +345,8 @@ final class Cuotas
                     ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 c.monto_cuota AS monto_actual,
                 f.id_familia,
@@ -379,6 +383,13 @@ final class Cuotas
             $partner['id_medio_pago'] = $partner['id_medio_pago'] === null ? null : (int)$partner['id_medio_pago'];
             $partner['id_familia'] = $partner['id_familia'] === null ? null : (int)$partner['id_familia'];
             $partner['cantidad_integrantes'] = (int)($partner['cantidad_integrantes'] ?? 0);
+            $partner['numero_domicilio'] = isset($partner['numero_domicilio']) && trim((string)$partner['numero_domicilio']) !== ''
+                ? trim((string)$partner['numero_domicilio'])
+                : null;
+            $partner['domicilio'] = self::fullAddress(
+                $partner['domicilio'] ?? null,
+                $partner['numero_domicilio']
+            );
             $baseAmount = $partner['id_categoria'] === null
                 ? 0.0
                 : self::priceForPeriod(
@@ -456,6 +467,8 @@ final class Cuotas
                     ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
                 fc.cantidad_integrantes
@@ -491,6 +504,8 @@ final class Cuotas
                     s.id_categoria, s.id_medio_pago AS id_medio_pago_preferido,
                     TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))) AS denominacion,
                     sp.dni AS documento,
+                    sp.domicilio AS domicilio,
+                    sp.numero_domicilio AS numero_domicilio,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco
                  FROM familias_socios fs
@@ -635,6 +650,8 @@ final class Cuotas
                     ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
                 fc.cantidad_integrantes,
@@ -675,6 +692,8 @@ final class Cuotas
                     s.id_categoria, s.id_medio_pago AS id_medio_pago_preferido,
                     TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))) AS denominacion,
                     sp.dni AS documento,
+                    sp.domicilio AS domicilio,
+                    sp.numero_domicilio AS numero_domicilio,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco,
                     p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago, p.estado AS estado_pago
@@ -963,6 +982,8 @@ final class Cuotas
                         'id_pago' => $paymentId,
                         'id_socio' => $target['id_socio'],
                         'socio' => $target['denominacion'],
+                        'domicilio' => $target['domicilio'],
+                        'numero_domicilio' => $target['numero_domicilio'],
                         'categoria' => $target['categoria'] ?: 'SIN CATEGORÍA',
                         'periodo' => self::monthName($target['mes']) . ' ' . $target['anio'],
                         'monto_base' => number_format((float)$target['monto_base'], 2, '.', ''),
@@ -992,6 +1013,7 @@ final class Cuotas
             'estado' => 'PAGADO',
             'fecha_pago' => $paymentDate,
             'socios_label' => self::compactNames($names),
+            'domicilio' => count($saved['lineas']) === 1 ? ($saved['lineas'][0]['domicilio'] ?? null) : null,
             'modalidad_label' => $familyPayment
                 ? 'Pago de grupo familiar'
                 : (count($saved['lineas']) > 1 ? 'Pago múltiple de cuotas' : 'Pago mensual de cuota'),
@@ -1026,6 +1048,8 @@ final class Cuotas
             'tipo_socio' => (string)$candidate['tipo_socio'],
             'denominacion' => (string)$candidate['denominacion'],
             'documento' => $candidate['documento'],
+            'domicilio' => $candidate['domicilio'] ?? null,
+            'numero_domicilio' => $candidate['numero_domicilio'] ?? null,
             'id_categoria' => (int)$candidate['id_categoria'],
             'categoria' => $candidate['categoria'],
             'anio' => (int)$candidate['anio'],
@@ -1096,6 +1120,13 @@ final class Cuotas
             'estado_socio' => (string)($row['estado_socio'] ?? ''),
             'denominacion' => trim((string)($row['denominacion'] ?? '')),
             'documento' => $row['documento'] === null ? null : (string)$row['documento'],
+            'domicilio' => self::fullAddress(
+                $row['domicilio'] ?? null,
+                $row['numero_domicilio'] ?? null
+            ),
+            'numero_domicilio' => isset($row['numero_domicilio']) && trim((string)$row['numero_domicilio']) !== ''
+                ? trim((string)$row['numero_domicilio'])
+                : null,
             'id_categoria' => $categoryId,
             'categoria' => $row['categoria'] === null ? null : (string)$row['categoria'],
             'anio' => $year,
@@ -1247,6 +1278,8 @@ final class Cuotas
                 s.tipo_socio, s.estado AS estado_socio, s.fecha_alta, s.id_categoria,
                 COALESCE(se.razon_social, CONCAT(sp.apellido, ', ', sp.nombre)) AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 mp.nombre AS medio_pago
              FROM pagos p
@@ -1273,6 +1306,13 @@ final class Cuotas
             'estado_socio' => (string)($row['estado_socio'] ?? 'ACTIVO'),
             'denominacion' => trim((string)($row['denominacion'] ?? '')),
             'documento' => $row['documento'] === null ? null : (string)$row['documento'],
+            'domicilio' => self::fullAddress(
+                $row['domicilio'] ?? null,
+                $row['numero_domicilio'] ?? null
+            ),
+            'numero_domicilio' => isset($row['numero_domicilio']) && trim((string)$row['numero_domicilio']) !== ''
+                ? trim((string)$row['numero_domicilio'])
+                : null,
             'id_categoria' => isset($row['id_categoria']) && $row['id_categoria'] !== null ? (int)$row['id_categoria'] : null,
             'categoria' => $row['categoria'] === null ? null : (string)$row['categoria'],
             'fecha_alta' => $row['fecha_alta'] ?? null,
@@ -1300,6 +1340,24 @@ final class Cuotas
                 ? (string)$row['estado_pago']
                 : (isset($row['id_pago']) && $row['id_pago'] !== null ? 'PAGADO' : null),
         ];
+    }
+
+    private static function fullAddress(mixed $street, mixed $number): ?string
+    {
+        $streetText = trim((string)($street ?? ''));
+        $numberText = trim((string)($number ?? ''));
+
+        if ($streetText === '' && $numberText === '') return null;
+        if ($streetText === '') return $numberText;
+        if ($numberText === '') return $streetText;
+
+        // Evita repetir el número si en algún registro histórico ya quedó
+        // guardado dentro del texto del domicilio.
+        if (preg_match('/(?:^|\s)' . preg_quote($numberText, '/') . '$/u', $streetText) === 1) {
+            return $streetText;
+        }
+
+        return $streetText . ' ' . $numberText;
     }
 
     private static function familyCountSql(): string

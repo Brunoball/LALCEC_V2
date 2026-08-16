@@ -210,7 +210,7 @@ const receiptDisplayData = (source) => {
         ? "Socios"
         : "Nombre y Apellido",
     people: compact(receipt.socios, 116),
-    address: compact(receipt.domicilio || "Domicilio no registrado", 94),
+    address: compact(receipt.domicilio || "-", 94),
     category: compact(categories.join(" · ") || "—", 68),
     periods: compact(periods.join(", ") || receipt.modalidad, 112),
     amountDetail,

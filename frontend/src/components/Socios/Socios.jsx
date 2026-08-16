@@ -242,6 +242,47 @@ const MONTHS = [
   "DICIEMBRE",
 ];
 
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "AL_DIA", label: "AL DÍA" },
+  { value: "DEBE_1_2", label: "DEBE 1-2 MESES" },
+  { value: "DEBE_3_MAS", label: "DEBE 3 MESES O MÁS" },
+];
+
+const REMINDER_STATUS_OPTIONS = [
+  { value: "CON_AVISO", label: "CON AVISO" },
+  { value: "SIN_AVISO", label: "SIN AVISO" },
+];
+
+function paymentHealthMeta(item) {
+  const pending = Math.max(0, Number(item?.cuotas_pendientes || 0));
+  switch (String(item?.estado_cuota || "")) {
+    case "AL_DIA":
+      return {
+        className: "is-paid-up",
+        label: "AL DÍA",
+        title: "AL DÍA · sin cuotas pendientes",
+      };
+    case "DEBE_1_2":
+      return {
+        className: "is-warning",
+        label: "DEBE 1-2 MESES",
+        title: `${pending} ${pending === 1 ? "cuota pendiente" : "cuotas pendientes"}`,
+      };
+    case "DEBE_3_MAS":
+      return {
+        className: "is-danger",
+        label: "DEBE 3 MESES O MÁS",
+        title: `${pending} cuotas pendientes`,
+      };
+    default:
+      return {
+        className: "is-neutral",
+        label: item?.estado_cuota_label || "Sin categoría",
+        title: item?.estado_cuota_label || "Sin categoría asignada",
+      };
+  }
+}
+
 function paginationItems(currentPage, totalPages) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -296,12 +337,17 @@ const SociosRows = memo(function SociosRows({
   onDelete,
   onReason,
 }) {
-  return items.map((item) => (
-    <div
-      className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"} ${isInactive ? "socios-grid--bajas" : ""}`.trim()}
-      role="row"
-      key={item.id_socio}
-    >
+  return items.map((item) => {
+    const paymentHealth = isInactive ? null : paymentHealthMeta(item);
+
+    return (
+      <div
+        className={`mov-gridTable mov-gridTable--row global-divTable__row entity-table-row socios-grid ${isCompany ? "socios-grid--empresa" : "socios-grid--persona"} ${isInactive ? "socios-grid--bajas" : ""} ${paymentHealth ? `socios-payment-health-row ${paymentHealth.className}` : ""}`.trim()}
+        role="row"
+        key={item.id_socio}
+        title={paymentHealth ? `Estado de cuotas: ${paymentHealth.title}` : undefined}
+        data-payment-status={paymentHealth?.label || undefined}
+      >
       {isInactive ? (
         <>
           <div className="mov-gridCell entity-main-cell">
@@ -412,8 +458,9 @@ const SociosRows = memo(function SociosRows({
           ) : null}
         </div>
       </div>
-    </div>
-  ));
+      </div>
+    );
+  });
 });
 
 function PaymentYearSelector({ value, options, onChange }) {
@@ -1046,6 +1093,9 @@ export default function Socios({ tipo = PERSON }) {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState(readSharedPartnerStatus);
   const [category, setCategory] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [reminderStatus, setReminderStatus] = useState("");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -1071,10 +1121,22 @@ export default function Socios({ tipo = PERSON }) {
       buscar: serverSearch,
       estado: status,
       categoria: category,
+      medio_pago: paymentMethod,
+      estado_cuota: paymentStatus,
+      recordatorio: reminderStatus,
       pagina: page,
       por_pagina: PAGE_SIZE,
     }),
-    [type, serverSearch, status, category, page],
+    [
+      type,
+      serverSearch,
+      status,
+      category,
+      paymentMethod,
+      paymentStatus,
+      reminderStatus,
+      page,
+    ],
   );
   const { items, catalogos, paginacion, loading, error, cargar } =
     useSocios(filters);
@@ -1158,6 +1220,15 @@ export default function Socios({ tipo = PERSON }) {
     const selectedCategory = (catalogos.categorias || []).find(
       (item) => String(item.id_categoria) === String(category),
     );
+    const selectedPaymentMethod = (catalogos.medios_pago || []).find(
+      (item) => String(item.id_medio_pago) === String(paymentMethod),
+    );
+    const selectedPaymentStatus = PAYMENT_STATUS_OPTIONS.find(
+      (item) => item.value === paymentStatus,
+    );
+    const selectedReminderStatus = REMINDER_STATUS_OPTIONS.find(
+      (item) => item.value === reminderStatus,
+    );
     return [
       status === "INACTIVO" ? "Bajas" : "Activos",
       status === "INACTIVO"
@@ -1165,11 +1236,31 @@ export default function Socios({ tipo = PERSON }) {
         : selectedCategory
           ? `Categoría: ${selectedCategory.nombre}`
           : "Todas las categorías",
+      status === "INACTIVO"
+        ? null
+        : selectedPaymentMethod
+          ? `Medio: ${selectedPaymentMethod.nombre}`
+          : "Todos los medios",
+      status === "INACTIVO" || !selectedPaymentStatus
+        ? null
+        : `Cuotas: ${selectedPaymentStatus.label}`,
+      status === "INACTIVO" || !selectedReminderStatus
+        ? null
+        : `Avisos: ${selectedReminderStatus.label}`,
       debouncedSearch ? `Búsqueda: ${debouncedSearch}` : null,
     ]
       .filter(Boolean)
       .join(" · ");
-  }, [catalogos.categorias, category, debouncedSearch, status]);
+  }, [
+    catalogos.categorias,
+    catalogos.medios_pago,
+    category,
+    debouncedSearch,
+    paymentMethod,
+    paymentStatus,
+    reminderStatus,
+    status,
+  ]);
 
   const obtenerTodosParaExportar = useCallback(async () => {
     const primeraRespuesta = await sociosApi.listar({
@@ -1345,7 +1436,12 @@ export default function Socios({ tipo = PERSON }) {
       onChange: (value) => {
         saveSharedPartnerStatus(value);
         setStatus(value);
-        if (value === "INACTIVO") setCategory("");
+        if (value === "INACTIVO") {
+          setCategory("");
+          setPaymentMethod("");
+          setPaymentStatus("");
+          setReminderStatus("");
+        }
         setPage(1);
       },
       options: [
@@ -1378,6 +1474,45 @@ export default function Socios({ tipo = PERSON }) {
               value: item.id_categoria,
               label: `${item.nombre}${item.activo ? "" : " (BAJA)"}`,
             })),
+          },
+          {
+            key: "medio_pago",
+            label: "Medio de pago",
+            type: "select",
+            placeholder: "Todos",
+            value: paymentMethod,
+            onChange: (value) => {
+              setPaymentMethod(value);
+              setPage(1);
+            },
+            options: (catalogos.medios_pago || []).map((item) => ({
+              value: item.id_medio_pago,
+              label: `${item.nombre}${item.activo ? "" : " (BAJA)"}`,
+            })),
+          },
+          {
+            key: "estado_cuota",
+            label: "Estado de cuotas",
+            type: "select",
+            placeholder: "Todos",
+            value: paymentStatus,
+            onChange: (value) => {
+              setPaymentStatus(value);
+              setPage(1);
+            },
+            options: PAYMENT_STATUS_OPTIONS,
+          },
+          {
+            key: "recordatorio",
+            label: "Avisos",
+            type: "select",
+            placeholder: "Todos",
+            value: reminderStatus,
+            onChange: (value) => {
+              setReminderStatus(value);
+              setPage(1);
+            },
+            options: REMINDER_STATUS_OPTIONS,
           },
         ]),
   ];
@@ -1474,6 +1609,27 @@ export default function Socios({ tipo = PERSON }) {
             onReason={setReasonModal}
           />
         </GlobalDivTable>
+
+        {!isInactive ? (
+          <div
+            className="socios-payment-health-legend"
+            aria-label="Referencia de estado de pago"
+          >
+            <strong>ESTADO DE PAGO</strong>
+            <span>
+              <i className="is-paid-up" aria-hidden="true" />
+              AL DÍA
+            </span>
+            <span>
+              <i className="is-warning" aria-hidden="true" />
+              DEBE 1-2 MESES
+            </span>
+            <span>
+              <i className="is-danger" aria-hidden="true" />
+              DEBE 3 MESES O MÁS
+            </span>
+          </div>
+        ) : null}
 
         {Number(paginacion?.total || 0) > 0 ? (
           <nav

@@ -54,6 +54,36 @@ trait SociosConsultas
             $params['medio_pago'] = (int)$paymentMethod;
         }
 
+        $reminderStatus = strtoupper(trim((string)($filters['recordatorio'] ?? '')));
+        if (!in_array($reminderStatus, ['', 'CON_AVISO', 'SIN_AVISO'], true)) {
+            api_error('El filtro de avisos solicitado no es válido.', 'FILTRO_INVALIDO');
+        }
+        if ($reminderStatus === 'CON_AVISO') {
+            $where[] = 's.enviar_recordatorio = 1';
+        } elseif ($reminderStatus === 'SIN_AVISO') {
+            $where[] = 's.enviar_recordatorio = 0';
+        }
+
+        $paymentStatus = strtoupper(trim((string)($filters['estado_cuota'] ?? '')));
+        if (!in_array($paymentStatus, ['', 'AL_DIA', 'DEBE_1_2', 'DEBE_3_MAS'], true)) {
+            api_error('El estado de cuotas solicitado no es válido.', 'FILTRO_INVALIDO');
+        }
+        if ($paymentStatus !== '') {
+            $pendingSql = self::pendingInstallmentsSql('s');
+            // El estado de deuda sólo aplica a registros activos que tienen una
+            // categoría/cuota configurada. Así el filtro reproduce la misma
+            // noción de deuda que usa el módulo de Cuotas.
+            $where[] = "s.estado = 'ACTIVO'";
+            $where[] = 's.id_categoria IS NOT NULL';
+            if ($paymentStatus === 'AL_DIA') {
+                $where[] = "({$pendingSql}) = 0";
+            } elseif ($paymentStatus === 'DEBE_1_2') {
+                $where[] = "({$pendingSql}) BETWEEN 1 AND 2";
+            } else {
+                $where[] = "({$pendingSql}) >= 3";
+            }
+        }
+
         $familyFilter = trim((string)($filters['familia'] ?? ''));
         if ($familyFilter === 'sin_familia') {
             $where[] = 's.tipo_socio = \'PERSONA\' AND f.id_familia IS NULL';
@@ -324,12 +354,15 @@ trait SociosConsultas
 
     private static function baseQuery(string $extraWhere = ''): string
     {
+        $pendingSql = self::pendingInstallmentsSql('s');
+
         return "SELECT
                     s.id_socio, s.tipo_socio, s.observaciones, s.motivo_baja, s.fecha_baja,
                     s.fecha_alta, s.estado, s.id_categoria, s.id_medio_pago,
                     s.enviar_recordatorio, s.creado_en, s.actualizado_en,
                     c.nombre AS categoria, c.monto_cuota,
                     mp.nombre AS medio_pago,
+                    ({$pendingSql}) AS cuotas_pendientes,
                     p.apellido, p.nombre, p.dni, p.domicilio AS persona_domicilio,
                     p.numero_domicilio, p.localidad, p.telefono AS persona_telefono,
                     p.email AS persona_email, p.domicilio_alternativo AS persona_domicilio_alternativo,
@@ -357,6 +390,51 @@ trait SociosConsultas
                 {$extraWhere}";
     }
 
+    /**
+     * Cantidad de períodos mensuales vencidos/actuales sin registro de pago.
+     *
+     * La fórmula replica la regla vigente de Cuotas: desde el mes de alta hasta
+     * el mes actual inclusive. Un período deja de ser deuda cuando existe un
+     * registro en pagos para ese socio/año/mes. Los meses futuros nunca se
+     * contabilizan.
+     */
+    private static function pendingInstallmentsSql(string $alias): string
+    {
+        $currentYear = (int)date('Y');
+        $currentMonth = (int)date('n');
+        $currentMonthStart = date('Y-m-01');
+        $currentMonthEnd = date('Y-m-t');
+
+        return "CASE
+                    WHEN {$alias}.estado <> 'ACTIVO'
+                      OR {$alias}.id_categoria IS NULL
+                      OR {$alias}.fecha_alta IS NULL
+                      OR {$alias}.fecha_alta > '{$currentMonthEnd}'
+                    THEN 0
+                    ELSE GREATEST(
+                        0,
+                        TIMESTAMPDIFF(
+                            MONTH,
+                            DATE_FORMAT({$alias}.fecha_alta, '%Y-%m-01'),
+                            '{$currentMonthStart}'
+                        ) + 1
+                        - (
+                            SELECT COUNT(DISTINCT CONCAT(px.anio, '-', LPAD(px.mes, 2, '0')))
+                            FROM pagos px
+                            WHERE px.id_socio = {$alias}.id_socio
+                              AND (
+                                  px.anio > YEAR({$alias}.fecha_alta)
+                                  OR (px.anio = YEAR({$alias}.fecha_alta) AND px.mes >= MONTH({$alias}.fecha_alta))
+                              )
+                              AND (
+                                  px.anio < {$currentYear}
+                                  OR (px.anio = {$currentYear} AND px.mes <= {$currentMonth})
+                              )
+                        )
+                    )
+                END";
+    }
+
     private static function detalle(PDO $db, int $id): ?array
     {
         $statement = $db->prepare(self::baseQuery('WHERE s.id_socio = :id') . ' LIMIT 1');
@@ -375,6 +453,24 @@ trait SociosConsultas
         $row['es_titular'] = $row['es_titular'] === null ? false : (bool)$row['es_titular'];
         $row['activo'] = $row['estado'] === 'ACTIVO';
         $row['monto_cuota'] = $row['monto_cuota'] === null ? null : (float)$row['monto_cuota'];
+        $row['cuotas_pendientes'] = max(0, (int)($row['cuotas_pendientes'] ?? 0));
+
+        if (!$row['activo']) {
+            $row['estado_cuota'] = 'NO_APLICA';
+            $row['estado_cuota_label'] = 'No aplica';
+        } elseif ($row['id_categoria'] === null) {
+            $row['estado_cuota'] = 'SIN_CATEGORIA';
+            $row['estado_cuota_label'] = 'Sin categoría';
+        } elseif ($row['cuotas_pendientes'] === 0) {
+            $row['estado_cuota'] = 'AL_DIA';
+            $row['estado_cuota_label'] = 'AL DÍA';
+        } elseif ($row['cuotas_pendientes'] <= 2) {
+            $row['estado_cuota'] = 'DEBE_1_2';
+            $row['estado_cuota_label'] = 'DEBE 1-2 MESES';
+        } else {
+            $row['estado_cuota'] = 'DEBE_3_MAS';
+            $row['estado_cuota_label'] = 'DEBE 3 MESES O MÁS';
+        }
 
         if ($row['tipo_socio'] === 'PERSONA') {
             $row['domicilio'] = $row['persona_domicilio'];

@@ -9,8 +9,16 @@ $allowed = array_values(array_filter(array_map('trim', explode(',', (string)env_
 $isLocalOrigin = preg_match('#^http://(localhost|127\.0\.0\.1):\d+$#', $origin) === 1;
 $isLocalDev = !$isProduction && $isLocalOrigin;
 
-// En producción localhost queda habilitado exclusivamente para la suite E2E.
-// El preflight no trae el valor del header, pero sí declara su nombre.
+// Desarrollo local contra Hostinger: permitir explícitamente el frontend React
+// habitual sin abrir CORS a orígenes externos. Playwright conserva además su
+// autorización especial para orígenes loopback locales.
+$trustedLocalOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+];
+$isTrustedLocalFrontend = in_array($origin, $trustedLocalOrigins, true);
+
+// El preflight no trae el valor del header E2E, pero sí declara su nombre.
 $e2eHeader = strtoupper(trim((string)($_SERVER['HTTP_X_LALCEC_E2E'] ?? '')));
 $requestedHeaders = strtolower((string)($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'] ?? ''));
 $isE2EActual = $isLocalOrigin && $e2eHeader === 'PLAYWRIGHT';
@@ -18,6 +26,7 @@ $isE2EPreflight = $isLocalOrigin && str_contains($requestedHeaders, 'x-lalcec-e2
 
 $isAllowed = $origin !== '' && (
     $isLocalDev
+    || $isTrustedLocalFrontend
     || in_array($origin, $allowed, true)
     || $isE2EActual
     || $isE2EPreflight

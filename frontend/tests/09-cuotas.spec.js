@@ -25,6 +25,7 @@ const apiPaginationPersonOne = personData();
 const apiPaginationPersonTwo = personData();
 const historicalPricePerson = personData();
 const yearRangePerson = personData();
+const addressPropagationPerson = personData();
 const family = familyData();
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -166,6 +167,7 @@ test.describe('Cuotas de socios y empresas', () => {
       { tipo: 'PERSONA', documento: apiPaginationPersonTwo.dni },
       { tipo: 'PERSONA', documento: historicalPricePerson.dni },
       { tipo: 'PERSONA', documento: yearRangePerson.dni },
+      { tipo: 'PERSONA', documento: addressPropagationPerson.dni },
     ]) {
       try {
         await cleanupSocioByDocument(request, target);
@@ -306,6 +308,102 @@ test.describe('Cuotas de socios y empresas', () => {
     }
   });
 
+
+  test('propaga domicilio y número completos desde cuotas hasta todos los datos usados por los comprobantes', async ({ request }) => {
+    const street = 'CALLE REGRESION DOMICILIO';
+    const streetNumber = '9876';
+    const fullAddress = `${street} ${streetNumber}`;
+    const { category, medium } = await activeCategoryAndMedium(request);
+
+    const saved = await createPerson(request, addressPropagationPerson, {
+      fecha_alta: `${currentYear}-01-01`,
+      domicilio: street,
+      numero_domicilio: streetNumber,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    const assertAddress = (item, label) => {
+      expect(item, `${label}: falta el objeto esperado`).toBeTruthy();
+      expect(item.domicilio, `${label}: domicilio incompleto`).toBe(fullAddress);
+      expect(item.numero_domicilio, `${label}: número de domicilio incorrecto`).toBe(streetNumber);
+      expect(String(item.domicilio), `${label}: nunca debe degradar a N/A`).not.toMatch(/^N\/?A$/i);
+      expect(String(item.domicilio), `${label}: no debe duplicar el número`).not.toBe(`${fullAddress} ${streetNumber}`);
+    };
+
+    const debt = await apiCall(request, 'cuotas_listar', {
+      params: {
+        tipo: 'PERSONA',
+        estado: 'DEUDORES',
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: addressPropagationPerson.dni,
+      },
+    });
+    expect(debt.items).toHaveLength(1);
+    assertAddress(debt.items[0], 'cuotas_listar DEUDORES');
+
+    const catalogs = await apiCall(request, 'cuotas_catalogos', {
+      params: { anio: currentYear, mes: currentMonth },
+    });
+    const catalogPartner = (catalogs.catalogos?.socios || catalogs.catalogos?.partners || catalogs.socios || [])
+      .find((item) => Number(item.id_socio) === Number(saved.id_socio));
+    expect(catalogPartner, 'cuotas_catalogos: el socio creado debe estar en el catálogo').toBeTruthy();
+    assertAddress(catalogPartner, 'cuotas_catalogos');
+
+    const context = await apiCall(request, 'cuotas_contexto_pago', {
+      params: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+      },
+    });
+    assertAddress(context.principal, 'cuotas_contexto_pago.principal');
+
+    const contexts = await apiCall(request, 'cuotas_contextos_pago', {
+      params: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        fecha_pago: todayIso(),
+      },
+    });
+    const annualCurrent = contexts.periodos?.[String(currentMonth)];
+    expect(annualCurrent, 'cuotas_contextos_pago: falta el período actual').toBeTruthy();
+    assertAddress(annualCurrent.principal, 'cuotas_contextos_pago.periodos[mes].principal');
+
+    const payment = await apiCall(request, 'cuotas_registrar_pago', {
+      method: 'POST',
+      data: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        monto: context.principal.monto_sugerido,
+        id_medio_pago: medium.id_medio_pago,
+      },
+    });
+
+    assertAddress(payment.item, 'cuotas_registrar_pago.item');
+    expect(payment.comprobante.domicilio).toBe(fullAddress);
+    expect(payment.comprobante.lineas).toHaveLength(1);
+    assertAddress(payment.comprobante.lineas[0], 'cuotas_registrar_pago.comprobante.lineas[0]');
+
+    const paid = await apiCall(request, 'cuotas_listar', {
+      params: {
+        tipo: 'PERSONA',
+        estado: 'PAGADOS',
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: addressPropagationPerson.dni,
+      },
+    });
+    expect(paid.items).toHaveLength(1);
+    assertAddress(paid.items[0], 'cuotas_listar PAGADOS / reimpresión');
+
+    await removePayments(request, payment.items || [payment.item]);
+  });
+
   test('mantiene operativos los alias históricos de registrar cobro y anular', async ({ request }) => {
     await cleanupSocioByDocument(request, { tipo: 'PERSONA', documento: person.dni });
     const { category, medium } = await activeCategoryAndMedium(request);
@@ -349,10 +447,14 @@ test.describe('Cuotas de socios y empresas', () => {
     const { category, medium } = await activeCategoryAndMedium(request);
     const discount = await ensureTwoMemberDiscount(request);
     const first = await createPerson(request, familyPersonOne, {
+      domicilio: 'CALLE FAMILIA UNO',
+      numero_domicilio: '101',
       id_categoria: category.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
     const second = await createPerson(request, familyPersonTwo, {
+      domicilio: 'CALLE FAMILIA DOS',
+      numero_domicilio: '202',
       id_categoria: category.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
@@ -375,6 +477,11 @@ test.describe('Cuotas de socios y empresas', () => {
     expect(Number(context.principal.monto_sugerido)).toBeLessThanOrEqual(
       Number(context.principal.monto_base),
     );
+    const familyAddresses = new Map(
+      context.familia.integrantes.map((member) => [Number(member.id_socio), member.domicilio]),
+    );
+    expect(familyAddresses.get(Number(first.id_socio))).toBe('CALLE FAMILIA UNO 101');
+    expect(familyAddresses.get(Number(second.id_socio))).toBe('CALLE FAMILIA DOS 202');
 
     const response = await apiCall(request, 'cuotas_registrar_pago', {
       method: 'POST',
@@ -395,6 +502,11 @@ test.describe('Cuotas de socios y empresas', () => {
     expect(response.comprobante.lineas.map((line) => line.id_socio).sort()).toEqual(
       [first.id_socio, second.id_socio].sort(),
     );
+    const receiptAddresses = new Map(
+      response.comprobante.lineas.map((line) => [Number(line.id_socio), line.domicilio]),
+    );
+    expect(receiptAddresses.get(Number(first.id_socio))).toBe('CALLE FAMILIA UNO 101');
+    expect(receiptAddresses.get(Number(second.id_socio))).toBe('CALLE FAMILIA DOS 202');
 
     await removePayments(request, response.items);
   });
@@ -457,10 +569,14 @@ test.describe('Cuotas de socios y empresas', () => {
   test('registra varios socios seleccionados en una sola operación y genera un comprobante agrupado', async ({ request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);
     const first = await createPerson(request, batchPersonOne, {
+      domicilio: 'CALLE LOTE UNO',
+      numero_domicilio: '301',
       id_categoria: category.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
     const second = await createPerson(request, batchPersonTwo, {
+      domicilio: 'CALLE LOTE DOS',
+      numero_domicilio: '302',
       id_categoria: category.id_categoria,
       id_medio_pago: medium.id_medio_pago,
     });
@@ -500,6 +616,11 @@ test.describe('Cuotas de socios y empresas', () => {
     expect(response.items.map((item) => item.id_socio).sort()).toEqual(
       [first.id_socio, second.id_socio].sort(),
     );
+    const batchReceiptAddresses = new Map(
+      response.comprobante.lineas.map((line) => [Number(line.id_socio), line.domicilio]),
+    );
+    expect(batchReceiptAddresses.get(Number(first.id_socio))).toBe('CALLE LOTE UNO 301');
+    expect(batchReceiptAddresses.get(Number(second.id_socio))).toBe('CALLE LOTE DOS 302');
 
     await removePayments(request, response.items);
   });

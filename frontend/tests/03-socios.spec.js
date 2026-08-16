@@ -37,9 +37,11 @@ async function permanentDeleteCurrentPartner(page, row) {
   await expectToast(page, /eliminados definitivamente/i);
 }
 
-// Cada caso usa datos propios y cleanup independiente. Un crash nativo de Chromium/Windows
-// (0xC0000409) se reintenta una sola vez en un worker limpio sin saltear el resto.
-test.describe.configure({ retries: 1 });
+// Cada caso usa datos propios y cleanup independiente.
+// Se ejecutan como grupos paralelizables para que Playwright les asigne workers aislados.
+// Con --workers=1 siguen ejecutándose de a uno, sin escrituras concurrentes en la DB,
+// pero cada caso de Socios arranca en un proceso limpio y no hereda un worker envejecido.
+test.describe.configure({ mode: 'parallel', retries: 1 });
 
 test.describe('Socios, empresas y familias', () => {
   test.afterEach(async ({ request }) => {
@@ -116,20 +118,56 @@ test.describe('Socios, empresas y familias', () => {
     await expectToast(page, 'Registro creado correctamente.');
 
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
+    const waitForSociosList = (matcher) =>
+      page.waitForResponse((response) => {
+        if (!response.ok() || response.request().method() !== 'GET') return false;
+
+        const url = new URL(response.url());
+        if (url.searchParams.get('action') !== 'socios_listar') return false;
+        if (url.searchParams.get('tipo') !== 'PERSONA') return false;
+
+        return matcher(url.searchParams);
+      });
+
+    const normalizedSearch = person.textSuffix.toLowerCase();
+    const normalizedSearchResponse = waitForSociosList(
+      (params) => params.get('buscar') === normalizedSearch,
+    );
     await search.fill(`  ${person.nombre.toLowerCase()} ,  ${person.apellido.toLowerCase()}  `);
+    await normalizedSearchResponse;
     await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
+
+    const dniSearchResponse = waitForSociosList(
+      (params) => params.get('buscar') === person.dni && !params.has('categoria'),
+    );
     await search.fill(person.dni);
+    await dniSearchResponse;
+
     let row = tableRow(page, 'Listado de socios', person.dni);
     await expect(row).toContainText(`${person.apellido}, ${person.nombre}`);
     await expect(row).toContainText('SIN AVISO');
 
     if (selectedCategoryValue) {
       const categoryFilter = page.getByLabel('Categoría');
+
+      const categoryResponse = waitForSociosList(
+        (params) =>
+          params.get('buscar') === person.dni &&
+          params.get('categoria') === selectedCategoryValue,
+      );
       await categoryFilter.selectOption(selectedCategoryValue);
+      await categoryResponse;
       await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
+
+      const clearCategoryResponse = waitForSociosList(
+        (params) => params.get('buscar') === person.dni && !params.has('categoria'),
+      );
       await categoryFilter.selectOption('');
+      await clearCategoryResponse;
+      await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
     }
 
+    row = tableRow(page, 'Listado de socios', person.dni);
     await row.getByTitle('Ver ficha e historial').click();
     let infoDialog = page.getByRole('dialog', { name: 'Información del Socio' });
     await expect(infoDialog).toContainText(person.dni);

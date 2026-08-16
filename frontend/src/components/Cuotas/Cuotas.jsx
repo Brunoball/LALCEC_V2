@@ -223,7 +223,7 @@ const printReceiptsBatch = ({ printWindow, records, entityType }) => {
           ? item.razon_social
           : `${item.apellido || ""} ${item.nombre || ""}`.trim()) ||
         "—";
-      const address = item.domicilio || item.domicilio_2 || item.direccion || "N/A";
+      const address = item.domicilio || item.domicilio_2 || item.direccion || "-";
       const category = item.categoria || "";
       const paymentMethod =
         item.medio_pago || item.medio_pago_preferido || "No especificado";

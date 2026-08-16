@@ -52,9 +52,46 @@
 }
 
 .socios-headFilters .module-filter--select {
-  flex: 0 1 140px;
+  flex: 0 1 170px;
   width: 100%;
-  max-width: 140px;
+  max-width: 170px;
+}
+
+/* Indicador visual del estado de cuotas, equivalente a la barra del sistema
+   anterior: verde = al día, amarillo = 1-2 pendientes, rojo = 3 o más. */
+.socios-payment-health-row {
+  position: relative;
+}
+
+.socios-payment-health-row::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 1px;
+  width: 4px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.socios-payment-health-row > .mov-gridCell:first-child {
+  padding-left: 18px;
+}
+
+.socios-payment-health-row.is-paid-up::before {
+  background: var(--success-500, #10b981);
+}
+
+.socios-payment-health-row.is-warning::before {
+  background: var(--warning-500, #f59e0b);
+}
+
+.socios-payment-health-row.is-danger::before {
+  background: var(--danger-500, #ef4444);
+}
+
+.socios-payment-health-row.is-neutral::before {
+  background: var(--text-secondary, #94a3b8);
 }
 
 .socios-grid > .mov-gridCell--head {
@@ -960,5 +997,63 @@
     justify-content: flex-start;
     overflow-x: auto;
     padding-bottom: 2px;
+  }
+}
+
+/* Referencia compacta del semáforo de deuda mostrado en cada fila. */
+.socios-payment-health-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 10px 2px 2px;
+  color: var(--text-secondary, #64748b);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.socios-payment-health-legend > strong {
+  color: var(--text-primary, #334155);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.socios-payment-health-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.socios-payment-health-legend i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.socios-payment-health-legend i.is-paid-up {
+  color: var(--success-500, #10b981);
+  background: var(--success-500, #10b981);
+}
+
+.socios-payment-health-legend i.is-warning {
+  color: var(--warning-500, #f59e0b);
+  background: var(--warning-500, #f59e0b);
+}
+
+.socios-payment-health-legend i.is-danger {
+  color: var(--danger-500, #ef4444);
+  background: var(--danger-500, #ef4444);
+}
+
+@media (max-width: 720px) {
+  .socios-payment-health-legend {
+    gap: 8px 10px;
+  }
+
+  .socios-payment-health-legend > strong {
+    flex-basis: 100%;
   }
 }
