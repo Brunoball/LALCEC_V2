@@ -62,6 +62,7 @@ const INFO_TAB_CONTACT = "contacto";
 const INFO_TAB_HISTORY = "historial";
 const INFO_TAB_PAYMENTS = "pagos";
 const PAGE_SIZE = 100;
+const BAJA_REASON_PREVIEW_LIMIT = 50;
 const PARTNER_STATUS_STORAGE_KEY = "lalcec_socios_estado_seleccionado";
 
 function readSharedPartnerStatus() {
@@ -258,6 +259,31 @@ function paginationItems(currentPage, totalPages) {
   return items;
 }
 
+function BajaReasonCell({ item, onOpen }) {
+  const reason = String(item?.motivo_baja || "").trim();
+  const displayReason = reason || "SIN MOTIVO REGISTRADO";
+  const needsModal = reason.length > BAJA_REASON_PREVIEW_LIMIT;
+
+  if (!needsModal) {
+    return <span>{displayReason}</span>;
+  }
+
+  const preview = `${reason.slice(0, BAJA_REASON_PREVIEW_LIMIT).trimEnd()}…`;
+
+  return (
+    <button
+      className="socios-baja-reason__trigger"
+      type="button"
+      onClick={() => onOpen?.(item)}
+      title="Ver motivo de baja completo"
+      aria-label={`Ver motivo de baja completo de ${item.denominacion}`}
+    >
+      <span>{preview}</span>
+      <small>Ver motivo completo</small>
+    </button>
+  );
+}
+
 const SociosRows = memo(function SociosRows({
   items,
   isCompany,
@@ -268,6 +294,7 @@ const SociosRows = memo(function SociosRows({
   onEdit,
   onState,
   onDelete,
+  onReason,
 }) {
   return items.map((item) => (
     <div
@@ -288,7 +315,7 @@ const SociosRows = memo(function SociosRows({
             <strong>{formatDate(item.fecha_baja)}</strong>
           </div>
           <div className="mov-gridCell socios-baja-reason">
-            <span>{item.motivo_baja || "SIN MOTIVO REGISTRADO"}</span>
+            <BajaReasonCell item={item} onOpen={onReason} />
           </div>
         </>
       ) : (
@@ -1111,6 +1138,7 @@ export default function Socios({ tipo = PERSON }) {
   const [historyModal, setHistoryModal] = useState(null);
   const [historyTab, setHistoryTab] = useState(INFO_TAB_SUMMARY);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [reasonModal, setReasonModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -1443,6 +1471,7 @@ export default function Socios({ tipo = PERSON }) {
             onEdit={openEdit}
             onState={openStateModal}
             onDelete={openPermanentDelete}
+            onReason={setReasonModal}
           />
         </GlobalDivTable>
 
@@ -1764,6 +1793,26 @@ export default function Socios({ tipo = PERSON }) {
           ) : (
             <PaymentCalendar payments={info.pagos || []} item={itemInfo} />
           )
+        ) : null}
+      </InfoModal>
+
+      <InfoModal
+        open={Boolean(reasonModal)}
+        title="Motivo de baja"
+        subtitle={
+          reasonModal
+            ? `${isCompany ? "Empresa" : "Socio"}: ${reasonModal.denominacion} · Baja: ${formatDate(reasonModal.fecha_baja)}`
+            : ""
+        }
+        onClose={() => setReasonModal(null)}
+        modalClassName="socios-baja-reason-modal"
+        closeOnBackdrop={false}
+      >
+        {reasonModal ? (
+          <section className="socios-baja-reason-modal__content">
+            <span>Motivo registrado</span>
+            <p>{reasonModal.motivo_baja}</p>
+          </section>
         ) : null}
       </InfoModal>
 

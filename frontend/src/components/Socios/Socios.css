@@ -131,7 +131,8 @@
   min-width: 0;
 }
 
-.socios-baja-reason span {
+.socios-baja-reason > span,
+.socios-baja-reason__trigger > span {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-secondary, #64748b);
@@ -139,6 +140,75 @@
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.socios-baja-reason__trigger {
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.socios-baja-reason__trigger:hover {
+  background: color-mix(in srgb, var(--primary-500, #f97316) 8%, transparent);
+}
+
+.socios-baja-reason__trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--primary-500, #f97316) 22%, transparent);
+}
+
+.socios-baja-reason__trigger small {
+  color: var(--primary-700, #c2410c);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.socios-baja-reason-modal.entity-modal {
+  width: min(580px, 100%);
+}
+
+.socios-baja-reason-modal .entity-modal__body {
+  padding: 16px 20px 20px;
+}
+
+.socios-baja-reason-modal__content {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--primary-500, #f97316) 18%, #e5e7eb);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-500, #f97316) 4%, #fff);
+}
+
+.socios-baja-reason-modal__content > span {
+  color: var(--primary-700, #c2410c);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.socios-baja-reason-modal__content p {
+  margin: 0;
+  color: var(--text-primary, #1f2937);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 
