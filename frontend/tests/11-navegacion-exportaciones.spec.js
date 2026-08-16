@@ -68,7 +68,7 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
 
     if (title === 'descarga Excel y PDF reales de familias') {
       try {
-        cleanupFamilyByPrefix(family.prefix);
+        await cleanupFamilyByPrefix(request, family.prefix);
       } catch (_error) {
         // Puede no haberse creado la familia.
       }

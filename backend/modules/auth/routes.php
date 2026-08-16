@@ -174,7 +174,12 @@ function auth_login(): never
         api_error('El usuario se encuentra deshabilitado.', 'USER_DISABLED', 403);
     }
 
-    auth_upgrade_password_if_needed($db, $user, $password);
+    // Las corridas E2E contra producción no deben modificar el hash del usuario
+    // real utilizado para autenticarse. La sesión/auditoría de testing queda
+    // igualmente marcada y se limpia al finalizar.
+    if (!e2e_request_enabled()) {
+        auth_upgrade_password_if_needed($db, $user, $password);
+    }
 
     $hours = max(1, min(168, (int)env_value('SESSION_HOURS', '12')));
     $expiresAt = (new DateTimeImmutable())->modify("+{$hours} hours");
@@ -215,7 +220,15 @@ function auth_current(): never
 function auth_logout(): never
 {
     $auth = auth_context();
-    app_db()->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idSesion = ?')->execute([$auth['id_sesion']]);
+    $db = app_db();
+    if (e2e_request_enabled()) {
+        // La sesión fue creada exclusivamente por Playwright. Se elimina en
+        // vez de dejar una fila inactiva para que la DB vuelva a su estado
+        // funcional previo a la ejecución.
+        $db->prepare('DELETE FROM sis_sesiones WHERE idSesion = ?')->execute([$auth['id_sesion']]);
+    } else {
+        $db->prepare('UPDATE sis_sesiones SET activo = 0 WHERE idSesion = ?')->execute([$auth['id_sesion']]);
+    }
     auth_cookie('', time() - 3600);
     api_success([], 'Sesión cerrada correctamente.');
 }

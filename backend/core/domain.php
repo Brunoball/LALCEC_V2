@@ -10,7 +10,12 @@ function client_ip(): string
 
 function client_user_agent(): string
 {
-    return substr(trim((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 255);
+    $agent = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $isE2E = strtoupper(trim((string)($_SERVER['HTTP_X_LALCEC_E2E'] ?? ''))) === 'PLAYWRIGHT';
+    if ($isE2E && !str_starts_with($agent, 'LALCEC-PLAYWRIGHT-E2E')) {
+        $agent = 'LALCEC-PLAYWRIGHT-E2E/1.0 ' . $agent;
+    }
+    return substr($agent, 0, 255);
 }
 
 function clean_text(mixed $value, int $maxLength = 255, bool $uppercase = true): string

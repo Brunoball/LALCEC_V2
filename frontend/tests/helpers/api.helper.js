@@ -1,12 +1,21 @@
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 const { loadTestEnv } = require('./env.helper');
 
 loadTestEnv();
 
 const FRONTEND_ROOT = path.resolve(__dirname, '..', '..');
 const AUTH_FILE = path.join(FRONTEND_ROOT, 'tests', '.auth', 'user.json');
+const BASELINE_FILE = path.join(FRONTEND_ROOT, 'tests', '.auth', 'baseline.json');
+
+function e2eRequestHeaders() {
+  return String(process.env.PW_E2E_HEADER || 'PLAYWRIGHT').trim() === 'PLAYWRIGHT'
+    ? {
+        'X-LALCEC-E2E': 'PLAYWRIGHT',
+        'User-Agent': 'LALCEC-PLAYWRIGHT-E2E/1.0',
+      }
+    : {};
+}
 
 function normalizedApiBase() {
   return String(process.env.PW_API_URL || 'http://localhost:3001/routes')
@@ -87,6 +96,7 @@ async function apiResult(requestContext, action, options = {}) {
     : await ensureAuthSession(requestContext);
   const headers = {
     Accept: 'application/json',
+    ...e2eRequestHeaders(),
     ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
     ...(options.headers || {}),
   };
@@ -287,53 +297,55 @@ async function cleanupContableOptionByName(requestContext, type, itemName) {
 }
 
 
-function runDbCleanup(operation, value) {
-  const phpBinary = process.env.PW_PHP_BIN || 'php';
-  const script = path.join(__dirname, 'db-cleanup.php');
-  const result = spawnSync(phpBinary, [script, operation, value], {
-    cwd: FRONTEND_ROOT,
-    encoding: 'utf8',
-    env: { ...process.env },
+async function cleanupScope(requestContext, scope, value) {
+  const response = await apiCall(requestContext, 'e2e_cleanup_scope', {
+    method: 'POST',
+    data: {
+      confirmacion: 'LIMPIAR_PLAYWRIGHT',
+      scope,
+      value,
+    },
   });
-  if (result.status !== 0) {
+  const skipped = response.omitidos_por_seguridad || {};
+  if (Object.keys(skipped).length > 0) {
     throw new Error(
-      `No se pudo completar la limpieza ${operation}.\n${result.stdout || ''}\n${result.stderr || ''}`,
+      `La limpieza E2E acotada omitió registros por seguridad: ${JSON.stringify(skipped)}`,
     );
   }
-  return String(result.stdout || '').trim();
+  return response;
 }
 
-function cleanupFamilyByPrefix(prefix) {
+async function cleanupFamilyByPrefix(requestContext, prefix) {
   const value = String(prefix);
   if (!value.startsWith('PW E2E FAM ') && !value.startsWith('PW EE FAM ')) {
     throw new Error('La limpieza de familias solo admite prefijos de Playwright controlados.');
   }
-  return runDbCleanup('family-prefix', value);
+  return cleanupScope(requestContext, 'familia_prefijo', value);
 }
 
-function cleanupUsersByPrefix(prefix) {
+async function cleanupUsersByPrefix(requestContext, prefix) {
   if (!String(prefix).startsWith('pw_e2e_')) {
     throw new Error('La limpieza de usuarios solo admite el prefijo pw_e2e_.');
   }
-  return runDbCleanup('user-prefix', prefix);
+  return cleanupScope(requestContext, 'usuario_prefijo', String(prefix));
 }
 
-function cleanupLoginAuditByPrefix(prefix) {
+async function cleanupLoginAuditByPrefix(requestContext, prefix) {
   if (!String(prefix).startsWith('pw_e2e_')) {
     throw new Error('La limpieza de auditoría solo admite el prefijo pw_e2e_.');
   }
-  return runDbCleanup('login-prefix', prefix);
+  return cleanupScope(requestContext, 'login_prefijo', String(prefix));
 }
 
-function cleanupCategoriesByPrefix(prefix) {
+async function cleanupCategoriesByPrefix(requestContext, prefix) {
   const value = String(prefix);
   if (!value.startsWith('PW E2E CAT ') && !value.startsWith('PW EE CAT ')) {
     throw new Error('La limpieza de categorías solo admite prefijos de Playwright controlados.');
   }
-  return runDbCleanup('category-prefix', value);
+  return cleanupScope(requestContext, 'categoria_prefijo', value);
 }
 
-function cleanupDiscountsByThresholds(thresholds) {
+async function cleanupDiscountsByThresholds(requestContext, thresholds) {
   const values = Array.isArray(thresholds)
     ? [...new Set(thresholds.map(Number))].filter(
         (value) => Number.isInteger(value) && value >= 2 && value <= 50,
@@ -342,10 +354,10 @@ function cleanupDiscountsByThresholds(thresholds) {
   if (values.length === 0) {
     throw new Error('La limpieza de descuentos requiere umbrales válidos entre 2 y 50.');
   }
-  return runDbCleanup('discount-thresholds', values.join(','));
+  return cleanupScope(requestContext, 'descuentos_umbrales', values);
 }
 
-function readAuditActions(table, id) {
+async function readAuditActions(requestContext, table, id) {
   if (!['categorias', 'descuentos_familiares'].includes(String(table))) {
     throw new Error('Tabla de auditoría no permitida.');
   }
@@ -353,15 +365,39 @@ function readAuditActions(table, id) {
   if (!Number.isInteger(numericId) || numericId <= 0) {
     throw new Error('ID de auditoría inválido.');
   }
-  const output = runDbCleanup('audit-actions', `${table}:${numericId}`);
-  return output ? JSON.parse(output) : [];
+  const response = await apiCall(requestContext, 'e2e_auditoria', {
+    params: { tabla: table, id: numericId },
+  });
+  return response.items || [];
+}
+
+async function cleanupAllE2E(requestContext, session) {
+  return apiCall(requestContext, 'e2e_cleanup', {
+    method: 'POST',
+    data: { confirmacion: 'LIMPIAR_PLAYWRIGHT' },
+    ...(session ? { session } : {}),
+  });
+}
+
+async function e2eStatus(requestContext, session) {
+  return apiCall(requestContext, 'e2e_status', {
+    ...(session ? { session } : {}),
+  });
+}
+
+async function e2eSnapshot(requestContext, session) {
+  return apiCall(requestContext, 'e2e_snapshot', {
+    ...(session ? { session } : {}),
+  });
 }
 
 module.exports = {
   AUTH_FILE,
+  BASELINE_FILE,
   actionUrl,
   apiCall,
   apiResult,
+  cleanupAllE2E,
   cleanupCatalogByName,
   cleanupContableOptionByName,
   cleanupCategoriesByPrefix,
@@ -372,6 +408,9 @@ module.exports = {
   cleanupSocioById,
   cleanupUserByUsername,
   cleanupUsersByPrefix,
+  e2eRequestHeaders,
+  e2eSnapshot,
+  e2eStatus,
   closeApiSession,
   createApiSession,
   expectApiError,

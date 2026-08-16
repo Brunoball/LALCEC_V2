@@ -6,7 +6,9 @@ function categoryData() {
   return {
     suffix,
     textSuffix,
-    prefix: 'PW EE CAT ',
+    // Prefijo único de esta corrida. No termina en espacio: el backend aplica
+    // trim() al scope y exige conservar texto después de "PW EE CAT ".
+    prefix: `PW EE CAT ${textSuffix}`,
     nombre: `PW EE CAT ${textSuffix}`,
     nombreEditado: `PW EE CAT ${textSuffix} EDITADA`,
     descripcion: 'CATEGORÍA CREADA POR PLAYWRIGHT',

@@ -207,6 +207,9 @@ async function apiGetExportacion(action, params = {}) {
     headers: {
       Accept: "application/json",
       "X-Requested-With": "XMLHttpRequest",
+      ...(String(process.env.REACT_APP_E2E_HEADER || "").trim() === "PLAYWRIGHT"
+        ? { "X-LALCEC-E2E": "PLAYWRIGHT" }
+        : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });

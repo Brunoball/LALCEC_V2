@@ -6,6 +6,10 @@ const API_URL = /\/api\.php$/i.test(normalizedBaseUrl)
   ? normalizedBaseUrl
   : `${normalizedBaseUrl}/api.php`;
 
+const E2E_HEADER = String(process.env.REACT_APP_E2E_HEADER || "").trim();
+const e2eHeaders = () =>
+  E2E_HEADER === "PLAYWRIGHT" ? { "X-LALCEC-E2E": "PLAYWRIGHT" } : {};
+
 function buildUrl(action, params = {}) {
   const url = new URL(API_URL, window.location.origin);
   url.searchParams.set("action", action);
@@ -30,6 +34,7 @@ async function request(action, { method = "GET", params, body, signal } = {}) {
     credentials: "include",
     headers: {
       Accept: "application/json",
+      ...e2eHeaders(),
       ...(body ? { "Content-Type": "application/json" } : {}),
       ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
     },
@@ -85,6 +90,7 @@ export async function apiFormPost(action, formData, options = {}) {
     credentials: "include",
     headers: {
       Accept: "application/json",
+      ...e2eHeaders(),
       ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
     },
     body: formData,
@@ -120,6 +126,7 @@ export async function apiDownload(action, params = {}, options = {}) {
     signal: options.signal,
     credentials: "include",
     headers: {
+      ...e2eHeaders(),
       ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
     },
   });

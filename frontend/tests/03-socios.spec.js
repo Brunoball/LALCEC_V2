@@ -44,7 +44,7 @@ test.describe.configure({ retries: 1 });
 test.describe('Socios, empresas y familias', () => {
   test.afterEach(async ({ request }) => {
     try {
-      cleanupFamilyByPrefix(family.prefix);
+      await cleanupFamilyByPrefix(request, family.prefix);
     } catch (_error) {
       // La familia puede no haberse creado todavía.
     }
@@ -287,7 +287,7 @@ test.describe('Socios, empresas y familias', () => {
   });
 
   test('cubre el ciclo completo y elimina una familia sin borrar sus socios', async ({ page, request }) => {
-    cleanupFamilyByPrefix(family.prefix);
+    await cleanupFamilyByPrefix(request, family.prefix);
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
       documento: familyMember.dni,
@@ -560,7 +560,7 @@ test.describe('Socios, empresas y familias', () => {
       expect(partner.item.familia).toBeNull();
     }
 
-    cleanupFamilyByPrefix(family.prefix);
+    await cleanupFamilyByPrefix(request, family.prefix);
     await cleanupSocioByDocument(request, {
       tipo: 'PERSONA',
       documento: familyMember.dni,

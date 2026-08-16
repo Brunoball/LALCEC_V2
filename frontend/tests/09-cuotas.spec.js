@@ -145,12 +145,12 @@ function singlePaymentDialog(page, person) {
 test.describe('Cuotas de socios y empresas', () => {
   test.afterEach(async ({ request }) => {
     try {
-      cleanupFamilyByPrefix(family.prefix);
+      await cleanupFamilyByPrefix(request, family.prefix);
     } catch (_error) {
       // La familia puede no haberse creado todavía.
     }
     try {
-      cleanupDiscountsByThresholds([2]);
+      await cleanupDiscountsByThresholds(request, [2]);
     } catch (_error) {
       // Solo elimina la regla E2E, si llegó a crearse.
     }
@@ -677,7 +677,7 @@ test.describe('Cuotas de socios y empresas', () => {
           documento: historicalPricePerson.dni,
         }).catch(() => undefined);
       }
-      cleanupCategoriesByPrefix(historicalCategory.prefix);
+      await cleanupCategoriesByPrefix(request, historicalCategory.prefix);
     }
   });
 
@@ -946,7 +946,7 @@ test.describe('Cuotas de socios y empresas', () => {
     await expectApiError(
       request,
       'cuotas_contextos_pago',
-      { params: { id_socio: 1, anio: 'NO_VALIDO' } },
+      { params: { id_socio: 2147483647, anio: 'NO_VALIDO' } },
       { status: 422, code: 'VALIDATION_ERROR' },
     );
     await expectApiError(
@@ -955,6 +955,7 @@ test.describe('Cuotas de socios y empresas', () => {
       { method: 'POST', data: {} },
       { status: 422, code: 'VALIDATION_ERROR' },
     );
+    // Primero verificamos específicamente el contrato de medio inexistente.
     await expectApiError(
       request,
       'cuotas_registrar_pagos',
@@ -962,12 +963,46 @@ test.describe('Cuotas de socios y empresas', () => {
         method: 'POST',
         data: {
           fecha_pago: todayIso(),
-          id_medio_pago: 1,
+          id_medio_pago: 2147483647,
           pagos: [],
         },
       },
-      { status: 422, code: 'VALIDATION_ERROR' },
+      { status: 422, code: 'MEDIO_PAGO_INVALIDO' },
     );
+
+    // Para alcanzar la validación de "pagos obligatorios" usamos un medio creado
+    // por el propio E2E. Así la prueba no depende ni referencia catálogos reales.
+    const validationMediumName = `PW E2E MEDIO VALIDACION ${uniqueSuffix()}`;
+    let validationMedium = null;
+    try {
+      const createdMedium = await apiCall(request, 'configuracion_lista_guardar', {
+        method: 'POST',
+        data: { lista: 'medios_pago', nombre: validationMediumName },
+      });
+      validationMedium = createdMedium.item;
+
+      await expectApiError(
+        request,
+        'cuotas_registrar_pagos',
+        {
+          method: 'POST',
+          data: {
+            fecha_pago: todayIso(),
+            id_medio_pago: validationMedium.id_medio_pago,
+            pagos: [],
+          },
+        },
+        { status: 422, code: 'VALIDATION_ERROR' },
+      );
+    } finally {
+      if (validationMedium?.id_medio_pago) {
+        await apiCall(request, 'configuracion_lista_eliminar_definitivo', {
+          method: 'POST',
+          data: { lista: 'medios_pago', id: validationMedium.id_medio_pago },
+        }).catch(() => false);
+      }
+    }
+
     await expectApiError(
       request,
       'cuotas_eliminar_pago',

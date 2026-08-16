@@ -192,7 +192,7 @@ test.describe.configure({ timeout: 90000 });
 test.describe('Cuotas completas desde la interfaz', () => {
   test.afterEach(async ({ request }) => {
     try {
-      cleanupFamilyByPrefix(uiFamily.prefix);
+      await cleanupFamilyByPrefix(request, uiFamily.prefix);
     } catch (_error) {
       // La familia puede no haberse creado en el caso ejecutado.
     }
@@ -223,7 +223,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     }
 
     try {
-      cleanupCategoriesByPrefix(historicalCategoryName);
+      await cleanupCategoriesByPrefix(request, historicalCategoryName);
     } catch (_error) {
       // La categoría histórica sólo existe en su prueba específica.
     }

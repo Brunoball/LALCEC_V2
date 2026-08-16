@@ -4,6 +4,7 @@ const { userData } = require('./fixtures/usuarios.fixture');
 const {
   apiCall,
   cleanupCatalogByName,
+  cleanupCategoriesByPrefix,
   cleanupFamilyByPrefix,
   cleanupSocioByDocument,
   cleanupUsersByPrefix,
@@ -38,6 +39,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
     const family = familyData();
     const user = userData();
     const catalogName = `PW E2E MEDIO VISTA ${person.suffix}`;
+    const categoryPrefix = `PW E2E CAT VISTA ${person.suffix}`;
     let personItem;
     let companyItem;
     let familyItem;
@@ -55,11 +57,17 @@ test.describe('Permisos de usuario de solo lectura', () => {
       companyItem = await createCompany(request, company);
       familyItem = await createFamily(request, family, [personItem]);
       userItem = await createUser(request, user, { rol: 'vista' });
-      const categories = await apiCall(request, 'categorias_listar', {
-        params: { estado: 'activo' },
+      const categoryCreated = await apiCall(request, 'categorias_guardar', {
+        method: 'POST',
+        data: {
+          nombre: categoryPrefix,
+          descripcion: 'PW E2E CATEGORÍA EXCLUSIVA PARA PERMISOS VISTA',
+          monto_actual: 1000,
+          vigente_desde: '2000-01-01',
+        },
       });
-      categoryItem = (categories.items || [])[0];
-      expect(categoryItem).toBeTruthy();
+      categoryItem = categoryCreated.item;
+      expect(categoryItem?.id_categoria).toBeTruthy();
 
       viewSession = await createApiSession(request, {
         username: user.username,
@@ -129,36 +137,36 @@ test.describe('Permisos de usuario de solo lectura', () => {
           anio: new Date().getFullYear(),
           mes: new Date().getMonth() + 1,
         }],
-        ['cuotas_eliminar_pago', { id_pago: 1 }],
-        ['contable_opcion_guardar', { tipo: 'PROVEEDOR', nombre: 'NO PERMITIDO' }],
-        ['contable_opcion_cambiar_estado', { id_opcion: 1, activo: false }],
-        ['contable_opcion_eliminar', { id_opcion: 1 }],
-        ['contable_ingreso_guardar', { fecha: '2026-08-05', importe: 100 }],
-        ['contable_ingreso_eliminar', { id_ingreso: 1 }],
-        ['contable_egreso_guardar', { fecha: '2026-08-05', importe: 100 }],
-        ['contable_egreso_eliminar', { id_egreso: 1 }],
-        ['socios_guardar', { tipo_socio: 'PERSONA' }],
+        ['cuotas_eliminar_pago', { id_pago: 2147483647 }],
+        ['contable_opcion_guardar', { tipo: 'PROVEEDOR', nombre: 'PW E2E NO PERMITIDO' }],
+        ['contable_opcion_cambiar_estado', { id_opcion: 2147483647, activo: false }],
+        ['contable_opcion_eliminar', { id_opcion: 2147483647 }],
+        ['contable_ingreso_guardar', { fecha: '2026-08-05', importe: 100, detalle: 'PW E2E NO PERMITIDO' }],
+        ['contable_ingreso_eliminar', { id_ingreso: 2147483647 }],
+        ['contable_egreso_guardar', { fecha: '2026-08-05', importe: 100, detalle: 'PW E2E NO PERMITIDO' }],
+        ['contable_egreso_eliminar', { id_egreso: 2147483647 }],
+        ['socios_guardar', { tipo_socio: 'PERSONA', apellido: 'PW E2E NO PERMITIDO' }],
         ['socios_eliminar', { id: personItem.id_socio }],
         ['socios_eliminar_definitivo', { id: personItem.id_socio, confirmacion: 'ELIMINAR' }],
         ['socios_reactivar', { id: personItem.id_socio }],
-        ['familias_guardar', { nombre: 'NO PERMITIDA', integrantes: [] }],
+        ['familias_guardar', { nombre: 'PW E2E FAM NO PERMITIDA', integrantes: [] }],
         ['familias_eliminar', { id: familyItem.id_familia }],
         ['familias_eliminar_definitivo', {
           id: familyItem.id_familia,
           confirmacion: 'ELIMINAR',
         }],
         ['familias_reactivar', { id: familyItem.id_familia }],
-        ['categorias_guardar', { nombre: 'NO PERMITIDA', monto_actual: 1000, vigente_desde: '2026-08-04' }],
+        ['categorias_guardar', { nombre: 'PW E2E CAT NO PERMITIDA', monto_actual: 1000, vigente_desde: '2026-08-04' }],
         ['categorias_eliminar', { id: categoryItem.id_categoria }],
         ['categorias_reactivar', { id: categoryItem.id_categoria }],
-        ['descuentos_familiares_guardar', { cantidad_integrantes_desde: 49, cantidad_integrantes_hasta: 49, porcentaje_descuento: 10 }],
-        ['descuentos_familiares_eliminar', { id: 1 }],
-        ['configuracion_lista_guardar', { lista: 'medios_pago', nombre: 'NO PERMITIDO' }],
+        ['descuentos_familiares_guardar', { cantidad_integrantes_desde: 49, cantidad_integrantes_hasta: 49, porcentaje_descuento: 10, descripcion: 'PW E2E NO PERMITIDO' }],
+        ['descuentos_familiares_eliminar', { id: 2147483647 }],
+        ['configuracion_lista_guardar', { lista: 'medios_pago', nombre: 'PW E2E NO PERMITIDO' }],
         ['configuracion_lista_eliminar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['configuracion_lista_baja', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['configuracion_lista_reactivar', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
         ['configuracion_lista_eliminar_definitivo', { lista: 'medios_pago', id: catalogItem.id_medio_pago }],
-        ['usuarios_guardar', { usuario: 'no_permitido' }],
+        ['usuarios_guardar', { usuario: 'pw_e2e_no_permitido' }],
         ['usuarios_cambiar_estado', { id: userItem.id, activo: false }],
         ['usuarios_eliminar', { id: userItem.id }],
       ];
@@ -283,7 +291,7 @@ test.describe('Permisos de usuario de solo lectura', () => {
       if (context) await context.close().catch(() => undefined);
       await closeApiSession(request, viewSession).catch(() => undefined);
       try {
-        cleanupFamilyByPrefix(family.prefix);
+        await cleanupFamilyByPrefix(request, family.prefix);
       } catch (_error) {
         // Puede no haberse creado.
       }
@@ -295,9 +303,10 @@ test.describe('Permisos de usuario de solo lectura', () => {
         tipo: 'EMPRESA',
         documento: company.cuit,
       }).catch(() => false);
+      await cleanupCategoriesByPrefix(request, categoryPrefix).catch(() => false);
       await cleanupCatalogByName(request, 'medios_pago', catalogName).catch(() => false);
       try {
-        cleanupUsersByPrefix(user.username);
+        await cleanupUsersByPrefix(request, user.username);
       } catch (_error) {
         // La limpieza directa está limitada al entorno local.
       }

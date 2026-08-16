@@ -32,10 +32,10 @@ const privateRoutes = [
 ];
 
 test.describe('Login y sesión', () => {
-  test.afterEach(() => {
+  test.afterEach(async ({ request }) => {
     for (const prefix of ['pw_e2e_invalido_', 'pw_e2e_largo', 'pw_e2e_lock_']) {
       try {
-        cleanupLoginAuditByPrefix(prefix);
+        await cleanupLoginAuditByPrefix(request, prefix);
       } catch (_error) {
         // La limpieza directa solo se habilita en el entorno local de testing.
       }

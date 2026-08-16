@@ -10,7 +10,7 @@ const apiBase = String(
 ).replace(/\/+$/, '');
 const backendHealthUrl =
   process.env.PW_BACKEND_HEALTH_URL ||
-  `${/\/api\.php$/i.test(apiBase) ? apiBase : `${apiBase}/api.php`}?action=dashboard_resumen`;
+  `${/\/api\.php$/i.test(apiBase) ? apiBase : `${apiBase}/api.php`}?action=health`;
 
 const webServer = [];
 if (envBoolean('PW_START_BACKEND', true)) {
@@ -20,7 +20,7 @@ if (envBoolean('PW_START_BACKEND', true)) {
       'php -S localhost:3001',
     cwd: path.resolve(__dirname, process.env.PW_BACKEND_DIR || '../backend'),
     url: backendHealthUrl,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: 'ignore',
     stderr: 'ignore',
@@ -31,7 +31,7 @@ if (envBoolean('PW_START_FRONTEND', true)) {
     command: process.env.PW_FRONTEND_COMMAND || 'npm start',
     cwd: __dirname,
     url: baseURL,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 180_000,
     stdout: 'ignore',
     stderr: 'ignore',
@@ -64,6 +64,7 @@ module.exports = defineConfig({
     timezoneId: 'America/Argentina/Cordoba',
     viewport: { width: 1440, height: 900 },
     ignoreHTTPSErrors: true,
+    userAgent: 'LALCEC-PLAYWRIGHT-E2E/1.0',
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
     screenshot: 'only-on-failure',

@@ -62,14 +62,14 @@ test.describe('Categorías y descuentos familiares', () => {
   const category = categoryData();
   const discounts = discountData();
 
-  test.beforeAll(() => {
-    cleanupCategoriesByPrefix(category.prefix);
-    cleanupDiscountsByThresholds(discounts.thresholds);
+  test.beforeEach(async ({ request }) => {
+    await cleanupCategoriesByPrefix(request, category.prefix);
+    await cleanupDiscountsByThresholds(request, discounts.thresholds);
   });
 
-  test.afterAll(() => {
-    cleanupCategoriesByPrefix(category.prefix);
-    cleanupDiscountsByThresholds(discounts.thresholds);
+  test.afterEach(async ({ request }) => {
+    await cleanupCategoriesByPrefix(request, category.prefix);
+    await cleanupDiscountsByThresholds(request, discounts.thresholds);
   });
 
   test('cubre alta, edición, historial, búsqueda, baja, reactivación y auditoría de categorías', async ({ page, request }) => {
@@ -190,7 +190,7 @@ test.describe('Categorías y descuentos familiares', () => {
       { status: 409, code: 'ESTADO_SIN_CAMBIOS' },
     );
 
-    const audit = readAuditActions('categorias', created.id_categoria);
+    const audit = await readAuditActions(request, 'categorias', created.id_categoria);
     expect(auditActionNames(audit)).toEqual(
       expect.arrayContaining(['CREAR', 'EDITAR', 'DAR_BAJA', 'REACTIVAR']),
     );
@@ -263,6 +263,7 @@ test.describe('Categorías y descuentos familiares', () => {
           porcentaje_descuento: '10',
           vigencia_desde: discounts.vigenciaDesde,
           vigencia_hasta: discounts.vigenciaHasta,
+          descripcion: 'PW E2E VALIDACIÓN DESCUENTO',
         },
       },
       { status: 409, code: 'DESCUENTO_FAMILIAR_DUPLICADO' },
@@ -278,6 +279,7 @@ test.describe('Categorías y descuentos familiares', () => {
           porcentaje_descuento: '10',
           vigencia_desde: discounts.vigenciaDesde,
           vigencia_hasta: discounts.vigenciaHasta,
+          descripcion: 'PW E2E VALIDACIÓN DESCUENTO',
         },
       },
       { status: 409, code: 'DESCUENTO_FAMILIAR_DUPLICADO' },
@@ -290,6 +292,7 @@ test.describe('Categorías y descuentos familiares', () => {
         data: {
           cantidad_integrantes_desde: 1,
           porcentaje_descuento: '10',
+          descripcion: 'PW E2E VALIDACIÓN DESCUENTO',
         },
       },
       { status: 422, code: 'VALIDATION_ERROR' },
@@ -302,6 +305,7 @@ test.describe('Categorías y descuentos familiares', () => {
         data: {
           cantidad_integrantes_desde: 49,
           porcentaje_descuento: '101',
+          descripcion: 'PW E2E VALIDACIÓN DESCUENTO',
         },
       },
       { status: 422, code: 'VALIDATION_ERROR' },
@@ -321,9 +325,9 @@ test.describe('Categorías y descuentos familiares', () => {
     const historyRow = tableRow(page, 'Descuentos familiares', `DESDE ${discounts.second.desde} INTEGRANTES`);
     await expect(historyRow).toContainText('HISTÓRICO');
 
-    const firstAudit = readAuditActions('descuentos_familiares', firstCreated.id_descuento_familiar);
+    const firstAudit = await readAuditActions(request, 'descuentos_familiares', firstCreated.id_descuento_familiar);
     expect(auditActionNames(firstAudit)).toEqual(expect.arrayContaining(['CREAR', 'EDITAR']));
-    const secondAudit = readAuditActions('descuentos_familiares', secondCreated.id_descuento_familiar);
+    const secondAudit = await readAuditActions(request, 'descuentos_familiares', secondCreated.id_descuento_familiar);
     expect(auditActionNames(secondAudit)).toEqual(expect.arrayContaining(['CREAR', 'ELIMINAR']));
   });
 });

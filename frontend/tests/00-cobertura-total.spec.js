@@ -101,6 +101,16 @@ function applicationRoutes() {
   return [...new Set(routes)].sort();
 }
 
+
+const E2E_INFRA_ACTIONS = new Set([
+  'e2e_auditoria',
+  'e2e_cleanup',
+  'e2e_cleanup_scope',
+  'e2e_guard_probe',
+  'e2e_snapshot',
+  'e2e_status',
+]);
+
 const REQUIRED_UI_ACTION_MARKERS = [
   'Abrir menú',
   'Un clic para desplegar; doble clic para ingresar',
@@ -271,11 +281,21 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(authFixtureSource).toContain('await ensureAuthSession(request)');
   });
 
-  test('cada acción registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {
+  test('cada acción funcional registrada por el backend administrativo, incluido health, aparece cubierta por la suite', () => {
     expect(fs.existsSync(BACKEND_ROOT), `No se encontró el backend en ${BACKEND_ROOT}`).toBe(true);
     const source = scenarioSources();
-    const missing = backendActions().filter((action) => !source.includes(action));
+    const missing = backendActions()
+      .filter((action) => !E2E_INFRA_ACTIONS.has(action))
+      .filter((action) => !source.includes(action));
     expect(missing, `Acciones backend sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  test('la infraestructura E2E registrada por el backend está ejercitada por setup, teardown o helpers', () => {
+    const backend = new Set(backendActions());
+    const source = testSources();
+    const registered = [...E2E_INFRA_ACTIONS].filter((action) => backend.has(action));
+    const missing = registered.filter((action) => !source.includes(action));
+    expect(missing, `Infraestructura E2E sin uso declarado: ${missing.join(', ')}`).toEqual([]);
   });
 
   test('cada acción usada por el frontend administrativo existe en el backend y está cubierta', () => {

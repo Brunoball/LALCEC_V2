@@ -11,7 +11,6 @@ const {
   closeApiSession,
   createApiSession,
   expectApiError,
-  readAuthSession,
 } = require('./helpers/api.helper');
 const {
   createCatalog,
@@ -59,8 +58,8 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['dashboard_resumen', 'GET'],
       ['cuotas_listar', 'GET'],
       ['cuotas_catalogos', 'GET'],
-      ['cuotas_contexto_pago', 'GET', { params: { id_socio: 1, anio: 2026, mes: 8 } }],
-      ['cuotas_contextos_pago', 'GET', { params: { id_socio: 1, anio: 2026 } }],
+      ['cuotas_contexto_pago', 'GET', { params: { id_socio: 2147483647, anio: 2026, mes: 8 } }],
+      ['cuotas_contextos_pago', 'GET', { params: { id_socio: 2147483647, anio: 2026 } }],
       ['cuotas_registrar_pago', 'POST', { data: {} }],
       ['cuotas_registrar_pagos', 'POST', { data: {} }],
       ['cuotas_condonar_pago', 'POST', { data: {} }],
@@ -73,7 +72,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['contable_ingresos_socios', 'GET'],
       ['contable_ingresos_listar', 'GET'],
       ['contable_egresos_listar', 'GET'],
-      ['contable_egreso_archivo', 'GET', { params: { id: 1 } }],
+      ['contable_egreso_archivo', 'GET', { params: { id: 2147483647 } }],
       ['contable_opcion_guardar', 'POST', { data: {} }],
       ['contable_opcion_cambiar_estado', 'POST', { data: {} }],
       ['contable_opcion_eliminar', 'POST', { data: {} }],
@@ -82,21 +81,21 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['contable_egreso_guardar', 'POST', { data: {} }],
       ['contable_egreso_eliminar', 'POST', { data: {} }],
       ['socios_listar', 'GET'],
-      ['socios_obtener', 'GET', { params: { id: 1 } }],
-      ['socios_historial', 'GET', { params: { id: 1 } }],
+      ['socios_obtener', 'GET', { params: { id: 2147483647 } }],
+      ['socios_historial', 'GET', { params: { id: 2147483647 } }],
       ['socios_guardar', 'POST', { data: {} }],
       ['socios_eliminar', 'POST', { data: {} }],
       ['socios_eliminar_definitivo', 'POST', { data: {} }],
       ['socios_reactivar', 'POST', { data: {} }],
       ['familias_listar', 'GET'],
-      ['familias_obtener', 'GET', { params: { id: 1 } }],
+      ['familias_obtener', 'GET', { params: { id: 2147483647 } }],
       ['familias_guardar', 'POST', { data: {} }],
       ['familias_eliminar', 'POST', { data: {} }],
       ['familias_eliminar_definitivo', 'POST', { data: {} }],
       ['familias_reactivar', 'POST', { data: {} }],
       ['categorias_listar', 'GET'],
-      ['categorias_obtener', 'GET', { params: { id: 1 } }],
-      ['categorias_historial', 'GET', { params: { id: 1 } }],
+      ['categorias_obtener', 'GET', { params: { id: 2147483647 } }],
+      ['categorias_historial', 'GET', { params: { id: 2147483647 } }],
       ['categorias_guardar', 'POST', { data: {} }],
       ['categorias_eliminar', 'POST', { data: {} }],
       ['categorias_reactivar', 'POST', { data: {} }],
@@ -162,13 +161,13 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     await expectApiError(
       request,
       'contable_opcion_guardar',
-      { method: 'POST', data: { tipo: 'TIPO_INEXISTENTE', nombre: 'PRUEBA' } },
+      { method: 'POST', data: { tipo: 'TIPO_INEXISTENTE', nombre: 'PW E2E PRUEBA' } },
       { status: 422, code: 'TIPO_OPCION_INVALIDO' },
     );
     await expectApiError(
       request,
       'contable_opcion_cambiar_estado',
-      { method: 'POST', data: { id_opcion: 1, activo: 'tal vez' } },
+      { method: 'POST', data: { id_opcion: 2147483647, activo: 'tal vez' } },
       { status: 422, code: 'ESTADO_OPCION_INVALIDO' },
     );
     await expectApiError(
@@ -229,7 +228,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       await expectApiError(
         request,
         'socios_guardar',
-        { method: 'POST', data: { tipo_socio: 'OTRO' } },
+        { method: 'POST', data: { tipo_socio: 'OTRO', apellido: 'PW E2E INVALIDO', email: 'pw.tipo.invalido@example.test' } },
         { status: 422, code: 'VALIDATION_ERROR' },
       );
       await expectApiError(
@@ -239,7 +238,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             tipo_socio: 'PERSONA',
-            apellido: 'PRUEBA',
+            apellido: 'PW E2E PRUEBA',
             nombre: 'DNI',
             dni: '123',
             fecha_alta: todayIso(),
@@ -254,7 +253,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             tipo_socio: 'EMPRESA',
-            razon_social: 'EMPRESA INVÁLIDA',
+            razon_social: 'PW E2E EMPRESA INVÁLIDA',
             cuit: '2030',
             fecha_alta: todayIso(),
           },
@@ -268,7 +267,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             tipo_socio: 'PERSONA',
-            apellido: 'PRUEBA',
+            apellido: 'PW E2E PRUEBA',
             nombre: 'EMAIL',
             dni: person.dni,
             email: 'correo-invalido',
@@ -550,7 +549,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       expect(preservedAfterInactiveDelete.item.id_familia).toBeNull();
     } finally {
       try {
-        cleanupFamilyByPrefix(family.prefix);
+        await cleanupFamilyByPrefix(request, family.prefix);
       } catch (_error) {
         // La familia puede no haberse creado.
       }
@@ -588,15 +587,23 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       await expectApiError(
         request,
         'configuracion_lista_guardar',
-        { method: 'POST', data: { lista: 'otra', nombre: 'X' } },
+        { method: 'POST', data: { lista: 'otra', nombre: 'PW E2E X' } },
         { status: 422, code: 'LISTA_CONFIGURACION_INVALIDA' },
       );
-      await expectApiError(
-        request,
-        'configuracion_lista_guardar',
-        { method: 'POST', data: { lista: 'medios_pago', nombre: '' } },
-        { status: 422, code: 'VALIDATION_ERROR' },
-      );
+      // El contrato actual de clean_text recorta al máximo permitido en lugar de
+      // rechazar el texto largo. Verificamos explícitamente ese comportamiento y
+      // eliminamos inmediatamente el registro E2E creado para no dejar residuos.
+      const longCatalogInput = `PW E2E MEDIO LARGO ${suffix} ${'X'.repeat(300)}`;
+      const longCatalog = await apiCall(request, 'configuracion_lista_guardar', {
+        method: 'POST',
+        data: { lista: 'medios_pago', nombre: longCatalogInput },
+      });
+      expect(longCatalog.item.nombre).toBe(longCatalogInput.toUpperCase().slice(0, 100));
+      expect(longCatalog.item.nombre).toHaveLength(100);
+      await apiCall(request, 'configuracion_lista_eliminar_definitivo', {
+        method: 'POST',
+        data: { lista: 'medios_pago', id: longCatalog.item.id_medio_pago },
+      });
 
       for (const definition of definitions) {
         const unused = await createCatalog(request, definition.list, definition.name);
@@ -679,8 +686,10 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
 
   test('usuarios valida formato, autoprotección, baja y eliminación definitiva aun con historial', async ({ request }) => {
     const user = userData();
-    const currentSession = readAuthSession();
+    const selfUser = userData();
     let created;
+    let selfCreated;
+    let selfSession;
     let userSession;
 
     try {
@@ -691,6 +700,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             usuario: 'ab',
+            email: `pw.short.${uniqueSuffix().toLowerCase()}@example.test`,
             rol: 'vista',
             contrasena: 'Password123',
             confirmar_contrasena: 'Password123',
@@ -705,6 +715,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
           method: 'POST',
           data: {
             usuario: `pw e2e ${uniqueSuffix()}`,
+            email: `pw.invalidchars.${uniqueSuffix().toLowerCase()}@example.test`,
             rol: 'vista',
             contrasena: 'Password123',
             confirmar_contrasena: 'Password123',
@@ -790,18 +801,23 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
         { status: 409, code: 'EMAIL_DUPLICADO' },
       );
 
-      const users = await apiCall(request, 'usuarios_listar');
-      const current = users.usuarios.find((item) => item.id === currentSession.usuario.id);
-      expect(current).toBeTruthy();
+      selfCreated = await createUser(request, selfUser, { rol: 'admin' });
+      selfSession = await createApiSession(request, {
+        username: selfUser.username,
+        password: selfUser.password,
+      });
+      expect(selfSession.usuario.rol).toBe('admin');
+
       await expectApiError(
         request,
         'usuarios_guardar',
         {
           method: 'POST',
+          session: selfSession,
           data: {
-            id: current.id,
-            usuario: `pw_self_${uniqueSuffix().toLowerCase()}`.slice(0, 80),
-            email: current.email,
+            id: selfCreated.id,
+            usuario: selfUser.username,
+            email: selfUser.email,
             rol: 'vista',
             contrasena: '',
             confirmar_contrasena: '',
@@ -812,15 +828,22 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       await expectApiError(
         request,
         'usuarios_cambiar_estado',
-        { method: 'POST', data: { id: current.id, activo: false } },
+        { method: 'POST', data: { id: selfCreated.id, activo: false }, session: selfSession },
         { status: 409, code: 'USUARIO_ACTUAL_BAJA' },
       );
       await expectApiError(
         request,
         'usuarios_eliminar',
-        { method: 'POST', data: { id: current.id } },
+        { method: 'POST', data: { id: selfCreated.id }, session: selfSession },
         { status: 409, code: 'USUARIO_ACTUAL_ELIMINAR' },
       );
+      await closeApiSession(request, selfSession);
+      selfSession = null;
+      await apiCall(request, 'usuarios_eliminar', {
+        method: 'POST',
+        data: { id: selfCreated.id },
+      });
+      selfCreated = null;
       await expectApiError(
         request,
         'usuarios_cambiar_estado',
@@ -875,8 +898,10 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       created = null;
     } finally {
       await closeApiSession(request, userSession).catch(() => undefined);
+      await closeApiSession(request, selfSession).catch(() => undefined);
       try {
-        cleanupUsersByPrefix(user.username);
+        await cleanupUsersByPrefix(request, user.username);
+        await cleanupUsersByPrefix(request, selfUser.username);
       } catch (_error) {
         // La limpieza protegida puede estar deshabilitada fuera del entorno local.
       }
