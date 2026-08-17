@@ -67,6 +67,13 @@
   max-width: 140px;
 }
 
+.socios-headFilters .module-filter--select.socios-filter--notice {
+  flex: 0 0 110px;
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+}
+
 /* Indicador visual del estado de cuotas, equivalente a la barra del sistema
    anterior: verde = al día, amarillo = 1-2 pendientes, rojo = 3 o más. */
 .socios-payment-health-row {

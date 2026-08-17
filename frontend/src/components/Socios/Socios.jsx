@@ -1509,7 +1509,7 @@ export default function Socios({ tipo = PERSON }) {
             key: "recordatorio",
             label: "Avisos",
             type: "select",
-            className: "socios-filter--compact",
+            className: "socios-filter--notice",
             placeholder: "Todos",
             value: reminderStatus,
             onChange: (value) => {
