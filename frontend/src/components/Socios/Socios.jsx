@@ -1464,6 +1464,7 @@ export default function Socios({ tipo = PERSON }) {
             key: "categoria",
             label: "Categoría",
             type: "select",
+            className: "socios-filter--compact",
             placeholder: "Todas",
             value: category,
             onChange: (value) => {
@@ -1479,6 +1480,7 @@ export default function Socios({ tipo = PERSON }) {
             key: "medio_pago",
             label: "Medio de pago",
             type: "select",
+            className: "socios-filter--medium",
             placeholder: "Todos",
             value: paymentMethod,
             onChange: (value) => {
@@ -1494,6 +1496,7 @@ export default function Socios({ tipo = PERSON }) {
             key: "estado_cuota",
             label: "Estado de cuotas",
             type: "select",
+            className: "socios-filter--medium",
             placeholder: "Todos",
             value: paymentStatus,
             onChange: (value) => {
@@ -1506,6 +1509,7 @@ export default function Socios({ tipo = PERSON }) {
             key: "recordatorio",
             label: "Avisos",
             type: "select",
+            className: "socios-filter--compact",
             placeholder: "Todos",
             value: reminderStatus,
             onChange: (value) => {
@@ -1610,38 +1614,40 @@ export default function Socios({ tipo = PERSON }) {
           />
         </GlobalDivTable>
 
-        {!isInactive ? (
-          <div
-            className="socios-payment-health-legend"
-            aria-label="Referencia de estado de pago"
-          >
-            <strong>ESTADO DE PAGO</strong>
-            <span>
-              <i className="is-paid-up" aria-hidden="true" />
-              AL DÍA
-            </span>
-            <span>
-              <i className="is-warning" aria-hidden="true" />
-              DEBE 1-2 MESES
-            </span>
-            <span>
-              <i className="is-danger" aria-hidden="true" />
-              DEBE 3 MESES O MÁS
-            </span>
-          </div>
-        ) : null}
-
         {Number(paginacion?.total || 0) > 0 ? (
           <nav
             className="socios-pagination"
             aria-label={`Paginación de ${title.toLowerCase()}`}
           >
-            <p className="socios-pagination__summary">
-              Mostrando <strong>{paginacion.desde}</strong>–
-              <strong>{paginacion.hasta}</strong> de{" "}
-              <strong>{paginacion.total}</strong> {title.toLowerCase()}
-              {loading ? <span>Cargando página...</span> : null}
-            </p>
+            <div className="socios-pagination__info">
+              <p className="socios-pagination__summary">
+                Mostrando <strong>{paginacion.desde}</strong>–
+                <strong>{paginacion.hasta}</strong> de{" "}
+                <strong>{paginacion.total}</strong> {title.toLowerCase()}
+                {loading ? <span>Cargando página...</span> : null}
+              </p>
+
+              {!isInactive ? (
+                <div
+                  className="socios-payment-health-legend"
+                  aria-label="Referencia de estado de pago"
+                >
+                  <strong>ESTADO DE PAGO</strong>
+                  <span className="is-paid-up">
+                    <i className="is-paid-up" aria-hidden="true" />
+                    AL DÍA
+                  </span>
+                  <span className="is-warning">
+                    <i className="is-warning" aria-hidden="true" />
+                    DEBE 1-2 MESES
+                  </span>
+                  <span className="is-danger">
+                    <i className="is-danger" aria-hidden="true" />
+                    DEBE 3 MESES O MÁS
+                  </span>
+                </div>
+              ) : null}
+            </div>
 
             <div className="socios-pagination__controls">
               <button
