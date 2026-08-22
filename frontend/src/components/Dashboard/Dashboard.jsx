@@ -283,7 +283,12 @@ export default function Dashboard() {
           </aside>
         </div>
 
-
+        <footer className="admin-dashboard__footer">
+          Desarrollado por{" "}
+          <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer">
+            3devs.solutions
+          </a>
+        </footer>
       </div>
     </section>
   );
