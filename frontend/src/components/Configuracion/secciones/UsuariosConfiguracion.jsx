@@ -524,11 +524,15 @@ export default function UsuariosConfiguracion({ onBack }) {
               active={Boolean(form.usuario)}
             >
               <input
+                className="config-usersForm__freeCaseInput"
+                data-preserve-case="true"
                 value={form.usuario}
                 placeholder=" "
                 onChange={(event) => updateForm("usuario", event.target.value)}
                 maxLength={100}
                 autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 required
                 autoFocus
               />

@@ -416,6 +416,10 @@
   gap: 5px;
 }
 
+.config-usersForm__freeCaseInput {
+  text-transform: none !important;
+}
+
 .config-usersForm .entity-floating-field > span > svg {
   width: 10px;
   color: currentColor;

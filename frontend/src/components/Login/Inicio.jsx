@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import Toast from "../Global/Toast";
 import { apiPost } from "../_shared/api/apiClient";
 import { saveSession } from "../_shared/auth/session";
 import lalcecBanner from "../../imagenes/lalcec_banner.png";
@@ -58,14 +59,35 @@ export default function Inicio() {
   const [recordarCuenta, setRecordarCuenta] = useState(Boolean(rememberedAccount));
   const [visible, setVisible] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [mensaje, setMensaje] = useState("");
+  const [toast, setToast] = useState(null);
 
   const ingresar = async (event) => {
     event.preventDefault();
-    setMensaje("");
+    setToast(null);
+
+    const usuarioLimpio = usuario.trim();
+
+    if (!usuarioLimpio && !contrasena) {
+      setToast({
+        tipo: "advertencia",
+        mensaje: "Ingresá tu usuario y contraseña.",
+      });
+      return;
+    }
+
+    if (!usuarioLimpio) {
+      setToast({ tipo: "advertencia", mensaje: "Ingresá tu usuario." });
+      return;
+    }
+
+    if (!contrasena) {
+      setToast({ tipo: "advertencia", mensaje: "Ingresá tu contraseña." });
+      return;
+    }
+
     setCargando(true);
     try {
-      const data = await apiPost("auth_login", { usuario: usuario.trim(), contrasena });
+      const data = await apiPost("auth_login", { usuario: usuarioLimpio, contrasena });
       saveSession({
         token: data.token,
         expira_en: data.expira_en,
@@ -74,14 +96,17 @@ export default function Inicio() {
       });
 
       if (recordarCuenta) {
-        saveRememberedAccount(usuario.trim(), contrasena);
+        saveRememberedAccount(usuarioLimpio, contrasena);
       } else {
         clearRememberedAccount();
       }
 
       navigate("/panel", { replace: true });
     } catch (error) {
-      setMensaje(error.message || "No se pudo iniciar sesión.");
+      setToast({
+        tipo: "error",
+        mensaje: error.message || "No se pudo iniciar sesión.",
+      });
     } finally {
       setCargando(false);
     }
@@ -89,6 +114,14 @@ export default function Inicio() {
 
   return (
     <div className="ini_contenedor-principal">
+      {toast ? (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          onClose={() => setToast(null)}
+        />
+      ) : null}
+
       <main className="ini_login-shell" aria-label={`Acceso a ${APP_NAME}`}>
         <section className="ini_brand-panel">
           <div className="ini_brand-glow" aria-hidden="true" />
@@ -113,10 +146,10 @@ export default function Inicio() {
             </div>
             <form className="ini_formulario" onSubmit={ingresar}>
               <div className="ini_campo">
-                <input className="ini_input" value={usuario} onChange={(e) => setUsuario(e.target.value)} placeholder="Usuario" autoComplete="username" required maxLength={100} autoFocus />
+                <input className="ini_input" value={usuario} onChange={(e) => setUsuario(e.target.value)} placeholder="Usuario" autoComplete="username" maxLength={100} autoFocus />
               </div>
               <div className="ini_campo ini_campo-password">
-                <input className="ini_input" type={visible ? "text" : "password"} value={contrasena} onChange={(e) => setContrasena(e.target.value)} placeholder="Contraseña" autoComplete="current-password" required maxLength={255} />
+                <input className="ini_input" type={visible ? "text" : "password"} value={contrasena} onChange={(e) => setContrasena(e.target.value)} placeholder="Contraseña" autoComplete="current-password" maxLength={255} />
                 <button type="button" className="ini_toggle-password" onClick={() => setVisible((value) => !value)} aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
                   aria-pressed={visible}>
                   <FontAwesomeIcon icon={visible ? faEyeSlash : faEye} />
@@ -137,7 +170,6 @@ export default function Inicio() {
                   <span>Recordar cuenta</span>
                 </label>
               </div>
-              {mensaje ? <p className="ini_mensaje-error">{mensaje}</p> : null}
               <button className="ini_boton" type="submit" disabled={cargando}>{cargando ? "Ingresando..." : "Ingresar"}</button>
             </form>
           </div>
