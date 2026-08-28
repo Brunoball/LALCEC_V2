@@ -141,18 +141,35 @@ test.describe('Contabilidad completa desde la interfaz', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           exito: true,
-          items: [{
-            id_pago: 930001,
-            fecha: date,
-            socio: 'PW E2E SOCIO CONTABLE',
-            dni: '99999991',
-            categoria: 'PW E2E CATEGORÍA SOCIO',
-            periodo: `${String(month).padStart(2, '0')}/${year}`,
-            medio: 'EFECTIVO',
-            monto: '1234.56',
-            monto_estimado: false,
-          }],
-          resumen: { registros: 1, importe: '1234.56', estimados: 0, categorias: [] },
+          items: [
+            {
+              id_pago: 930001,
+              fecha: date,
+              socio: 'PW E2E SOCIO CONTABLE',
+              dni: '99999991',
+              categoria: 'PW E2E CATEGORÍA SOCIO',
+              periodo: `${String(month).padStart(2, '0')}/${year}`,
+              medio: 'EFECTIVO',
+              monto: '1234.56',
+              tipo_pago: 'MONTO_PERSONALIZADO',
+              porcentaje_descuento_familiar: null,
+              monto_estimado: false,
+            },
+            {
+              id_pago: 930002,
+              fecha: date,
+              socio: 'PW E2E SOCIO FAMILIAR',
+              dni: '99999992',
+              categoria: 'PW E2E CATEGORÍA SOCIO',
+              periodo: `${String(month).padStart(2, '0')}/${year}`,
+              medio: 'EFECTIVO',
+              monto: '1000.00',
+              tipo_pago: 'DESCUENTO_FAMILIAR',
+              porcentaje_descuento_familiar: '12.50',
+              monto_estimado: false,
+            },
+          ],
+          resumen: { registros: 2, importe: '2234.56', estimados: 0, categorias: [] },
         }),
       });
     });
@@ -165,6 +182,8 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     await expect(table).toContainText('PW E2E CATEGORÍA SOCIO');
     await expect(table).toContainText('EFECTIVO');
     await expect(table).toContainText('1.234,56');
+    await expect(table).toContainText('Monto personalizado');
+    await expect(table).toContainText('Desc. familiar 12,5%');
 
     const exportButton = page.getByRole('button', { name: 'Exportar', exact: true }).first();
     await exportFromGlobalModal(page, {

@@ -304,19 +304,28 @@ const isUnavailablePrincipal = (principal) =>
   principal.puede_pagar === "0" ||
   principal.disponible === false;
 
-const familyTargetsForMonths = (periodMap, monthIds) =>
+const familyTargetsForMonths = (periodMap, monthIds, monthAmounts = {}) =>
   monthIds.reduce((targets, monthId) => {
     const context = periodMap[String(monthId)]?.context;
     const members = Array.isArray(context?.familia?.integrantes)
       ? context.familia.integrantes
       : [];
+    const amountState = monthAmounts?.[String(monthId)] || {};
+    const customAmount = amountState.personalizado
+      ? Number(decimalInput(amountState.monto))
+      : null;
+    const hasValidCustomAmount =
+      Number.isFinite(customAmount) && Number(customAmount) > 0;
 
     members.forEach((member) => {
       if (member?.puede_pagar) {
         targets.push({
           id_socio: Number(member.id_socio),
           mes: Number(monthId),
-          monto: Number(member.monto_sugerido || 0),
+          monto: hasValidCustomAmount
+            ? Number(customAmount)
+            : Number(member.monto_sugerido || 0),
+          monto_personalizado: hasValidCustomAmount,
         });
       }
     });
@@ -672,6 +681,10 @@ export default function Cuotas() {
   const pendingTableScrollRef = useRef(null);
   const totalsRequestId = useRef(0);
   const selectAllRequestId = useRef(0);
+  // setSaving(true) recién deshabilita el botón en el siguiente render.
+  // Este ref se actualiza de forma sincrónica y evita que un doble click,
+  // Enter + click o dos submit events del navegador envíen dos cobros.
+  const paymentSubmitInFlightRef = useRef(false);
   const [tipo, setTipo] = useState("PERSONA");
   const [estado, setEstado] = useState("DEUDORES");
   const [buscar, setBuscar] = useState("");
@@ -1141,6 +1154,7 @@ export default function Cuotas() {
   const familyPaymentTargets = familyTargetsForMonths(
     paymentPeriods,
     selectedMonthIds,
+    paymentForm.montos_por_mes,
   );
   const familyPaymentCount = familyPaymentTargets.length;
   const familyPaymentTotal = familyPaymentTargets.reduce(
@@ -1631,7 +1645,6 @@ export default function Cuotas() {
 
       return {
         ...current,
-        aplicar_familia: false,
         monto:
           String(current.mes) === normalizedMonth
             ? String(nextState.monto ?? "")
@@ -1651,7 +1664,6 @@ export default function Cuotas() {
       const previous = current.montos_por_mes?.[normalizedMonth] || {};
       return {
         ...current,
-        aplicar_familia: false,
         monto:
           String(current.mes) === normalizedMonth
             ? sanitizedValue
@@ -1691,6 +1703,13 @@ export default function Cuotas() {
 
   const submitPayment = async (event) => {
     event.preventDefault();
+
+    // Bloqueo sincrónico: React puede recibir un segundo submit antes de que
+    // `saving` se refleje en el DOM. Sin este guard el primer POST registra
+    // los pagos y el segundo puede responder SIN_CUOTAS_PENDIENTES, dejando
+    // un error visible aunque el cobro haya sido exitoso.
+    if (paymentSubmitInFlightRef.current) return;
+
     if (!paymentForm.id_medio_pago) {
       setFeedback({ type: "error", message: "Seleccioná el medio de pago." });
       return;
@@ -1716,15 +1735,11 @@ export default function Cuotas() {
         return;
       }
       if (
-        !paymentForm.aplicar_familia &&
-        selectedMonthIds.some(
-          (monthId) =>
-            !(
-              Number(
-                decimalInput(paymentForm.montos_por_mes?.[monthId]?.monto),
-              ) > 0
-            ),
-        )
+        selectedMonthIds.some((monthId) => {
+          const amountState = paymentForm.montos_por_mes?.[monthId] || {};
+          if (paymentForm.aplicar_familia && !amountState.personalizado) return false;
+          return !(Number(decimalInput(amountState.monto)) > 0);
+        })
       ) {
         setFeedback({
           type: "error",
@@ -1746,6 +1761,7 @@ export default function Cuotas() {
       return;
     }
 
+    paymentSubmitInFlightRef.current = true;
     setSaving(true);
     try {
       let response;
@@ -1758,6 +1774,7 @@ export default function Cuotas() {
             anio: Number(payment.anio),
             mes: Number(payment.mes),
             monto: Number(decimalInput(payment.monto)),
+            monto_personalizado: Boolean(payment.monto_personalizado),
           })),
         });
       } else if (paymentForm.aplicar_familia && family) {
@@ -1768,6 +1785,18 @@ export default function Cuotas() {
           fecha_pago: paymentForm.fecha_pago,
           id_medio_pago: Number(paymentForm.id_medio_pago),
           aplicar_familia: true,
+          montos_personalizados: Object.fromEntries(
+            selectedMonthIds
+              .filter((monthId) =>
+                Boolean(paymentForm.montos_por_mes?.[monthId]?.personalizado),
+              )
+              .map((monthId) => [
+                String(monthId),
+                Number(
+                  decimalInput(paymentForm.montos_por_mes?.[monthId]?.monto),
+                ),
+              ]),
+          ),
         });
       } else if (selectedMonthIds.length > 1) {
         response = await cuotasApi.registrarPagos({
@@ -1790,6 +1819,9 @@ export default function Cuotas() {
                   0,
                 ),
               ),
+              monto_personalizado: Boolean(
+                paymentForm.montos_por_mes?.[monthId]?.personalizado,
+              ),
             };
           }),
         });
@@ -1807,6 +1839,9 @@ export default function Cuotas() {
           ),
           id_medio_pago: Number(paymentForm.id_medio_pago),
           aplicar_familia: false,
+          monto_personalizado: Boolean(
+            paymentForm.montos_por_mes?.[selectedMonthIds[0]]?.personalizado,
+          ),
         });
       }
 
@@ -1915,6 +1950,7 @@ export default function Cuotas() {
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
+      paymentSubmitInFlightRef.current = false;
       setSaving(false);
     }
   };

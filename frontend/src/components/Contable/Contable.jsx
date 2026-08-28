@@ -87,6 +87,21 @@ const money = (value) =>
     minimumFractionDigits: 2,
   }).format(Number(value || 0));
 
+const paymentTypeDetail = (item) => {
+  const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
+  if (type === "MONTO_PERSONALIZADO") return "Monto personalizado";
+  if (type === "DESCUENTO_FAMILIAR") {
+    const percentage = Number(item?.porcentaje_descuento_familiar);
+    if (!Number.isFinite(percentage) || percentage <= 0) return "Desc. familiar";
+    const formatted = new Intl.NumberFormat("es-AR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(percentage);
+    return `Desc. familiar ${formatted}%`;
+  }
+  return "";
+};
+
 const formatDate = (value) =>
   value
     ? new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(
@@ -999,6 +1014,10 @@ export default function ContableModule({ view = "summary" }) {
           { label: "Medio", key: "medio" },
           { label: "Monto", key: "monto" },
           {
+            label: "Detalle del pago",
+            value: (item) => paymentTypeDetail(item),
+          },
+          {
             label: "Tipo de importe",
             value: (item) => item.monto_estimado ? "ESTIMADO" : "REGISTRADO",
           },
@@ -1362,6 +1381,11 @@ export default function ContableModule({ view = "summary" }) {
                         {item.monto_estimado ? (
                           <small className="contable-estimated">
                             Importe histórico estimado
+                          </small>
+                        ) : null}
+                        {paymentTypeDetail(item) ? (
+                          <small className="contable-payment-kind">
+                            {paymentTypeDetail(item)}
                           </small>
                         ) : null}
                       </div>

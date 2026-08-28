@@ -172,12 +172,31 @@ function decimal_amount(mixed $value, string $label, float $min = 0, float $max 
 function transaction(PDO $db, callable $callback): mixed
 {
     $db->beginTransaction();
+    $finished = false;
+
+    // api_error()/json_response() finalizan la petición con exit. Un exit no
+    // atraviesa el catch de PHP, por lo que una validación dentro del callback
+    // podría abandonar la función con la transacción todavía abierta. PDO suele
+    // revertir al destruir la conexión, pero no conviene depender de eso. Este
+    // shutdown guard garantiza atomicidad: si la petición termina antes del
+    // commit/rollback explícito, todo lo pendiente se revierte.
+    register_shutdown_function(static function () use ($db, &$finished): void {
+        if ($finished || !$db->inTransaction()) return;
+        try {
+            $db->rollBack();
+        } catch (Throwable) {
+            // En shutdown no debemos reemplazar la respuesta original.
+        }
+    });
+
     try {
         $result = $callback();
         $db->commit();
+        $finished = true;
         return $result;
     } catch (Throwable $error) {
         if ($db->inTransaction()) $db->rollBack();
+        $finished = true;
         throw $error;
     }
 }

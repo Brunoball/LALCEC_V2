@@ -749,6 +749,99 @@ test.describe('Cuotas completas desde la interfaz', () => {
     expect(Number(paid.items[0].monto)).toBeCloseTo(777.77, 2);
   });
 
+  test('monto personalizado mantiene seleccionado el pago familiar y se aplica a todos sus integrantes', async ({ page, request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const first = await createPerson(request, familyUiPersonOne, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    const second = await createPerson(request, familyUiPersonTwo, {
+      fecha_alta: `${currentYear}-01-01`,
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    await createFamily(request, uiFamily, [first, second]);
+
+    await page.goto('/cuotas');
+    await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(familyUiPersonOne.dni);
+    await debtRow(page, familyUiPersonOne)
+      .getByRole('button', { name: /Registrar pago de/i })
+      .click();
+
+    const dialog = singlePaymentDialog(page, familyUiPersonOne);
+    await selectPaymentTab(dialog, /Familia/);
+    const familyCheck = dialog.getByRole('checkbox', {
+      name: 'Aplicar pago a todo el grupo familiar',
+    });
+    await expect(familyCheck).toBeChecked();
+
+    await selectPaymentTab(dialog, 'Datos del pago');
+    const monthLabel = monthNames[currentMonth - 1];
+    const amountRow = dialog
+      .locator('.cuotas-month-amount-row')
+      .filter({ hasText: monthLabel });
+    await amountRow.getByRole('checkbox', { name: 'Monto personalizado' }).check();
+    const customAmount = 333.33;
+    await amountRow
+      .getByLabel(`Monto personalizado para ${monthLabel}`)
+      .fill(String(customAmount));
+
+    await selectPaymentTab(dialog, /Familia/);
+    await expect(familyCheck).toBeChecked();
+    await expect(dialog).toContainText('Monto personalizado por integrante');
+
+    await selectPaymentTab(dialog, /Meses a pagar/);
+    await selectPreferredMedium(dialog);
+    let paymentPostCount = 0;
+    page.on('request', (requestEvent) => {
+      const url = new URL(requestEvent.url());
+      if (
+        requestEvent.method() === 'POST' &&
+        url.searchParams.get('action') === 'cuotas_registrar_pagos'
+      ) {
+        paymentPostCount += 1;
+      }
+    });
+    const requestPromise = page.waitForRequest((requestEvent) => {
+      const url = new URL(requestEvent.url());
+      return url.searchParams.get('action') === 'cuotas_registrar_pagos';
+    });
+
+    // Regresión: dos submit events en el mismo tick deben producir un único
+    // POST. Antes el primero cobraba y el segundo devolvía
+    // SIN_CUOTAS_PENDIENTES, mostrando un error aunque el pago ya existiera.
+    await dialog.locator('form').evaluate((form) => {
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+
+    const paymentRequest = await requestPromise;
+    const payload = paymentRequest.postDataJSON();
+    expect(payload.aplicar_familia).toBe(true);
+    expect(Number(payload.montos_personalizados?.[currentMonth])).toBeCloseTo(customAmount, 2);
+
+    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
+    expect(paymentPostCount).toBe(1);
+    await receipt.getByText('Cerrar', { exact: true }).click();
+
+    for (const person of [familyUiPersonOne, familyUiPersonTwo]) {
+      const paid = await apiCall(request, 'cuotas_listar', {
+        params: {
+          tipo: 'PERSONA',
+          estado: 'PAGADOS',
+          anio: currentYear,
+          mes: currentMonth,
+          buscar: person.dni,
+        },
+      });
+      expect(paid.items).toHaveLength(1);
+      expect(Number(paid.items[0].monto)).toBeCloseTo(customAmount, 2);
+      expect(paid.items[0].tipo_pago).toBe('MONTO_PERSONALIZADO');
+      expect(paid.items[0].porcentaje_descuento_familiar).toBeNull();
+    }
+  });
+
   test('mantiene habilitado el pago familiar con varios meses y explica en verde los períodos ya pagados', async ({ page, request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);
     const first = await createPerson(request, familyUiPersonOne, {

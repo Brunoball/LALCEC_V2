@@ -216,6 +216,15 @@ export default function ModalPagoCuota({
     familyPaidPeriodsByMember.values(),
   ).some((periods) => periods.length > 0);
 
+  const activeFamilyAmountState =
+    paymentForm.montos_por_mes?.[String(paymentForm.mes)] || {};
+  const activeFamilyCustomAmount =
+    paymentForm.aplicar_familia && activeFamilyAmountState.personalizado
+      ? Number(String(activeFamilyAmountState.monto ?? "").replace(",", "."))
+      : null;
+  const hasActiveFamilyCustomAmount =
+    Number.isFinite(activeFamilyCustomAmount) && activeFamilyCustomAmount > 0;
+
   const paymentTabs = [
     {
       value: "meses",
@@ -468,8 +477,18 @@ export default function ModalPagoCuota({
                                   </>
                                 ) : member.puede_pagar ? (
                                   <>
-                                    <strong>{money(member.monto_sugerido)}</strong>
-                                    <small>Base {money(member.monto_base)}</small>
+                                    <strong>
+                                      {money(
+                                        hasActiveFamilyCustomAmount
+                                          ? activeFamilyCustomAmount
+                                          : member.monto_sugerido,
+                                      )}
+                                    </strong>
+                                    <small>
+                                      {hasActiveFamilyCustomAmount
+                                        ? "Monto personalizado por integrante"
+                                        : `Base ${money(member.monto_base)}`}
+                                    </small>
                                   </>
                                 ) : (
                                   <strong>
@@ -650,7 +669,7 @@ export default function ModalPagoCuota({
                   <span>Importe por mes</span>
                   <small>
                     {paymentForm.aplicar_familia && family
-                      ? "Monto del socio; al cambiarlo se cobra individual."
+                      ? "El monto personalizado se aplica a cada integrante pendiente."
                       : "Actual o histórico según el período."}
                   </small>
                 </div>

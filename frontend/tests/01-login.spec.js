@@ -84,7 +84,7 @@ test.describe('Login y sesión', () => {
     }
   });
 
-  test('aplica atributos del formulario y restaura todas las credenciales recordadas', async ({ page }) => {
+  test('aplica atributos actuales del formulario y restaura todas las credenciales recordadas', async ({ page }) => {
     const username = process.env.PW_USER;
     await page.addInitScript(
       ({ rememberedKey, sessionKey, account }) => {
@@ -98,10 +98,8 @@ test.describe('Login y sesión', () => {
     const userInput = page.getByPlaceholder('Usuario');
     const passwordInput = page.getByPlaceholder('Contraseña');
 
-    await expect(userInput).toHaveAttribute('required', '');
     await expect(userInput).toHaveAttribute('maxlength', '100');
     await expect(userInput).toHaveAttribute('autocomplete', 'username');
-    await expect(passwordInput).toHaveAttribute('required', '');
     await expect(passwordInput).toHaveAttribute('maxlength', '255');
     await expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
     await expect(userInput).toHaveValue(username);
@@ -120,16 +118,20 @@ test.describe('Login y sesión', () => {
     expect(storage.remembered.contrasena).toBe('NO_GUARDAR');
   });
 
-  test('la validación nativa impide enviar campos vacíos', async ({ page }) => {
+  test('la validación controlada impide enviar campos vacíos y muestra el aviso correcto', async ({ page }) => {
     await page.goto('/');
     const userInput = page.getByPlaceholder('Usuario');
-    const passwordInput = page.getByPlaceholder('Contraseña');
+
     await page.getByRole('button', { name: /^Ingresar$/ }).click();
-    expect(await userInput.evaluate((element) => element.validity.valueMissing)).toBe(true);
+    const emptyFieldsToast = page.getByRole('status');
+    await expect(emptyFieldsToast).toHaveClass(/toast-advertencia/);
+    await expect(emptyFieldsToast).toContainText('Ingresá tu usuario y contraseña.');
 
     await userInput.fill('usuario');
     await page.getByRole('button', { name: /^Ingresar$/ }).click();
-    expect(await passwordInput.evaluate((element) => element.validity.valueMissing)).toBe(true);
+    const missingPasswordToast = page.getByRole('status');
+    await expect(missingPasswordToast).toHaveClass(/toast-advertencia/);
+    await expect(missingPasswordToast).toContainText('Ingresá tu contraseña.');
   });
 
   test('valida credenciales, muestra la contraseña, recuerda la cuenta y cierra sesión', async ({ page }) => {
@@ -155,7 +157,9 @@ test.describe('Login y sesión', () => {
     );
     await page.getByRole('button', { name: /^Ingresar$/ }).click();
     await invalidResponse;
-    await expect(page.locator('.ini_mensaje-error')).toContainText(
+    const invalidCredentialsToast = page.getByRole('status');
+    await expect(invalidCredentialsToast).toHaveClass(/toast-error/);
+    await expect(invalidCredentialsToast).toContainText(
       'Usuario o contraseña incorrectos.',
     );
     await expect(page).toHaveURL(/\/$/);

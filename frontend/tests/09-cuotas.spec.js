@@ -496,6 +496,13 @@ test.describe('Cuotas de socios y empresas', () => {
     });
     expect(response.aplico_familia).toBe(true);
     expect(response.items).toHaveLength(2);
+    for (const item of response.items) {
+      expect(item.tipo_pago).toBe('DESCUENTO_FAMILIAR');
+      expect(Number(item.porcentaje_descuento_familiar)).toBeCloseTo(
+        Number(discount.porcentaje_descuento),
+        2,
+      );
+    }
     expect(response.comprobante.lineas).toHaveLength(2);
     expect(response.comprobante.modalidad_label).toMatch(/grupo familiar/i);
     expect(Number(response.comprobante.monto)).toBeGreaterThan(0);
@@ -508,9 +515,100 @@ test.describe('Cuotas de socios y empresas', () => {
     expect(receiptAddresses.get(Number(first.id_socio))).toBe('CALLE FAMILIA UNO 101');
     expect(receiptAddresses.get(Number(second.id_socio))).toBe('CALLE FAMILIA DOS 202');
 
+    const accounting = await apiCall(request, 'contable_ingresos_socios', {
+      params: {
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: familyPersonOne.dni,
+      },
+    });
+    const accountingItem = (accounting.items || []).find(
+      (item) => Number(item.id_socio) === Number(first.id_socio),
+    );
+    expect(accountingItem).toBeTruthy();
+    expect(accountingItem.tipo_pago).toBe('DESCUENTO_FAMILIAR');
+    expect(Number(accountingItem.porcentaje_descuento_familiar)).toBeCloseTo(
+      Number(discount.porcentaje_descuento),
+      2,
+    );
+
     await removePayments(request, response.items);
   });
 
+
+  test('monto personalizado familiar se aplica a cada integrante y queda trazado como personalizado', async ({ request }) => {
+    const { category, medium } = await activeCategoryAndMedium(request);
+    await ensureTwoMemberDiscount(request);
+    const first = await createPerson(request, familyPersonOne, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    const second = await createPerson(request, familyPersonTwo, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+    await createFamily(request, family, [first, second]);
+
+    const customAmount = 777.77;
+    const response = await apiCall(request, 'cuotas_registrar_pago', {
+      method: 'POST',
+      data: {
+        id_socio: first.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+        id_medio_pago: medium.id_medio_pago,
+        aplicar_familia: true,
+        montos_personalizados: {
+          [currentMonth]: customAmount,
+        },
+      },
+    });
+
+    expect(response.aplico_familia).toBe(true);
+    expect(response.items).toHaveLength(2);
+    expect(Number(response.comprobante.monto)).toBeCloseTo(customAmount * 2, 2);
+    for (const item of response.items) {
+      expect(Number(item.monto)).toBeCloseTo(customAmount, 2);
+      expect(item.tipo_pago).toBe('MONTO_PERSONALIZADO');
+      expect(item.porcentaje_descuento_familiar).toBeNull();
+    }
+    for (const line of response.comprobante.lineas) {
+      expect(Number(line.monto)).toBeCloseTo(customAmount, 2);
+      expect(line.tipo_pago).toBe('MONTO_PERSONALIZADO');
+      expect(line.porcentaje_descuento_familiar).toBeNull();
+    }
+
+    const accounting = await apiCall(request, 'contable_ingresos_socios', {
+      params: {
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: familyPersonOne.dni,
+      },
+    });
+    const accountingItem = (accounting.items || []).find(
+      (item) => Number(item.id_socio) === Number(first.id_socio),
+    );
+    expect(accountingItem).toBeTruthy();
+    expect(accountingItem.tipo_pago).toBe('MONTO_PERSONALIZADO');
+    expect(accountingItem.porcentaje_descuento_familiar).toBeNull();
+
+    // El contexto individual de una cuota ya pagada también debe conservar la
+    // trazabilidad. Cubre el SELECT específico de cuotas_contexto_pago.
+    const paidContext = await apiCall(request, 'cuotas_contexto_pago', {
+      params: {
+        id_socio: first.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+      },
+    });
+    expect(paidContext.principal.pagado).toBe(true);
+    expect(paidContext.principal.tipo_pago).toBe('MONTO_PERSONALIZADO');
+    expect(paidContext.principal.porcentaje_descuento_familiar).toBeNull();
+
+    await removePayments(request, response.items);
+  });
 
   test('al desactivar el pago familiar registra solamente la cuota del socio abierto', async ({ request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);

@@ -79,7 +79,7 @@ trait DescuentosFamiliaresGestion
             $body['porcentaje_descuento'] ?? null,
             'porcentaje de descuento',
             0.01,
-            100
+            99.99
         );
         $effectiveFrom = valid_date(
             $body['vigencia_desde'] ?? date('Y-m-d'),
@@ -112,6 +112,10 @@ trait DescuentosFamiliaresGestion
                 $effectiveTo,
                 $description
             ): array {
+                // Serializa las altas/ediciones de reglas para que dos requests
+                // simultáneos no validen el mismo hueco y creen solapamientos.
+                self::bloquearCatalogoDescuentosFamiliares($db);
+
                 if ($id === null) {
                     self::validarSolapamientoDescuento(
                         $db,
@@ -238,6 +242,7 @@ trait DescuentosFamiliaresGestion
 
         try {
             transaction($db, static function () use ($db, $auth, $id): void {
+                self::bloquearCatalogoDescuentosFamiliares($db);
                 $beforeRaw = self::bloquearDescuento($db, $id);
                 $before = self::castDescuento($beforeRaw);
                 if (!(bool)$before['activo']) {
@@ -349,6 +354,19 @@ trait DescuentosFamiliaresGestion
         $statement->bindValue(':vigencia_hasta', $endDate, PDO::PARAM_STR);
         $statement->bindValue(':id', $id, PDO::PARAM_INT);
         $statement->execute();
+    }
+
+    private static function bloquearCatalogoDescuentosFamiliares(PDO $db): void
+    {
+        // El catálogo es pequeño y se modifica únicamente desde Configuración.
+        // Bloquearlo completo evita carreras entre altas/ediciones concurrentes
+        // sin agregar columnas ni depender de locks externos a la transacción.
+        $db->query(
+            'SELECT id_descuento_familiar
+             FROM descuentos_familiares
+             ORDER BY id_descuento_familiar
+             FOR UPDATE'
+        )->fetchAll();
     }
 
     private static function validarSolapamientoDescuento(

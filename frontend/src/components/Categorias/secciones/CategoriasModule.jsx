@@ -468,10 +468,10 @@ export default function CategoriasModule({ section = "categorias" }) {
       });
       return;
     }
-    if (!Number.isFinite(discount) || discount <= 0 || discount > 100) {
+    if (!Number.isFinite(discount) || discount <= 0 || discount >= 100) {
       setFeedback({
         type: "error",
-        message: "Ingresá un porcentaje mayor a 0 y de hasta 100.",
+        message: "Ingresá un porcentaje mayor a 0 y menor a 100.",
       });
       return;
     }

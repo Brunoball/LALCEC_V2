@@ -297,6 +297,7 @@ trait ContableConsultas
         $statement = $db->prepare(
             "SELECT
                 p.id_pago, p.id_socio, p.anio, p.mes, p.fecha_pago, p.id_medio_pago,
+                p.tipo_pago, p.porcentaje_descuento_familiar,
                 {$paymentAmount} AS monto_calculado,
                 CASE WHEN p.monto IS NULL THEN 1 ELSE 0 END AS monto_estimado,
                 s.tipo_socio, s.id_categoria,
@@ -346,6 +347,10 @@ trait ContableConsultas
                 'medio' => (string)$row['medio'],
                 'id_medio_pago' => $row['id_medio_pago'] === null ? null : (int)$row['id_medio_pago'],
                 'monto' => self::importeDesdeCentavos($amountCents),
+                'tipo_pago' => (string)($row['tipo_pago'] ?? 'NORMAL'),
+                'porcentaje_descuento_familiar' => $row['porcentaje_descuento_familiar'] === null
+                    ? null
+                    : number_format((float)$row['porcentaje_descuento_familiar'], 2, '.', ''),
                 'monto_estimado' => $isEstimated,
             ];
             $total += $amountCents;

@@ -34,14 +34,16 @@ const test = base.test.extend({
       } catch (_error) {
         // Una URL no válida seguirá tratándose como cualquier otra respuesta.
       }
+      const directBotApi = url.startsWith(normalizedBotApiBase());
       const monitoredApi =
-        url.startsWith(normalizedApiBase()) || url.startsWith(normalizedBotApiBase());
+        url.startsWith(normalizedApiBase()) || directBotApi;
 
       // Principal consulta el Panel Bot en segundo plano para mostrar su badge.
-      // Cuando Hostinger o el certificado local no están disponibles, esa función
-      // opcional no debe hacer fallar pruebas de Dashboard, Socios, Cuotas, etc.
-      // El spec del Panel Bot sí conserva el monitoreo estricto del proxy.
-      const optionalBotFailure = isLocalBotProxy && !isBotSpec;
+      // En local esa lectura puede pasar por bot_panel_proxy; apuntando a Hostinger
+      // puede ir directo a /api/bot_whatsapp. En ambos casos es una función opcional
+      // para Dashboard, Socios, Cuotas, etc., y no debe convertir esos specs en rojo.
+      // El spec del Panel Bot conserva el monitoreo estricto de sus propias llamadas.
+      const optionalBotFailure = !isBotSpec && (isLocalBotProxy || directBotApi);
       if (monitoredApi && response.status() >= 500 && !optionalBotFailure) {
         technicalFailures.push(`HTTP ${response.status()} en ${url}`);
       }

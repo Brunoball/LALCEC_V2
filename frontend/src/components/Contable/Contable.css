@@ -182,6 +182,15 @@
   text-align: right;
 }
 
+.contable-payment-kind {
+  display: block;
+  color: var(--muted, #64748b) !important;
+  font-size: 9px !important;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
+}
+
 /* Resumen: paneles propios sobre la misma paleta, radios y densidad global. */
 .ct-summary {
   min-height: 0;

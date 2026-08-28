@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/domain.php';
+
 final class Cuotas
 {
     private const TIPOS = ['PERSONA', 'EMPRESA'];
@@ -195,6 +197,8 @@ final class Cuotas
                 p.mes,
                 p.fecha_pago,
                 p.monto,
+                p.tipo_pago AS tipo_pago_registrado,
+                p.porcentaje_descuento_familiar AS porcentaje_descuento_familiar_registrado,
                 p.id_medio_pago,
                 p.estado AS estado_pago,
                 mp.nombre AS medio_pago
@@ -246,7 +250,14 @@ final class Cuotas
                 : self::discountForCount($discountRules, $familyCount);
             $row['monto_base'] = $baseAmount;
             $row['monto_actual_categoria'] = (float)($row['monto_actual'] ?? 0);
-            $row['porcentaje_descuento_familiar'] = $discount;
+            $row['tipo_pago'] = $row['id_pago'] === null
+                ? null
+                : (string)($row['tipo_pago_registrado'] ?? 'NORMAL');
+            $row['porcentaje_descuento_familiar'] = $row['id_pago'] === null
+                ? $discount
+                : ($row['porcentaje_descuento_familiar_registrado'] === null
+                    ? null
+                    : (float)$row['porcentaje_descuento_familiar_registrado']);
             $row['monto_sugerido'] = self::discountedAmount($baseAmount, $discount);
             $row['opciones_monto'] = $categoryId === null
                 ? []
@@ -539,7 +550,8 @@ final class Cuotas
         if ($memberIds !== []) {
             $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
             $paymentsStatement = $db->prepare(
-                "SELECT id_pago, id_socio, mes, fecha_pago, monto, id_medio_pago, estado
+                "SELECT id_pago, id_socio, mes, fecha_pago, monto, tipo_pago,
+                        porcentaje_descuento_familiar, id_medio_pago, estado
                  FROM pagos
                  WHERE anio = ?
                    AND id_socio IN ($placeholders)"
@@ -561,6 +573,8 @@ final class Cuotas
                 $row['id_pago'] = $payment['id_pago'] ?? null;
                 $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
                 $row['monto'] = $payment['monto'] ?? null;
+                $row['tipo_pago'] = $payment['tipo_pago'] ?? null;
+                $row['porcentaje_descuento_familiar_registrado'] = $payment['porcentaje_descuento_familiar'] ?? null;
                 $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
                 $row['estado_pago'] = $payment['estado'] ?? null;
                 $members[] = self::hydratePaymentCandidate(
@@ -587,6 +601,8 @@ final class Cuotas
                 $row['id_pago'] = $payment['id_pago'] ?? null;
                 $row['fecha_pago'] = $payment['fecha_pago'] ?? null;
                 $row['monto'] = $payment['monto'] ?? null;
+                $row['tipo_pago'] = $payment['tipo_pago'] ?? null;
+                $row['porcentaje_descuento_familiar_registrado'] = $payment['porcentaje_descuento_familiar'] ?? null;
                 $row['id_medio_pago'] = $payment['id_medio_pago'] ?? null;
                 $row['estado_pago'] = $payment['estado'] ?? null;
                 $principal = self::hydratePaymentCandidate(
@@ -655,7 +671,9 @@ final class Cuotas
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
                 fc.cantidad_integrantes,
-                p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago, p.estado AS estado_pago
+                p.id_pago, p.fecha_pago, p.monto, p.tipo_pago,
+                p.porcentaje_descuento_familiar AS porcentaje_descuento_familiar_registrado,
+                p.id_medio_pago, p.estado AS estado_pago
              FROM socios s
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
              LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
@@ -696,7 +714,9 @@ final class Cuotas
                     sp.numero_domicilio AS numero_domicilio,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco,
-                    p.id_pago, p.fecha_pago, p.monto, p.id_medio_pago, p.estado AS estado_pago
+                    p.id_pago, p.fecha_pago, p.monto, p.tipo_pago,
+                    p.porcentaje_descuento_familiar AS porcentaje_descuento_familiar_registrado,
+                    p.id_medio_pago, p.estado AS estado_pago
                  FROM familias_socios fs
                  INNER JOIN socios s ON s.id_socio = fs.id_socio
                  INNER JOIN socios_personas sp ON sp.id_socio = s.id_socio
@@ -794,6 +814,9 @@ final class Cuotas
     {
         $db = $auth['db'];
         $paymentDate = valid_date($body['fecha_pago'] ?? null, 'pago');
+        if ($paymentDate > date('Y-m-d')) {
+            api_error('La fecha de pago no puede ser futura.', 'VALIDATION_ERROR', 422);
+        }
         $mediumId = positive_id($body['id_medio_pago'] ?? null, 'medio de pago');
         $applyFamily = filter_var($body['aplicar_familia'] ?? false, FILTER_VALIDATE_BOOL);
 
@@ -806,6 +829,7 @@ final class Cuotas
 
         $targets = [];
         $familyData = null;
+        $familyCustomAmounts = self::familyCustomAmountsFromBody($body['montos_personalizados'] ?? null);
 
         if ($applyFamily) {
             $principalId = positive_id($body['id_socio'] ?? null, 'socio');
@@ -836,12 +860,17 @@ final class Cuotas
                 $contextFamily = $context['familia'] ?? null;
                 if ($contextFamily !== null) {
                     if ($familyData === null) $familyData = $contextFamily;
+                    $customAmount = $familyCustomAmounts[$month] ?? null;
                     foreach ($contextFamily['integrantes'] as $member) {
                         // Los períodos ya pagados o no disponibles se omiten de forma
                         // individual. Esto permite cobrar varios meses a una familia
                         // aunque algún integrante ya tenga uno de ellos abonado.
                         if (!(bool)($member['puede_pagar'] ?? false)) continue;
-                        $targets[] = self::targetFromCandidate($member, null);
+                        $targets[] = self::targetFromCandidate(
+                            $member,
+                            $customAmount,
+                            $customAmount !== null
+                        );
                     }
                     continue;
                 }
@@ -849,9 +878,14 @@ final class Cuotas
                 // Compatibilidad: si por algún motivo el socio ya no tiene una familia
                 // asociada, no perdemos el cobro del período del socio principal.
                 if ((bool)($context['principal']['puede_pagar'] ?? false)) {
+                    $fallbackCustomAmount = $familyCustomAmounts[$month] ?? null;
+                    $fallbackAmount = $fallbackCustomAmount
+                        ?? (count($requestedMonths) === 1 ? ($body['monto'] ?? null) : null);
                     $targets[] = self::targetFromCandidate(
                         $context['principal'],
-                        count($requestedMonths) === 1 ? ($body['monto'] ?? null) : null
+                        $fallbackAmount,
+                        $fallbackCustomAmount !== null
+                            || filter_var($body['monto_personalizado'] ?? false, FILTER_VALIDATE_BOOL)
                     );
                 }
             }
@@ -873,6 +907,10 @@ final class Cuotas
                     'anio' => $year,
                     'mes' => $month,
                     'monto' => $payment['monto'] ?? null,
+                    'monto_personalizado' => filter_var(
+                        $payment['monto_personalizado'] ?? false,
+                        FILTER_VALIDATE_BOOL
+                    ),
                 ];
             }
             if ($normalized === []) api_error('No hay pagos válidos seleccionados.', 'VALIDATION_ERROR');
@@ -888,7 +926,11 @@ final class Cuotas
                 if (!(bool)$context['principal']['puede_pagar']) {
                     self::paymentCandidateError($context['principal']);
                 }
-                $targets[] = self::targetFromCandidate($context['principal'], $payment['monto']);
+                $targets[] = self::targetFromCandidate(
+                    $context['principal'],
+                    $payment['monto'],
+                    (bool)$payment['monto_personalizado']
+                );
             }
         } else {
             $partnerId = positive_id($body['id_socio'] ?? null, 'socio o empresa');
@@ -898,7 +940,11 @@ final class Cuotas
             if (!(bool)$context['principal']['puede_pagar']) {
                 self::paymentCandidateError($context['principal']);
             }
-            $targets[] = self::targetFromCandidate($context['principal'], $body['monto'] ?? null);
+            $targets[] = self::targetFromCandidate(
+                $context['principal'],
+                $body['monto'] ?? null,
+                filter_var($body['monto_personalizado'] ?? false, FILTER_VALIDATE_BOOL)
+            );
         }
 
         if ($targets === []) api_error('No hay cuotas pendientes para registrar.', 'SIN_CUOTAS_PENDIENTES', 409);
@@ -919,20 +965,71 @@ final class Cuotas
                 $familyData,
                 $applyFamily
             ): array {
+                $medium = self::lockPaymentDependencies($db, $targets, $mediumId);
+
                 $insert = $db->prepare(
-                    "INSERT INTO pagos (id_socio, mes, anio, fecha_pago, monto, id_medio_pago, estado)
-                     VALUES (?, ?, ?, ?, ?, ?, 'PAGADO')"
+                    "INSERT INTO pagos
+                        (id_socio, mes, anio, fecha_pago, monto, tipo_pago,
+                         porcentaje_descuento_familiar, id_medio_pago, estado)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PAGADO')"
                 );
                 $items = [];
                 $lines = [];
 
                 foreach ($targets as $target) {
+                    // Recalcula el contexto dentro de la misma transacción y con
+                    // socios/familias/descuentos bloqueados. Así una edición
+                    // concurrente no puede convertir silenciosamente un descuento
+                    // familiar en otro importe entre la vista previa y el INSERT.
+                    $freshContext = self::paymentContextData(
+                        $db,
+                        (int)$target['id_socio'],
+                        (int)$target['anio'],
+                        (int)$target['mes'],
+                        $paymentDate
+                    );
+                    $freshCandidate = $freshContext['principal'];
+                    if (!(bool)($freshCandidate['puede_pagar'] ?? false)) {
+                        self::paymentCandidateError($freshCandidate);
+                    }
+                    if (
+                        $applyFamily
+                        && ($target['id_familia'] ?? null) !== ($freshCandidate['id_familia'] ?? null)
+                    ) {
+                        api_error(
+                            'El grupo familiar cambió mientras se registraba el pago. Actualizá la pantalla e intentá nuevamente.',
+                            'FAMILIA_MODIFICADA',
+                            409
+                        );
+                    }
+
+                    $freshTarget = self::targetFromCandidate(
+                        $freshCandidate,
+                        $target['monto'],
+                        (bool)$target['es_monto_personalizado']
+                    );
+                    $oldDiscount = $target['porcentaje_descuento_familiar_persistido'];
+                    $newDiscount = $freshTarget['porcentaje_descuento_familiar_persistido'];
+                    $sameDiscount = ($oldDiscount === null && $newDiscount === null)
+                        || ($oldDiscount !== null && $newDiscount !== null
+                            && abs((float)$oldDiscount - (float)$newDiscount) < 0.005);
+                    if ($freshTarget['tipo_pago'] !== $target['tipo_pago'] || !$sameDiscount) {
+                        api_error(
+                            'El importe o descuento familiar cambió mientras se registraba el pago. Actualizá la pantalla e intentá nuevamente.',
+                            'COTIZACION_MODIFICADA',
+                            409
+                        );
+                    }
+                    $target = $freshTarget;
+
                     $insert->execute([
                         $target['id_socio'],
                         $target['mes'],
                         $target['anio'],
                         $paymentDate,
                         $target['monto'],
+                        $target['tipo_pago'],
+                        $target['porcentaje_descuento_familiar_persistido'],
                         $mediumId,
                     ]);
                     $paymentId = (int)$db->lastInsertId();
@@ -948,7 +1045,8 @@ final class Cuotas
                         'mes' => $target['mes'],
                         'fecha_pago' => $paymentDate,
                         'monto_base' => $target['monto_base'],
-                        'porcentaje_descuento_familiar' => $target['porcentaje_descuento_familiar'],
+                        'tipo_pago' => $target['tipo_pago'],
+                        'porcentaje_descuento_familiar' => $target['porcentaje_descuento_familiar_persistido'],
                         'monto' => $target['monto'],
                         'id_medio_pago' => $mediumId,
                         'medio_pago' => $medium['nombre'],
@@ -987,7 +1085,10 @@ final class Cuotas
                         'categoria' => $target['categoria'] ?: 'SIN CATEGORÍA',
                         'periodo' => self::monthName($target['mes']) . ' ' . $target['anio'],
                         'monto_base' => number_format((float)$target['monto_base'], 2, '.', ''),
-                        'porcentaje_descuento_familiar' => number_format((float)$target['porcentaje_descuento_familiar'], 2, '.', ''),
+                        'tipo_pago' => $target['tipo_pago'],
+                        'porcentaje_descuento_familiar' => $target['porcentaje_descuento_familiar_persistido'] === null
+                            ? null
+                            : number_format((float)$target['porcentaje_descuento_familiar_persistido'], 2, '.', ''),
                         'monto' => number_format((float)$target['monto'], 2, '.', ''),
                         'familia' => $target['familia'],
                     ];
@@ -1037,11 +1138,173 @@ final class Cuotas
         ];
     }
 
-    private static function targetFromCandidate(array $candidate, mixed $amount): array
+    private static function lockPaymentDependencies(PDO $db, array $targets, int $mediumId): array
     {
-        $resolvedAmount = $amount === null || $amount === ''
-            ? number_format((float)$candidate['monto_sugerido'], 2, '.', '')
-            : decimal_amount($amount, 'monto', 0.01);
+        $partnerIds = [];
+        $familyIds = [];
+        $categoryIds = [];
+        foreach ($targets as $target) {
+            $partnerIds[(int)$target['id_socio']] = true;
+            if (($target['id_familia'] ?? null) !== null) {
+                $familyIds[(int)$target['id_familia']] = true;
+            }
+            if (($target['id_categoria'] ?? null) !== null) {
+                $categoryIds[(int)$target['id_categoria']] = true;
+            }
+        }
+
+        // La gestión de familias bloquea primero la familia y luego los socios.
+        // Respetamos ese mismo orden para evitar deadlocks entre edición y cobro.
+        $familyIds = array_keys($familyIds);
+        sort($familyIds, SORT_NUMERIC);
+        if ($familyIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($familyIds), '?'));
+            $families = $db->prepare(
+                "SELECT id_familia
+                 FROM familias
+                 WHERE id_familia IN ($placeholders)
+                 ORDER BY id_familia
+                 FOR UPDATE"
+            );
+            $families->execute($familyIds);
+            if (count($families->fetchAll()) !== count($familyIds)) {
+                api_error('El grupo familiar cambió mientras se registraba el pago.', 'FAMILIA_MODIFICADA', 409);
+            }
+        }
+
+        $partnerIds = array_keys($partnerIds);
+        sort($partnerIds, SORT_NUMERIC);
+        if ($partnerIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($partnerIds), '?'));
+            $statement = $db->prepare(
+                "SELECT id_socio
+                 FROM socios
+                 WHERE id_socio IN ($placeholders)
+                 ORDER BY id_socio
+                 FOR UPDATE"
+            );
+            $statement->execute($partnerIds);
+            if (count($statement->fetchAll()) !== count($partnerIds)) {
+                api_error('Uno de los socios del pago ya no existe.', 'SOCIO_NO_ENCONTRADO', 409);
+            }
+
+            // Bloquea la pertenencia familiar activa de cada destinatario.
+            $membership = $db->prepare(
+                "SELECT id_familia_socio
+                 FROM familias_socios
+                 WHERE id_socio IN ($placeholders)
+                   AND fecha_desvinculacion IS NULL
+                 ORDER BY id_socio, id_familia_socio
+                 FOR UPDATE"
+            );
+            $membership->execute($partnerIds);
+            $membership->fetchAll();
+        }
+
+        // También inmoviliza las categorías que determinan el monto base y su
+        // historial de precios. La gestión de categorías bloquea la fila padre,
+        // por lo que este lock cierra la ventana entre cotización e INSERT.
+        $categoryIds = array_keys($categoryIds);
+        sort($categoryIds, SORT_NUMERIC);
+        if ($categoryIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+            $categories = $db->prepare(
+                "SELECT id_categoria
+                 FROM categorias
+                 WHERE id_categoria IN ($placeholders)
+                 ORDER BY id_categoria
+                 FOR UPDATE"
+            );
+            $categories->execute($categoryIds);
+            if (count($categories->fetchAll()) !== count($categoryIds)) {
+                api_error('La categoría de una cuota cambió mientras se registraba el pago.', 'CATEGORIA_MODIFICADA', 409);
+            }
+        }
+
+        // Usa el mismo orden de lock que la gestión de descuentos. La tabla es
+        // pequeña y esta serialización evita que una regla cambie en medio de
+        // una operación de cobro.
+        $db->query(
+            'SELECT id_descuento_familiar
+             FROM descuentos_familiares
+             ORDER BY id_descuento_familiar
+             FOR UPDATE'
+        )->fetchAll();
+
+        // Revalida el medio de pago bajo lock para que no pueda darse de baja
+        // entre la validación inicial y el registro definitivo.
+        $medium = $db->prepare(
+            'SELECT id_medio_pago, nombre, activo
+             FROM medios_pago
+             WHERE id_medio_pago = ?
+             FOR UPDATE'
+        );
+        $medium->execute([$mediumId]);
+        $lockedMedium = $medium->fetch();
+        if (!$lockedMedium || !(bool)$lockedMedium['activo']) {
+            api_error('El medio de pago seleccionado no existe o está inactivo.', 'MEDIO_PAGO_INVALIDO', 409);
+        }
+
+        return $lockedMedium;
+    }
+
+    private static function targetFromCandidate(
+        array $candidate,
+        mixed $amount,
+        ?bool $explicitCustom = null
+    ): array {
+        $hasRequestedAmount = !($amount === null || $amount === '');
+        $resolvedAmount = $hasRequestedAmount
+            ? decimal_amount($amount, 'monto', 0.01)
+            : number_format((float)$candidate['monto_sugerido'], 2, '.', '');
+
+        if ((float)$resolvedAmount <= 0) {
+            api_error(
+                'El importe final de una cuota pagada debe ser mayor a cero.',
+                'MONTO_INVALIDO',
+                422
+            );
+        }
+
+        $validAmounts = [];
+        foreach (($candidate['opciones_monto'] ?? []) as $option) {
+            if (!is_array($option)) continue;
+            $optionAmount = (float)($option['monto'] ?? 0);
+            if ($optionAmount > 0) $validAmounts[] = $optionAmount;
+        }
+        if ($validAmounts === []) {
+            $suggested = (float)($candidate['monto_sugerido'] ?? 0);
+            if ($suggested > 0) $validAmounts[] = $suggested;
+        }
+
+        $matchesKnownAmount = !$hasRequestedAmount;
+        if ($hasRequestedAmount) {
+            $numericAmount = (float)$resolvedAmount;
+            foreach ($validAmounts as $validAmount) {
+                if (abs($numericAmount - $validAmount) < 0.005) {
+                    $matchesKnownAmount = true;
+                    break;
+                }
+            }
+        }
+
+        // La bandera explícita conserva la intención real de la UI aun cuando
+        // el operador escriba casualmente el mismo valor que una opción normal.
+        // Para clientes antiguos, un importe que no coincide con ninguna opción
+        // autorizada se clasifica de forma segura como personalizado.
+        $isCustom = $explicitCustom === true || ($hasRequestedAmount && !$matchesKnownAmount);
+        $familyDiscount = (float)($candidate['porcentaje_descuento_familiar'] ?? 0);
+
+        if ($isCustom) {
+            $paymentType = 'MONTO_PERSONALIZADO';
+            $persistedFamilyDiscount = null;
+        } elseif ($familyDiscount > 0) {
+            $paymentType = 'DESCUENTO_FAMILIAR';
+            $persistedFamilyDiscount = number_format($familyDiscount, 2, '.', '');
+        } else {
+            $paymentType = 'NORMAL';
+            $persistedFamilyDiscount = null;
+        }
 
         return [
             'id_socio' => (int)$candidate['id_socio'],
@@ -1055,11 +1318,29 @@ final class Cuotas
             'anio' => (int)$candidate['anio'],
             'mes' => (int)$candidate['mes'],
             'monto_base' => number_format((float)$candidate['monto_base'], 2, '.', ''),
-            'porcentaje_descuento_familiar' => number_format((float)$candidate['porcentaje_descuento_familiar'], 2, '.', ''),
+            'porcentaje_descuento_familiar' => number_format($familyDiscount, 2, '.', ''),
+            'porcentaje_descuento_familiar_persistido' => $persistedFamilyDiscount,
+            'tipo_pago' => $paymentType,
+            'es_monto_personalizado' => $isCustom,
             'monto' => $resolvedAmount,
             'id_familia' => $candidate['id_familia'],
             'familia' => $candidate['familia'],
         ];
+    }
+
+    private static function familyCustomAmountsFromBody(mixed $value): array
+    {
+        if (!is_array($value)) return [];
+
+        $amounts = [];
+        foreach ($value as $rawMonth => $rawAmount) {
+            $month = filter_var($rawMonth, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1, 'max_range' => 12],
+            ]);
+            if ($month === false || $rawAmount === null || $rawAmount === '') continue;
+            $amounts[(int)$month] = decimal_amount($rawAmount, 'monto personalizado', 0.01);
+        }
+        return $amounts;
     }
 
     private static function paymentCandidateError(array $candidate): never
@@ -1137,7 +1418,12 @@ final class Cuotas
                 : null,
             'monto_base' => number_format($baseAmount, 2, '.', ''),
             'monto_actual_categoria' => number_format((float)($row['monto_actual'] ?? 0), 2, '.', ''),
-            'porcentaje_descuento_familiar' => number_format($discount, 2, '.', ''),
+            'tipo_pago' => $paid ? (string)($row['tipo_pago'] ?? 'NORMAL') : null,
+            'porcentaje_descuento_familiar' => $paid
+                ? ($row['porcentaje_descuento_familiar_registrado'] === null
+                    ? null
+                    : number_format((float)$row['porcentaje_descuento_familiar_registrado'], 2, '.', ''))
+                : number_format($discount, 2, '.', ''),
             'monto_sugerido' => number_format(self::discountedAmount($baseAmount, $discount), 2, '.', ''),
             'opciones_monto' => $amountOptions,
             'id_familia' => isset($row['id_familia']) && $row['id_familia'] !== null ? (int)$row['id_familia'] : null,
@@ -1162,6 +1448,9 @@ final class Cuotas
             $body['fecha_condonacion'] ?? $body['fecha'] ?? date('Y-m-d'),
             'condonación'
         );
+        if ($condonationDate > date('Y-m-d')) {
+            api_error('La fecha de condonación no puede ser futura.', 'VALIDATION_ERROR', 422);
+        }
 
         $context = self::paymentContextData($db, $partnerId, $year, $month, $condonationDate);
         $candidate = $context['principal'];
@@ -1273,8 +1562,9 @@ final class Cuotas
     {
         $statement = $db->prepare(
             "SELECT
-                p.id_pago, p.id_socio, p.mes, p.anio, p.fecha_pago, p.monto, p.id_medio_pago,
-                p.estado AS estado_pago,
+                p.id_pago, p.id_socio, p.mes, p.anio, p.fecha_pago, p.monto,
+                p.tipo_pago, p.porcentaje_descuento_familiar,
+                p.id_medio_pago, p.estado AS estado_pago,
                 s.tipo_socio, s.estado AS estado_socio, s.fecha_alta, s.id_categoria,
                 COALESCE(se.razon_social, CONCAT(sp.apellido, ', ', sp.nombre)) AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
@@ -1330,7 +1620,13 @@ final class Cuotas
             'fecha_pago' => $row['fecha_pago'] ?? null,
             'monto_base' => number_format((float)($row['monto_base'] ?? $row['monto_sugerido'] ?? 0), 2, '.', ''),
             'monto_actual_categoria' => number_format((float)($row['monto_actual_categoria'] ?? $row['monto_actual'] ?? $row['monto_base'] ?? 0), 2, '.', ''),
-            'porcentaje_descuento_familiar' => number_format((float)($row['porcentaje_descuento_familiar'] ?? 0), 2, '.', ''),
+            'tipo_pago' => isset($row['tipo_pago']) && $row['tipo_pago'] !== null
+                ? (string)$row['tipo_pago']
+                : null,
+            'porcentaje_descuento_familiar' => !array_key_exists('porcentaje_descuento_familiar', $row)
+                || $row['porcentaje_descuento_familiar'] === null
+                    ? null
+                    : number_format((float)$row['porcentaje_descuento_familiar'], 2, '.', ''),
             'monto_sugerido' => number_format((float)($row['monto_sugerido'] ?? 0), 2, '.', ''),
             'opciones_monto' => is_array($row['opciones_monto'] ?? null) ? $row['opciones_monto'] : [],
             'monto' => !isset($row['monto']) || $row['monto'] === null ? null : number_format((float)$row['monto'], 2, '.', ''),
@@ -1393,7 +1689,7 @@ final class Cuotas
             $from = (int)$rule['cantidad_integrantes_desde'];
             $to = $rule['cantidad_integrantes_hasta'] === null ? null : (int)$rule['cantidad_integrantes_hasta'];
             if ($count >= $from && ($to === null || $count <= $to)) {
-                return max(0.0, min(100.0, (float)$rule['porcentaje_descuento']));
+                return max(0.0, min(99.99, (float)$rule['porcentaje_descuento']));
             }
         }
         return 0.0;
@@ -1401,7 +1697,7 @@ final class Cuotas
 
     private static function discountedAmount(float $baseAmount, float $discount): float
     {
-        return round(max(0.0, $baseAmount) * (1 - max(0.0, min(100.0, $discount)) / 100), 2);
+        return round(max(0.0, $baseAmount) * (1 - max(0.0, min(99.99, $discount)) / 100), 2);
     }
 
     private static function amountOptionsForCategory(array $history, float $currentAmount, float $discount): array

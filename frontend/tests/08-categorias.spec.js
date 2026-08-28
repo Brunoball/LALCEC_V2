@@ -304,7 +304,7 @@ test.describe('Categorías y descuentos familiares', () => {
         method: 'POST',
         data: {
           cantidad_integrantes_desde: 49,
-          porcentaje_descuento: '101',
+          porcentaje_descuento: '100',
           descripcion: 'PW E2E VALIDACIÓN DESCUENTO',
         },
       },
