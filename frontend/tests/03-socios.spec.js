@@ -15,6 +15,8 @@ const family = familyData();
 const familyMember = personData();
 const familyMemberRemoved = personData();
 const familyMemberForDelete = personData();
+const longBajaReason =
+  'PRUEBA DE BAJA AUTOMÁTICA CON UN MOTIVO EXTENSO QUE DEBE ABRIRSE COMPLETO EN EL MODAL GLOBAL';
 
 function tableRow(page, tableName, text) {
   return page
@@ -204,7 +206,7 @@ test.describe('Socios, empresas y familias', () => {
     await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
     await expectToast(page, 'Tenés que completar el motivo para continuar.');
     await dismissPersistentToast(page);
-    await stateDialog.getByLabel('Motivo de baja *').fill('PRUEBA DE BAJA AUTOMÁTICA');
+    await stateDialog.getByLabel('Motivo de baja *').fill(longBajaReason);
     await stateDialog.getByLabel('Fecha de baja *').fill(todayIso());
     await stateDialog.getByRole('button', { name: 'Dar de baja' }).click();
     await expectToast(page, 'Registro dado de baja correctamente.');
@@ -222,7 +224,11 @@ test.describe('Socios, empresas y familias', () => {
 
     row = tableRow(page, 'Listado de socios', person.dni);
     await expect(row).toBeVisible();
-    await expect(row).toContainText('PRUEBA DE BAJA AUTOMÁTICA');
+    await expect(row).toContainText('Ver motivo completo');
+    await row.getByTitle('Ver motivo de baja completo').click();
+    const reasonDialog = page.getByRole('dialog', { name: 'Motivo de baja' });
+    await expect(reasonDialog).toContainText(longBajaReason);
+    await reasonDialog.getByRole('button', { name: 'Cerrar' }).click();
     const expectedBajaDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC' }).format(
       new Date(`${todayIso()}T00:00:00Z`),
     );
@@ -230,7 +236,7 @@ test.describe('Socios, empresas y familias', () => {
     await expect(row).not.toContainText('WHATSAPP');
     await expect(row.getByTitle('Editar')).toHaveCount(0);
 
-    await search.fill('PRUEBA DE BAJA AUTOMÁTICA');
+    await search.fill('MOTIVO EXTENSO');
     await expect(tableRow(page, 'Listado de socios', person.dni)).toBeVisible();
     await search.fill(person.dni);
     row = tableRow(page, 'Listado de socios', person.dni);

@@ -320,6 +320,7 @@ export default function ModalPagoCuota({
       }
       wide
       closeOnBackdrop={false}
+      animateSize={!(activePaymentTab === "familia" && familyExpanded)}
       footerStart={
         <div className="cuotas-payment-footer-total">
           <span>Total a pagar</span>

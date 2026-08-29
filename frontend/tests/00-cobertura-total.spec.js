@@ -39,6 +39,17 @@ function scenarioSources() {
     .join('\n');
 }
 
+function specFiles() {
+  return walk(__dirname, (file) => file.endsWith('.spec.js'));
+}
+
+function declaredTestCount() {
+  return specFiles().reduce(
+    (total, file) => total + [...read(file).matchAll(/\btest\s*\(\s*['"`]/g)].length,
+    0,
+  );
+}
+
 function backendActions() {
   const modulesRoot = path.join(BACKEND_ROOT, 'modules');
   const routeFiles = walk(
@@ -135,6 +146,7 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Nueva familia',
   'Ver ficha e historial',
   'Ver integrantes e historial',
+  'Ver motivo completo',
   'Editar',
   'Dar de baja',
   'Reactivar',
@@ -166,6 +178,10 @@ const REQUIRED_UI_ACTION_MARKERS = [
   '+ Agregar',
   'Imprimir',
   'Comprobante',
+  'ArrowRight',
+  'is-size-transitioning',
+  'mov-row--skeleton',
+  'No se pudo conectar con el servidor. Intentá nuevamente.',
   'PDF',
   'Eliminar pago',
   // Cabecera/perfil.
@@ -334,6 +350,18 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const registered = [...E2E_INFRA_ACTIONS].filter((action) => backend.has(action));
     const missing = registered.filter((action) => !source.includes(action));
     expect(missing, `Infraestructura E2E sin uso declarado: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  test('la suite conserva su piso de escenarios y no permite pruebas deshabilitadas o exclusivas', () => {
+    const disabled = specFiles().flatMap((file) => {
+      const source = read(file);
+      return /\btest(?:\.describe)?\.(?:only|skip|fixme)\s*\(/.test(source)
+        ? [path.relative(__dirname, file)]
+        : [];
+    });
+
+    expect(disabled, `Specs deshabilitados o exclusivos: ${disabled.join(', ')}`).toEqual([]);
+    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(110);
   });
 
   test('los filtros y el semáforo de deuda de Socios/Empresas conservan su contrato frontend-backend', () => {

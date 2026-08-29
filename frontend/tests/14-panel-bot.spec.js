@@ -681,6 +681,21 @@ test.describe('Panel Bot WhatsApp', () => {
     )).toBeTruthy();
   });
 
+  test('mantiene el chat utilizable y sin desborde horizontal en un viewport móvil', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installSafeBotMock(page);
+    await openBotTestChat(page, WA_ID);
+
+    await expect(page.locator('.wp-messages')).toBeVisible();
+    await expect(page.locator('textarea.wp-input')).toBeVisible();
+    const overflow = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      body: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    expect(overflow.document).toBeLessThanOrEqual(1);
+    expect(overflow.body).toBeLessThanOrEqual(1);
+  });
+
   test('el botón global muestra badge normal/urgente y reproduce sonido cuando aumentan', async ({ page }) => {
     let notificationState = { total_normal: 2, total_urgent: 1 };
     const normalChatId = '5493492000001';

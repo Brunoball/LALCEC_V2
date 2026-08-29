@@ -37,7 +37,7 @@ test.describe('Usuarios y roles', () => {
     }
   });
 
-  test('protege la sesión actual y ofrece baja o eliminación definitiva incluso con historial', async ({ page, request }) => {
+  test('preserva mayúsculas y minúsculas, protege la sesión actual y completa el ciclo del usuario', async ({ page, request }) => {
     await cleanupUserByUsername(request, user.username).catch(() => false);
     await cleanupUserByUsername(request, user.usernameEdited).catch(() => false);
 
@@ -69,6 +69,7 @@ test.describe('Usuarios y roles', () => {
     await page.getByRole('button', { name: 'Nuevo usuario' }).click();
     dialog = page.getByRole('dialog', { name: 'Nuevo usuario' });
     await dialog.getByLabel('Usuario *').fill(user.username);
+    await expect(dialog.getByLabel('Usuario *')).toHaveValue(user.username);
     await dialog.getByLabel('Email').fill(user.email);
     await selectRole(dialog, /^Solo lectura/i);
     await dialog.getByLabel('Contraseña *', { exact: true }).fill(user.password);
@@ -83,6 +84,7 @@ test.describe('Usuarios y roles', () => {
 
     await search.fill(user.username);
     let row = userRow(page, user.username);
+    await expect(row.getByText(user.username, { exact: true })).toBeVisible();
     await expect(row).toContainText(user.email);
     await expect(row).toContainText('Solo lectura');
     await expect(row).toContainText('Activo');
@@ -90,6 +92,7 @@ test.describe('Usuarios y roles', () => {
     await row.getByRole('button', { name: `Editar ${user.username}` }).click();
     dialog = page.getByRole('dialog', { name: 'Editar usuario' });
     await dialog.getByLabel('Usuario *').fill(user.usernameEdited);
+    await expect(dialog.getByLabel('Usuario *')).toHaveValue(user.usernameEdited);
     await dialog.getByLabel('Email').fill(user.emailEdited);
     await selectRole(dialog, /^Administrador/i);
     await dialog.getByLabel('Nueva contraseña', { exact: true }).fill(user.newPassword);
@@ -99,6 +102,7 @@ test.describe('Usuarios y roles', () => {
 
     await search.fill(user.usernameEdited);
     row = userRow(page, user.usernameEdited);
+    await expect(row.getByText(user.usernameEdited, { exact: true })).toBeVisible();
     await expect(row).toContainText(user.emailEdited);
     await expect(row).toContainText('Administrador');
 

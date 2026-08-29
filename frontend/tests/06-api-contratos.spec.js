@@ -34,6 +34,94 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     expect(health.exito).not.toBe(false);
   });
 
+  test('el router rechaza action ausente, rutas desconocidas, métodos incorrectos y tokens excesivos', async ({ request }) => {
+    const missingAction = await apiResult(request, '', { session: null });
+    expect(missingAction.status).toBe(400);
+    expect(missingAction.body?.mensaje).toMatch(/Falta el parámetro action/i);
+
+    const unknownAction = await apiResult(request, 'pw_e2e_accion_inexistente', {
+      session: null,
+    });
+    expect(unknownAction.status).toBe(404);
+    expect(unknownAction.body?.mensaje).toMatch(/Acción no encontrada/i);
+
+    const wrongMethod = await apiResult(request, 'health', {
+      method: 'POST',
+      data: {},
+      session: null,
+    });
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.body?.mensaje).toMatch(/Método HTTP no permitido/i);
+
+    const oversizedToken = await apiResult(request, 'dashboard_resumen', {
+      session: { token: 'x'.repeat(129) },
+    });
+    expect(oversizedToken.status).toBe(401);
+    expect(oversizedToken.body?.codigo).toBe('SESSION_REQUIRED');
+  });
+
+  test('la infraestructura E2E exige header, confirmación, scope y auditoría válidos', async ({ request }) => {
+    const withoutHeader = await apiResult(request, 'e2e_status', {
+      headers: { 'X-LALCEC-E2E': 'NO' },
+    });
+    expect(withoutHeader.status).toBe(403);
+    expect(withoutHeader.body?.codigo).toBe('E2E_HEADER_REQUIRED');
+
+    await expectApiError(
+      request,
+      'e2e_cleanup',
+      { method: 'POST', data: { confirmacion: 'NO' } },
+      { status: 422, code: 'E2E_CLEANUP_CONFIRMACION_INVALIDA' },
+    );
+    await expectApiError(
+      request,
+      'e2e_cleanup_scope',
+      {
+        method: 'POST',
+        data: {
+          confirmacion: 'LIMPIAR_PLAYWRIGHT',
+          scope: 'scope_no_permitido',
+          value: 'PW E2E',
+        },
+      },
+      { status: 422, code: 'E2E_SCOPE_INVALIDO' },
+    );
+    await expectApiError(
+      request,
+      'e2e_auditoria',
+      { params: { tabla: 'socios', id: 1 } },
+      { status: 422, code: 'E2E_AUDITORIA_INVALIDA' },
+    );
+  });
+
+  test('CORS autoriza el preflight local esperado y no refleja orígenes externos', async ({ request }) => {
+    const allowedOrigin = 'http://localhost:3000';
+    const allowed = await apiResult(request, 'health', {
+      method: 'OPTIONS',
+      session: null,
+      headers: {
+        Origin: allowedOrigin,
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization, x-lalcec-e2e',
+      },
+    });
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers['access-control-allow-origin']).toBe(allowedOrigin);
+    expect(allowed.headers['access-control-allow-credentials']).toBe('true');
+    expect(allowed.headers['access-control-allow-headers']).toContain('X-LALCEC-E2E');
+
+    const blocked = await apiResult(request, 'health', {
+      method: 'OPTIONS',
+      session: null,
+      headers: {
+        Origin: 'https://origen-no-permitido.example.test',
+        'Access-Control-Request-Method': 'GET',
+      },
+    });
+    expect(blocked.status).toBe(204);
+    expect(blocked.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   test('el proxy local del Panel Bot rechaza orígenes externos antes de reenviar datos', async ({ request }) => {
     const result = await apiResult(request, 'bot_panel_proxy', {
       method: 'POST',
@@ -188,6 +276,38 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       { method: 'POST', data: {} },
       { status: 422, code: 'VALIDATION_ERROR' },
     );
+    await expectApiError(
+      request,
+      'contable_ingreso_eliminar',
+      { method: 'POST', data: { id_ingreso: 2147483647 } },
+      { status: 404, code: 'INGRESO_NO_ENCONTRADO' },
+    );
+    await expectApiError(
+      request,
+      'contable_egreso_eliminar',
+      { method: 'POST', data: { id_egreso: 2147483647 } },
+      { status: 404, code: 'EGRESO_NO_ENCONTRADO' },
+    );
+    await expectApiError(
+      request,
+      'contable_egreso_archivo',
+      { params: { id: 2147483647 } },
+      { status: 404, code: 'ARCHIVO_NO_ENCONTRADO' },
+    );
+  });
+
+  test('las operaciones sobre categorías, descuentos y usuarios inexistentes responden 404', async ({ request }) => {
+    for (const [action, options, code] of [
+      ['categorias_obtener', { params: { id: 2147483647 } }, 'CATEGORIA_NO_ENCONTRADA'],
+      ['categorias_historial', { params: { id: 2147483647 } }, 'CATEGORIA_NO_ENCONTRADA'],
+      ['categorias_eliminar', { method: 'POST', data: { id: 2147483647 } }, 'CATEGORIA_NO_ENCONTRADA'],
+      ['categorias_reactivar', { method: 'POST', data: { id: 2147483647 } }, 'CATEGORIA_NO_ENCONTRADA'],
+      ['descuentos_familiares_eliminar', { method: 'POST', data: { id: 2147483647 } }, 'DESCUENTO_FAMILIAR_NO_ENCONTRADO'],
+      ['usuarios_cambiar_estado', { method: 'POST', data: { id: 2147483647, activo: false } }, 'USUARIO_NO_ENCONTRADO'],
+      ['usuarios_eliminar', { method: 'POST', data: { id: 2147483647 } }, 'USUARIO_NO_ENCONTRADO'],
+    ]) {
+      await expectApiError(request, action, options, { status: 404, code });
+    }
   });
 
   test('socios valida filtros, campos, duplicados, tipo inmutable y confirmación destructiva', async ({ request }) => {
@@ -199,6 +319,24 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
         request,
         'socios_listar',
         { params: { tipo: 'OTRO' } },
+        { status: 422, code: 'FILTRO_INVALIDO' },
+      );
+      await expectApiError(
+        request,
+        'socios_listar',
+        { params: { pagina: 0 } },
+        { status: 422, code: 'PAGINA_INVALIDA' },
+      );
+      await expectApiError(
+        request,
+        'socios_listar',
+        { params: { familia: 'NO_VALIDO' } },
+        { status: 422, code: 'FILTRO_INVALIDO' },
+      );
+      await expectApiError(
+        request,
+        'socios_listar',
+        { params: { alta_desde: '2026-12-31', alta_hasta: '2026-01-01' } },
         { status: 422, code: 'FILTRO_INVALIDO' },
       );
       await expectApiError(

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -78,14 +78,16 @@ export default function CrudModal({
   footerStart = null,
   modalClassName = "",
   closeOnBackdrop = true,
+  animateSize = true,
 }) {
+  const titleId = useId();
   const modalRef = useRef(null);
   const modalIdRef = useRef(Symbol("crud-modal"));
   const onCloseRef = useRef(onClose);
   const savingRef = useRef(saving);
   onCloseRef.current = onClose;
   savingRef.current = saving;
-  useAnimatedModalSize(modalRef, open);
+  useAnimatedModalSize(modalRef, open && animateSize);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -127,12 +129,12 @@ export default function CrudModal({
         className={`entity-modal ${wide ? "entity-modal--wide" : ""} ${modalClassName}`.trim()}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="entity-modal-title"
+        aria-labelledby={titleId}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="entity-modal__header">
           <div>
-            <h2 id="entity-modal-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
           <button

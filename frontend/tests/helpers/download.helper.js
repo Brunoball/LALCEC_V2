@@ -31,6 +31,21 @@ async function captureDownload(page, trigger, options = {}) {
     );
   }
 
+  const expectedContent = Array.isArray(options.expectedContent)
+    ? options.expectedContent
+    : options.expectedContent
+      ? [options.expectedContent]
+      : [];
+  if (expectedContent.length) {
+    const rawText = content.toString('utf8');
+    for (const expectedValue of expectedContent) {
+      expect(
+        rawText,
+        `El archivo ${suggested} no contiene el dato exportado: ${expectedValue}`,
+      ).toContain(String(expectedValue));
+    }
+  }
+
   return { content, suggestedFilename: suggested };
 }
 
@@ -39,6 +54,7 @@ async function exportFromGlobalModal(page, {
   format,
   scope = null,
   expectedExtension,
+  expectedContent = [],
 }) {
   const dialog = page.getByRole('dialog').filter({ hasText: /Alcance/i });
   await expect(openButton).toBeVisible();
@@ -74,6 +90,7 @@ async function exportFromGlobalModal(page, {
       extension: expectedExtension,
       signature: expectedExtension === '.pdf' ? '%PDF' : 'PK',
       minimumBytes: expectedExtension === '.pdf' ? 300 : 500,
+      expectedContent,
     },
   );
   await expect(dialog).toBeHidden();

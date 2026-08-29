@@ -102,6 +102,14 @@ const paymentTypeDetail = (item) => {
   return "";
 };
 
+const paymentTypeTone = (item) => {
+  const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
+  if (type === "DESCUENTO_FAMILIAR") return "is-family";
+  if (type === "DESCUENTO_PERSONALIZADO") return "is-custom-discount";
+  if (type === "MONTO_PERSONALIZADO") return "is-custom";
+  return "is-neutral";
+};
+
 const formatDate = (value) =>
   value
     ? new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(
@@ -1384,7 +1392,9 @@ export default function ContableModule({ view = "summary" }) {
                           </small>
                         ) : null}
                         {paymentTypeDetail(item) ? (
-                          <small className="contable-payment-kind">
+                          <small
+                            className={`contable-payment-kind ${paymentTypeTone(item)}`}
+                          >
                             {paymentTypeDetail(item)}
                           </small>
                         ) : null}

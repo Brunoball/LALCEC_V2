@@ -1229,4 +1229,84 @@ test.describe('Cuotas de socios y empresas', () => {
       { status: 404, code: 'PAGO_NO_ENCONTRADO' },
     );
   });
+
+  test('rechaza cuotas sin categoría, anteriores al alta y pertenecientes a socios inactivos', async ({ request }) => {
+    const edgePerson = personData();
+    const { category, medium } = await activeCategoryAndMedium(request);
+    let saved = null;
+
+    const paymentPayload = () => ({
+      id_socio: saved.id_socio,
+      anio: currentYear,
+      mes: currentMonth,
+      fecha_pago: todayIso(),
+      monto: '100.00',
+      id_medio_pago: medium.id_medio_pago,
+      aplicar_familia: false,
+    });
+    const updatePerson = (overrides = {}) =>
+      apiCall(request, 'socios_guardar', {
+        method: 'POST',
+        data: {
+          id_socio: saved.id_socio,
+          tipo_socio: 'PERSONA',
+          apellido: edgePerson.apellido,
+          nombre: edgePerson.nombre,
+          dni: edgePerson.dni,
+          fecha_alta: '2000-01-01',
+          domicilio: 'CALLE PLAYWRIGHT',
+          numero_domicilio: '123',
+          localidad: 'SAN FRANCISCO',
+          telefono: edgePerson.telefono,
+          email: edgePerson.email,
+          id_categoria: category.id_categoria,
+          id_medio_pago: medium.id_medio_pago,
+          enviar_recordatorio: false,
+          observaciones: 'PW E2E BORDES DE CUOTAS',
+          ...overrides,
+        },
+      });
+
+    try {
+      saved = await createPerson(request, edgePerson, {
+        id_categoria: null,
+        id_medio_pago: medium.id_medio_pago,
+      });
+      await expectApiError(
+        request,
+        'cuotas_registrar_pago',
+        { method: 'POST', data: paymentPayload() },
+        { status: 409, code: 'CATEGORIA_REQUERIDA' },
+      );
+
+      await updatePerson({ fecha_alta: `${currentYear + 1}-01-01` });
+      await expectApiError(
+        request,
+        'cuotas_registrar_pago',
+        { method: 'POST', data: paymentPayload() },
+        { status: 409, code: 'PERIODO_ANTERIOR_AL_ALTA' },
+      );
+
+      await updatePerson();
+      await apiCall(request, 'socios_eliminar', {
+        method: 'POST',
+        data: {
+          id: saved.id_socio,
+          fecha_baja: todayIso(),
+          motivo_baja: 'PW E2E SOCIO INACTIVO PARA VALIDAR CUOTAS',
+        },
+      });
+      await expectApiError(
+        request,
+        'cuotas_registrar_pago',
+        { method: 'POST', data: paymentPayload() },
+        { status: 409, code: 'SOCIO_INACTIVO' },
+      );
+    } finally {
+      await cleanupSocioByDocument(request, {
+        tipo: 'PERSONA',
+        documento: edgePerson.dni,
+      }).catch(() => false);
+    }
+  });
 });

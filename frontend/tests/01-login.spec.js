@@ -134,6 +134,27 @@ test.describe('Login y sesión', () => {
     await expect(missingPasswordToast).toContainText('Ingresá tu contraseña.');
   });
 
+  test('un fallo de red se informa con un toast amigable y nunca expone Failed to fetch', async ({ page }) => {
+    await page.route(/api\.php\?action=auth_login(?:&|$)/, async (route) => {
+      await route.abort('failed');
+    });
+
+    await page.goto('/');
+    await page.getByPlaceholder('Usuario').fill('pw_e2e_red_amigable');
+    await page.getByPlaceholder('Contraseña').fill('Password123!');
+    await page.getByRole('button', { name: /^Ingresar$/ }).click();
+
+    const toast = page.getByRole('status');
+    await expect(toast).toHaveClass(/toast-error/);
+    await expect(toast).toContainText(
+      'No se pudo conectar con el servidor. Intentá nuevamente.',
+    );
+    await expect(toast).not.toContainText(/Failed to fetch|NetworkError|Load failed/i);
+    await expect(page.locator('.ini_contenedor')).not.toContainText(
+      /Failed to fetch|NetworkError|Load failed/i,
+    );
+  });
+
   test('valida credenciales, muestra la contraseña, recuerda la cuenta y cierra sesión', async ({ page }) => {
     const username = process.env.PW_USER;
     const password = process.env.PW_PASSWORD;

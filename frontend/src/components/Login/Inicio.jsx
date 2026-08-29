@@ -103,9 +103,17 @@ export default function Inicio() {
 
       navigate("/panel", { replace: true });
     } catch (error) {
+      const technicalMessage = String(error?.message || "");
+      const isNetworkError =
+        /Failed to fetch|NetworkError|Network error|Load failed/i.test(
+          technicalMessage,
+        );
+
       setToast({
         tipo: "error",
-        mensaje: error.message || "No se pudo iniciar sesión.",
+        mensaje: isNetworkError
+          ? "No se pudo conectar con el servidor. Intentá nuevamente."
+          : technicalMessage || "No se pudo iniciar sesión.",
       });
     } finally {
       setCargando(false);

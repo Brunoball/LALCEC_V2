@@ -28,16 +28,18 @@ async function disableExternalLogoLookup(page) {
   });
 }
 
-async function exportBothFormats(page, button) {
+async function exportBothFormats(page, button, expectedContent) {
   await exportFromGlobalModal(page, {
     openButton: button,
     format: 'Excel',
     expectedExtension: '.xlsx',
+    expectedContent,
   });
   await exportFromGlobalModal(page, {
     openButton: button,
     format: 'PDF',
     expectedExtension: '.pdf',
+    expectedContent,
   });
 }
 
@@ -270,7 +272,11 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await page.goto('/socios/personas');
     await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(person.dni);
     await expect(page.getByRole('table', { name: 'Listado de socios' })).toContainText(person.dni);
-    await exportBothFormats(page, page.getByRole('button', { name: 'Exportar', exact: true }));
+    await exportBothFormats(
+      page,
+      page.getByRole('button', { name: 'Exportar', exact: true }),
+      person.dni,
+    );
   });
 
   test('descarga Excel y PDF reales de empresas', async ({ page, request }) => {
@@ -279,7 +285,11 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await page.goto('/socios/empresas');
     await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(company.cuit);
     await expect(page.getByRole('table', { name: 'Listado de empresas' })).toContainText(company.cuit);
-    await exportBothFormats(page, page.getByRole('button', { name: 'Exportar', exact: true }));
+    await exportBothFormats(
+      page,
+      page.getByRole('button', { name: 'Exportar', exact: true }),
+      company.cuit,
+    );
   });
 
   test('descarga Excel y PDF reales de familias', async ({ page, request }) => {
@@ -289,6 +299,10 @@ test.describe('Navegación, responsive, paginación y exportaciones', () => {
     await page.goto('/socios/familias');
     await page.getByRole('textbox', { name: 'Búsqueda', exact: true }).fill(family.prefix);
     await expect(page.getByRole('table', { name: 'Listado de familias' })).toContainText(family.prefix);
-    await exportBothFormats(page, page.getByRole('button', { name: 'Exportar', exact: true }));
+    await exportBothFormats(
+      page,
+      page.getByRole('button', { name: 'Exportar', exact: true }),
+      family.prefix,
+    );
   });
 });
