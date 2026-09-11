@@ -201,6 +201,83 @@ function transaction(PDO $db, callable $callback): mixed
     }
 }
 
+/**
+ * Archivo histórico de socios eliminados definitivamente.
+ *
+ * Igual que en RH, el socio NO se borra físicamente: esta tabla funciona como
+ * tombstone y conserva la identidad/snapshot mientras pagos, historial y demás
+ * relaciones continúan referenciando el mismo id_socio.
+ */
+function ensure_socios_eliminados_schema(PDO $db): void
+{
+    static $done = [];
+    $connectionId = spl_object_id($db);
+    if (isset($done[$connectionId])) return;
+
+    // CREATE TABLE puede provocar COMMIT implícito en MySQL. Los callers que
+    // archivan un socio deben invocar este helper ANTES de abrir su transacción.
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS socios_eliminados (
+            id_socio INT NOT NULL,
+            tipo_socio ENUM('PERSONA','EMPRESA') NOT NULL,
+            denominacion VARCHAR(255) NOT NULL,
+            documento VARCHAR(20) NULL,
+            fecha_eliminacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            id_usuario INT NULL,
+            datos_socio LONGTEXT NOT NULL,
+            impacto LONGTEXT NOT NULL,
+            PRIMARY KEY (id_socio),
+            KEY idx_socios_eliminados_fecha (fecha_eliminacion),
+            KEY idx_socios_eliminados_documento (documento),
+            KEY idx_socios_eliminados_tipo (tipo_socio)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $done[$connectionId] = true;
+}
+
+function socios_eliminados_disponible(PDO $db): bool
+{
+    try {
+        $statement = $db->prepare(
+            "SELECT COUNT(*)
+             FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'socios_eliminados'"
+        );
+        $statement->execute();
+        return (int)$statement->fetchColumn() === 1;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function socio_esta_eliminado(PDO $db, int $idSocio): bool
+{
+    if ($idSocio <= 0 || !socios_eliminados_disponible($db)) return false;
+    $statement = $db->prepare('SELECT 1 FROM socios_eliminados WHERE id_socio = ? LIMIT 1');
+    $statement->execute([$idSocio]);
+    return (bool)$statement->fetchColumn();
+}
+
+/**
+ * Filtro SQL centralizado para evitar que un socio archivado vuelva a aparecer
+ * por accidente en módulos operativos nuevos.
+ */
+function filtro_socios_no_eliminados(PDO $db, string $alias = 's'): string
+{
+    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+        throw new InvalidArgumentException('Alias de socios inválido.');
+    }
+    if (!socios_eliminados_disponible($db)) return '1 = 1';
+
+    return "NOT EXISTS (
+                SELECT 1
+                FROM socios_eliminados se_arch
+                WHERE se_arch.id_socio = {$alias}.id_socio
+            )";
+}
+
 function audit_change(PDO $db, array $auth, string $module, string $action, string $table, int|string|null $id, string $description, mixed $before, mixed $after): void
 {
     $statement = $db->prepare(

@@ -329,7 +329,21 @@ test.describe('Contabilidad completa desde la interfaz', () => {
     const search = page.getByRole('textbox', { name: 'Búsqueda', exact: true });
     await search.fill(`${textSuffix.toLowerCase()}, egreso`);
     await expect(rowByText(page, 'Listado de egresos', suffix)).toBeVisible();
+
+    // La busqueda esta debounced. Con una API remota, el refresco puede caer
+    // justo durante el click de "Ver comprobante" y reemplazar la fila.
+    // Esperamos el resultado definitivo antes de seguir interactuando.
+    const finalSearchResponsePromise = page.waitForResponse((response) => {
+      if (response.status() !== 200) return false;
+      const url = new URL(response.url());
+      return (
+        url.searchParams.get('action') === 'contable_egresos_listar' &&
+        url.searchParams.get('buscar') === suffix
+      );
+    });
     await search.fill(suffix);
+    await finalSearchResponsePromise;
+
     let row = rowByText(page, 'Listado de egresos', suffix);
     await expect(row).toContainText(expenseDetail);
     await expect(row.getByTitle('Ver comprobante')).toBeEnabled();

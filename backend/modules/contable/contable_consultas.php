@@ -284,6 +284,7 @@ trait ContableConsultas
             ["CONCAT_WS(' ',
                 sp.apellido, sp.nombre, sp.dni,
                 se.razon_social, se.cuit,
+                sdel.denominacion, sdel.documento,
                 c.nombre, mp.nombre
             ) LIKE {param}"],
             160,
@@ -301,17 +302,25 @@ trait ContableConsultas
                 {$paymentAmount} AS monto_calculado,
                 CASE WHEN p.monto IS NULL THEN 1 ELSE 0 END AS monto_estimado,
                 s.tipo_socio, s.id_categoria,
-                CASE
-                    WHEN s.tipo_socio = 'EMPRESA' THEN COALESCE(NULLIF(se.razon_social, ''), CONCAT('EMPRESA #', s.id_socio))
-                    ELSE COALESCE(NULLIF(TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))), ', '), CONCAT('SOCIO #', s.id_socio))
-                END AS socio,
-                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                COALESCE(
+                    CASE
+                        WHEN s.tipo_socio = 'EMPRESA' THEN NULLIF(se.razon_social, '')
+                        ELSE NULLIF(TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))), ', ')
+                    END,
+                    NULLIF(sdel.denominacion, ''),
+                    CASE WHEN s.tipo_socio = 'EMPRESA' THEN CONCAT('EMPRESA #', s.id_socio) ELSE CONCAT('SOCIO #', s.id_socio) END
+                ) AS socio,
+                COALESCE(
+                    CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END,
+                    sdel.documento
+                ) AS documento,
                 COALESCE(NULLIF(c.nombre, ''), 'SIN CATEGORÍA') AS categoria,
                 COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio
              FROM pagos p
              INNER JOIN socios s ON s.id_socio = p.id_socio
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
              LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
+             LEFT JOIN socios_eliminados sdel ON sdel.id_socio = s.id_socio
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
              WHERE " . implode(' AND ', $where) . "

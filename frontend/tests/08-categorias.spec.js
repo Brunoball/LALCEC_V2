@@ -2,6 +2,7 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const { categoryData, discountData } = require('./fixtures/categorias.fixture');
 const {
   apiCall,
+  apiResult,
   cleanupCategoriesByPrefix,
   cleanupDiscountsByThresholds,
   expectApiError,
@@ -61,15 +62,16 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Categorías y descuentos familiares', () => {
   const category = categoryData();
   const discounts = discountData();
+  const concurrentDiscountThreshold = 48;
 
   test.beforeEach(async ({ request }) => {
     await cleanupCategoriesByPrefix(request, category.prefix);
-    await cleanupDiscountsByThresholds(request, discounts.thresholds);
+    await cleanupDiscountsByThresholds(request, [...discounts.thresholds, concurrentDiscountThreshold]);
   });
 
   test.afterEach(async ({ request }) => {
     await cleanupCategoriesByPrefix(request, category.prefix);
-    await cleanupDiscountsByThresholds(request, discounts.thresholds);
+    await cleanupDiscountsByThresholds(request, [...discounts.thresholds, concurrentDiscountThreshold]);
   });
 
   test('cubre alta, edición, historial, búsqueda, baja, reactivación y auditoría de categorías', async ({ page, request }) => {
@@ -194,6 +196,63 @@ test.describe('Categorías y descuentos familiares', () => {
     expect(auditActionNames(audit)).toEqual(
       expect.arrayContaining(['CREAR', 'EDITAR', 'DAR_BAJA', 'REACTIVAR']),
     );
+  });
+
+
+  test('serializa altas concurrentes de descuentos y nunca crea dos reglas solapadas', async ({ request }) => {
+    const common = {
+      cantidad_integrantes_desde: concurrentDiscountThreshold,
+      cantidad_integrantes_hasta: concurrentDiscountThreshold,
+      vigencia_desde: '1998-01-01',
+      vigencia_hasta: '1998-12-31',
+    };
+
+    const [first, second] = await Promise.all([
+      apiResult(request, 'descuentos_familiares_guardar', {
+        method: 'POST',
+        data: {
+          ...common,
+          porcentaje_descuento: '17.25',
+          descripcion: 'PW E2E CONCURRENCIA DESCUENTO A',
+        },
+      }),
+      apiResult(request, 'descuentos_familiares_guardar', {
+        method: 'POST',
+        data: {
+          ...common,
+          porcentaje_descuento: '18.75',
+          descripcion: 'PW E2E CONCURRENCIA DESCUENTO B',
+        },
+      }),
+    ]);
+
+    const results = [first, second];
+    const successes = results.filter((result) => result.ok);
+    const conflicts = results.filter(
+      (result) =>
+        !result.ok &&
+        result.status === 409 &&
+        result.body?.codigo === 'DESCUENTO_FAMILIAR_DUPLICADO',
+    );
+
+    expect(successes).toHaveLength(1);
+    expect(conflicts).toHaveLength(1);
+    expect(Number(successes[0].body?.item?.cantidad_integrantes_desde)).toBe(
+      concurrentDiscountThreshold,
+    );
+
+    const listed = await apiCall(request, 'descuentos_familiares_listar', {
+      params: { estado: 'todos' },
+    });
+    const persisted = (listed.items || []).filter(
+      (item) =>
+        Number(item.cantidad_integrantes_desde) === concurrentDiscountThreshold &&
+        Number(item.cantidad_integrantes_hasta) === concurrentDiscountThreshold &&
+        String(item.vigencia_desde) === common.vigencia_desde &&
+        String(item.vigencia_hasta) === common.vigencia_hasta &&
+        String(item.descripcion || '').startsWith('PW E2E CONCURRENCIA DESCUENTO'),
+    );
+    expect(persisted).toHaveLength(1);
   });
 
   test('cubre descuentos globales por cantidad, solapamientos, edición, baja lógica y auditoría', async ({ page, request }) => {

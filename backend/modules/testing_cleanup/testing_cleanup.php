@@ -117,6 +117,7 @@ final class TestingCleanup
             'contable_opciones' => 0,
             'familias' => 0,
             'socios' => 0,
+            'socios_eliminados' => 0,
             'pagos' => 0,
             'pagos_inscripciones' => 0,
             'categorias' => 0,
@@ -196,6 +197,9 @@ final class TestingCleanup
                 self::deleteByIds($db, 'familias_socios', 'id_familia', $testFamilies);
             }
             if ($testSocios !== []) {
+                if (self::tableExists($db, 'socios_eliminados')) {
+                    $counts['socios_eliminados'] += self::deleteByIds($db, 'socios_eliminados', 'id_socio', $testSocios);
+                }
                 self::deleteByIds($db, 'familias_socios', 'id_socio', $testSocios);
                 $counts['pagos'] += self::deleteByIds($db, 'pagos', 'id_socio', $testSocios);
                 if (self::tableExists($db, 'pagos_inscripciones')) {
@@ -356,7 +360,46 @@ final class TestingCleanup
 
         $db->beginTransaction();
         try {
-            if ($scope === 'familia_prefijo') {
+            if ($scope === 'socio_id') {
+                $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                if ($id === false) {
+                    api_error('ID de socio E2E inválido.', 'E2E_SCOPE_INVALIDO', 422);
+                }
+                $id = (int)$id;
+                $isE2E = self::scalar(
+                    $db,
+                    "SELECT COUNT(*)
+                     FROM socios s
+                     LEFT JOIN socios_personas p ON p.id_socio = s.id_socio
+                     LEFT JOIN socios_empresas e ON e.id_socio = s.id_socio
+                     WHERE s.id_socio = ?
+                       AND (
+                           p.apellido LIKE 'PW EE APELLIDO %'
+                           OR p.apellido LIKE 'PW E2E %'
+                           OR p.email LIKE '%@example.test'
+                           OR e.razon_social LIKE 'PW E2E %'
+                           OR e.razon_social LIKE 'PW EE %'
+                           OR e.email LIKE '%@example.test'
+                       )",
+                    [$id]
+                );
+                if ($isE2E !== 1) {
+                    api_error('El socio indicado no pertenece al conjunto E2E.', 'E2E_SCOPE_BLOQUEADO', 403);
+                }
+
+                // Limpieza física exclusiva del harness. La operación real de
+                // negocio archiva y conserva todos estos registros.
+                if (self::tableExists($db, 'socios_eliminados')) {
+                    $deleted += self::deleteByIds($db, 'socios_eliminados', 'id_socio', [$id]);
+                }
+                self::deleteByIds($db, 'familias_socios', 'id_socio', [$id]);
+                self::deleteByIds($db, 'pagos', 'id_socio', [$id]);
+                if (self::tableExists($db, 'pagos_inscripciones')) {
+                    self::deleteByIds($db, 'pagos_inscripciones', 'id_socio', [$id]);
+                }
+                self::deleteByIds($db, 'socios_historial_estados', 'id_socio', [$id]);
+                $deleted += self::deleteByIds($db, 'socios', 'id_socio', [$id]);
+            } elseif ($scope === 'familia_prefijo') {
                 $prefix = trim((string)$value);
                 if (!str_starts_with($prefix, 'PW E2E FAM ') && !str_starts_with($prefix, 'PW EE FAM ')) {
                     api_error('Prefijo E2E de familia inválido.', 'E2E_SCOPE_INVALIDO', 422);
@@ -437,6 +480,7 @@ final class TestingCleanup
 
     private static function residueCounts(PDO $db, int $currentSessionId): array
     {
+        ensure_socios_eliminados_schema($db);
         $counts = [
             'socios' => count(self::testSocioIds($db)),
             'familias' => self::scalar($db, "SELECT COUNT(*) FROM familias WHERE nombre LIKE 'PW E2E FAM %' OR nombre LIKE 'PW EE FAM %'"),
@@ -454,6 +498,11 @@ final class TestingCleanup
         ];
 
         $testSocios = self::testSocioIds($db);
+        $counts['socios_eliminados'] = $testSocios === [] ? 0 : self::scalar(
+            $db,
+            'SELECT COUNT(*) FROM socios_eliminados WHERE id_socio IN (' . self::placeholders(count($testSocios)) . ')',
+            $testSocios
+        );
         $counts['pagos'] = $testSocios === [] ? 0 : self::scalar(
             $db,
             'SELECT COUNT(*) FROM pagos WHERE id_socio IN (' . self::placeholders(count($testSocios)) . ')',
@@ -472,10 +521,12 @@ final class TestingCleanup
 
     private static function realDataSnapshot(PDO $db): array
     {
+        ensure_socios_eliminados_schema($db);
         $e2eSocio = self::e2eSocioExistsSql('s.id_socio');
         $e2eSocioFs = self::e2eSocioExistsSql('fs.id_socio');
         $queries = [
             'socios' => "SELECT s.* FROM socios s WHERE NOT EXISTS ({$e2eSocio}) ORDER BY s.id_socio",
+            'socios_eliminados' => "SELECT se.* FROM socios_eliminados se WHERE NOT EXISTS (" . self::e2eSocioExistsSql('se.id_socio') . ") ORDER BY se.id_socio",
             'socios_personas' => "SELECT p.* FROM socios_personas p WHERE NOT (p.apellido LIKE 'PW EE APELLIDO %' OR p.apellido LIKE 'PW E2E %' OR p.email LIKE '%@example.test') ORDER BY p.id_socio",
             'socios_empresas' => "SELECT e.* FROM socios_empresas e WHERE NOT (e.razon_social LIKE 'PW E2E %' OR e.razon_social LIKE 'PW EE %' OR e.email LIKE '%@example.test') ORDER BY e.id_socio",
             'socios_historial_estados' => "SELECT h.* FROM socios_historial_estados h WHERE NOT EXISTS (" . self::e2eSocioExistsSql('h.id_socio') . ") ORDER BY h.id_historial_estado",

@@ -127,7 +127,7 @@ final class Cuotas
         );
         if ($includeCatalogs === null) $includeCatalogs = true;
 
-        $where = ['s.tipo_socio = ?'];
+        $where = ['s.tipo_socio = ?', filtro_socios_no_eliminados($db, 's')];
         $params = [$anio, $mes, $tipo];
 
         if ($estado === 'DEUDORES') {
@@ -213,7 +213,7 @@ final class Cuotas
              LEFT JOIN familias f
                     ON f.id_familia = fs.id_familia
                    AND f.activo = 1
-             LEFT JOIN (" . self::familyCountSql() . ") fc ON fc.id_familia = f.id_familia
+             LEFT JOIN (" . self::familyCountSql($db) . ") fc ON fc.id_familia = f.id_familia
              LEFT JOIN pagos p
                     ON p.id_socio = s.id_socio
                    AND p.anio = ?
@@ -373,9 +373,10 @@ final class Cuotas
              LEFT JOIN familias f
                     ON f.id_familia = fs.id_familia
                    AND f.activo = 1
-             LEFT JOIN (" . self::familyCountSql() . ") fc ON fc.id_familia = f.id_familia
+             LEFT JOIN (" . self::familyCountSql($db) . ") fc ON fc.id_familia = f.id_familia
              WHERE s.estado = 'ACTIVO'
                AND s.id_categoria IS NOT NULL
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              ORDER BY s.tipo_socio, denominacion"
         )->fetchAll();
 
@@ -426,7 +427,8 @@ final class Cuotas
         $firstPartnerYear = $db->query(
             "SELECT MIN(YEAR(fecha_alta))
              FROM socios
-             WHERE fecha_alta IS NOT NULL"
+             WHERE fecha_alta IS NOT NULL
+               AND " . filtro_socios_no_eliminados($db, 'socios')
         )->fetchColumn();
         $currentYear = (int)date('Y');
         $firstYear = $firstPartnerYear !== false && $firstPartnerYear !== null
@@ -493,8 +495,9 @@ final class Cuotas
              LEFT JOIN familias f
                     ON f.id_familia = fs.id_familia
                    AND f.activo = 1
-             LEFT JOIN (" . self::familyCountSql() . ") fc ON fc.id_familia = f.id_familia
+             LEFT JOIN (" . self::familyCountSql($db) . ") fc ON fc.id_familia = f.id_familia
              WHERE s.id_socio = ?
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              LIMIT 1"
         );
         $principalStatement->execute([$partnerId]);
@@ -525,6 +528,7 @@ final class Cuotas
                  LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
                  WHERE fs.id_familia = ?
                    AND fs.fecha_desvinculacion IS NULL
+                   AND " . filtro_socios_no_eliminados($db, 's') . "
                  ORDER BY fs.es_titular DESC, sp.apellido ASC, sp.nombre ASC"
             );
             $membersStatement->execute([(int)$principalRow['id_familia']]);
@@ -684,12 +688,13 @@ final class Cuotas
              LEFT JOIN familias f
                     ON f.id_familia = fs.id_familia
                    AND f.activo = 1
-             LEFT JOIN (" . self::familyCountSql() . ") fc ON fc.id_familia = f.id_familia
+             LEFT JOIN (" . self::familyCountSql($db) . ") fc ON fc.id_familia = f.id_familia
              LEFT JOIN pagos p
                     ON p.id_socio = s.id_socio
                    AND p.anio = ?
                    AND p.mes = ?
              WHERE s.id_socio = ?
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              LIMIT 1"
         );
         $principalStatement->execute([$year, $month, $partnerId]);
@@ -727,6 +732,7 @@ final class Cuotas
                        AND p.mes = ?
                  WHERE fs.id_familia = ?
                    AND fs.fecha_desvinculacion IS NULL
+                   AND " . filtro_socios_no_eliminados($db, 's') . "
                  ORDER BY fs.es_titular DESC, sp.apellido ASC, sp.nombre ASC"
             );
             $membersStatement->execute([$year, $month, (int)$principalRow['id_familia']]);
@@ -813,6 +819,7 @@ final class Cuotas
     private static function registrarPagosDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
+        ensure_socios_eliminados_schema($db);
         $paymentDate = valid_date($body['fecha_pago'] ?? null, 'pago');
         if ($paymentDate > date('Y-m-d')) {
             api_error('La fecha de pago no puede ser futura.', 'VALIDATION_ERROR', 422);
@@ -1180,12 +1187,13 @@ final class Cuotas
                 "SELECT id_socio
                  FROM socios
                  WHERE id_socio IN ($placeholders)
+                   AND " . filtro_socios_no_eliminados($db, 'socios') . "
                  ORDER BY id_socio
                  FOR UPDATE"
             );
             $statement->execute($partnerIds);
             if (count($statement->fetchAll()) !== count($partnerIds)) {
-                api_error('Uno de los socios del pago ya no existe.', 'SOCIO_NO_ENCONTRADO', 409);
+                api_error('Uno de los socios del pago ya no está disponible para operar.', 'SOCIO_NO_DISPONIBLE', 409);
             }
 
             // Bloquea la pertenencia familiar activa de cada destinatario.
@@ -1441,6 +1449,7 @@ final class Cuotas
     private static function condonarPagoDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
+        ensure_socios_eliminados_schema($db);
         $partnerId = positive_id($body['id_socio'] ?? null, 'socio o empresa');
         $year = self::validYear($body['anio'] ?? null);
         $month = self::validMonth($body['mes'] ?? null);
@@ -1468,6 +1477,22 @@ final class Cuotas
                 $condonationDate,
                 $candidate
             ): int {
+                $partnerLock = $db->prepare(
+                    "SELECT id_socio
+                     FROM socios
+                     WHERE id_socio = ?
+                       AND " . filtro_socios_no_eliminados($db, 'socios') . "
+                     FOR UPDATE"
+                );
+                $partnerLock->execute([$partnerId]);
+                if (!$partnerLock->fetchColumn()) {
+                    api_error(
+                        'El socio ya no está disponible para operar.',
+                        'SOCIO_NO_DISPONIBLE',
+                        409
+                    );
+                }
+
                 $insert = $db->prepare(
                     "INSERT INTO pagos (id_socio, mes, anio, fecha_pago, monto, id_medio_pago, estado)
                      VALUES (?, ?, ?, ?, 0.00, NULL, 'CONDONADO')"
@@ -1527,8 +1552,33 @@ final class Cuotas
         $db = $auth['db'];
         $paymentId = positive_id($body['id_pago'] ?? $body['id'] ?? null, 'pago');
         $payment = self::paymentById($db, $paymentId);
+        if ((bool)($payment['socio_eliminado'] ?? false)) {
+            api_error(
+                'Los pagos de un socio eliminado están preservados para trazabilidad y no pueden eliminarse desde Cuotas.',
+                'PAGO_SOCIO_ELIMINADO_PROTEGIDO',
+                409
+            );
+        }
 
         transaction($db, static function () use ($db, $auth, $paymentId, $payment): void {
+            // Serializa con la eliminación definitiva del socio. Si el archivo
+            // histórico ganó la carrera, el pago queda protegido y no se toca.
+            $partnerLock = $db->prepare(
+                "SELECT id_socio
+                 FROM socios
+                 WHERE id_socio = ?
+                   AND " . filtro_socios_no_eliminados($db, 'socios') . "
+                 FOR UPDATE"
+            );
+            $partnerLock->execute([(int)$payment['id_socio']]);
+            if (!$partnerLock->fetchColumn()) {
+                api_error(
+                    'Los pagos de un socio eliminado están preservados para trazabilidad y no pueden eliminarse desde Cuotas.',
+                    'PAGO_SOCIO_ELIMINADO_PROTEGIDO',
+                    409
+                );
+            }
+
             $delete = $db->prepare('DELETE FROM pagos WHERE id_pago = ?');
             $delete->execute([$paymentId]);
             if ($delete->rowCount() !== 1) {
@@ -1560,6 +1610,7 @@ final class Cuotas
 
     private static function paymentById(PDO $db, int $paymentId): array
     {
+        ensure_socios_eliminados_schema($db);
         $statement = $db->prepare(
             "SELECT
                 p.id_pago, p.id_socio, p.mes, p.anio, p.fecha_pago, p.monto,
@@ -1567,7 +1618,8 @@ final class Cuotas
                 p.id_medio_pago, p.estado AS estado_pago,
                 s.tipo_socio, s.estado AS estado_socio, s.fecha_alta, s.id_categoria,
                 COALESCE(se.razon_social, CONCAT(sp.apellido, ', ', sp.nombre)) AS denominacion,
-                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
+                COALESCE(CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END, sdel.documento) AS documento,
+                CASE WHEN sdel.id_socio IS NULL THEN 0 ELSE 1 END AS socio_eliminado,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
@@ -1576,6 +1628,7 @@ final class Cuotas
              INNER JOIN socios s ON s.id_socio = p.id_socio
              LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
              LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
+             LEFT JOIN socios_eliminados sdel ON sdel.id_socio = s.id_socio
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
              WHERE p.id_pago = ?
@@ -1594,6 +1647,7 @@ final class Cuotas
             'id_socio' => (int)$row['id_socio'],
             'tipo_socio' => (string)$row['tipo_socio'],
             'estado_socio' => (string)($row['estado_socio'] ?? 'ACTIVO'),
+            'socio_eliminado' => (bool)($row['socio_eliminado'] ?? false),
             'denominacion' => trim((string)($row['denominacion'] ?? '')),
             'documento' => $row['documento'] === null ? null : (string)$row['documento'],
             'domicilio' => self::fullAddress(
@@ -1656,7 +1710,7 @@ final class Cuotas
         return $streetText . ' ' . $numberText;
     }
 
-    private static function familyCountSql(): string
+    private static function familyCountSql(PDO $db): string
     {
         return "SELECT fs_count.id_familia, COUNT(*) AS cantidad_integrantes
                 FROM familias_socios fs_count
@@ -1665,6 +1719,7 @@ final class Cuotas
                        AND s_count.estado = 'ACTIVO'
                        AND s_count.tipo_socio = 'PERSONA'
                 WHERE fs_count.fecha_desvinculacion IS NULL
+                  AND " . filtro_socios_no_eliminados($db, 's_count') . "
                 GROUP BY fs_count.id_familia";
     }
 

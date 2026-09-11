@@ -2,6 +2,7 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const { companyData, familyData, personData } = require('./fixtures/socios.fixture');
 const {
   apiCall,
+  apiResult,
   cleanupCategoriesByPrefix,
   cleanupDiscountsByThresholds,
   cleanupFamilyByPrefix,
@@ -26,6 +27,7 @@ const apiPaginationPersonTwo = personData();
 const historicalPricePerson = personData();
 const yearRangePerson = personData();
 const addressPropagationPerson = personData();
+const concurrentPaymentPerson = personData();
 const family = familyData();
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -168,6 +170,7 @@ test.describe('Cuotas de socios y empresas', () => {
       { tipo: 'PERSONA', documento: historicalPricePerson.dni },
       { tipo: 'PERSONA', documento: yearRangePerson.dni },
       { tipo: 'PERSONA', documento: addressPropagationPerson.dni },
+      { tipo: 'PERSONA', documento: concurrentPaymentPerson.dni },
     ]) {
       try {
         await cleanupSocioByDocument(request, target);
@@ -308,6 +311,82 @@ test.describe('Cuotas de socios y empresas', () => {
     }
   });
 
+
+
+  test('serializa dos cobros concurrentes del mismo período y persiste exactamente uno', async ({ request }) => {
+    await cleanupSocioByDocument(request, {
+      tipo: 'PERSONA',
+      documento: concurrentPaymentPerson.dni,
+    });
+
+    const { category, medium } = await activeCategoryAndMedium(request);
+    const saved = await createPerson(request, concurrentPaymentPerson, {
+      id_categoria: category.id_categoria,
+      id_medio_pago: medium.id_medio_pago,
+    });
+
+    const context = await apiCall(request, 'cuotas_contexto_pago', {
+      params: {
+        id_socio: saved.id_socio,
+        anio: currentYear,
+        mes: currentMonth,
+        fecha_pago: todayIso(),
+      },
+    });
+    expect(context.principal.puede_pagar).toBe(true);
+
+    const payload = {
+      id_socio: saved.id_socio,
+      anio: currentYear,
+      mes: currentMonth,
+      fecha_pago: todayIso(),
+      monto: context.principal.monto_sugerido,
+      id_medio_pago: medium.id_medio_pago,
+    };
+
+    // Se disparan realmente en paralelo. El lock/UNIQUE del backend debe hacer
+    // que una sola transacción gane y que la otra vea PAGO_YA_REGISTRADO.
+    const results = await Promise.all([
+      apiResult(request, 'cuotas_registrar_pago', { method: 'POST', data: payload }),
+      apiResult(request, 'cuotas_registrar_pago', { method: 'POST', data: payload }),
+    ]);
+
+    const successes = results.filter((result) => result.ok);
+    const conflicts = results.filter(
+      (result) =>
+        !result.ok &&
+        result.status === 409 &&
+        result.body?.codigo === 'PAGO_YA_REGISTRADO',
+    );
+    expect(successes).toHaveLength(1);
+    expect(conflicts).toHaveLength(1);
+
+    const paymentId = Number(successes[0].body?.item?.id_pago);
+    expect(paymentId).toBeGreaterThan(0);
+    expect(successes[0].body?.item?.tipo_pago).toBe('NORMAL');
+    expect(successes[0].body?.item?.porcentaje_descuento_familiar).toBeNull();
+
+    const paid = await apiCall(request, 'cuotas_listar', {
+      params: {
+        tipo: 'PERSONA',
+        estado: 'PAGADOS',
+        anio: currentYear,
+        mes: currentMonth,
+        buscar: concurrentPaymentPerson.dni,
+      },
+    });
+    const matching = (paid.items || []).filter(
+      (item) =>
+        Number(item.id_socio) === Number(saved.id_socio) &&
+        Number(item.id_pago) === paymentId,
+    );
+    expect(matching).toHaveLength(1);
+
+    await apiCall(request, 'cuotas_eliminar_pago', {
+      method: 'POST',
+      data: { id_pago: paymentId },
+    });
+  });
 
   test('propaga domicilio y número completos desde cuotas hasta todos los datos usados por los comprobantes', async ({ request }) => {
     const street = 'CALLE REGRESION DOMICILIO';

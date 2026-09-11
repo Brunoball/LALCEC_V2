@@ -140,7 +140,9 @@ trait SociosGestion
                 $lock = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
                 $lock->execute([$id]);
                 $locked = $lock->fetch();
-                if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                if (!$locked || socio_esta_eliminado($db, $id)) {
+                    api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                }
                 if ((string)$locked['tipo_socio'] !== $type) {
                     api_error('El tipo de socio no puede modificarse después del alta.', 'TIPO_SOCIO_INMUTABLE', 409);
                 }
@@ -252,26 +254,117 @@ trait SociosGestion
     {
         $db = $auth['db'];
 
+        // Fuera de la transacción: CREATE TABLE puede provocar COMMIT implícito.
+        ensure_socios_eliminados_schema($db);
+
         try {
-            return transaction($db, static function () use ($db, $auth, $id): array {
+            $result = transaction($db, static function () use ($db, $auth, $id): array {
                 $lock = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
                 $lock->execute([$id]);
                 $locked = $lock->fetch();
-                if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                if (!$locked || socio_esta_eliminado($db, $id)) {
+                    api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                }
 
                 $before = self::detalle($db, $id) ?? $locked;
                 $impact = self::impactoEliminacion($db, $id);
-                $module = ($before['tipo_socio'] ?? 'PERSONA') === 'EMPRESA' ? 'EMPRESAS' : 'SOCIOS';
+                $type = (string)($before['tipo_socio'] ?? $locked['tipo_socio'] ?? 'PERSONA');
+                $module = $type === 'EMPRESA' ? 'EMPRESAS' : 'SOCIOS';
                 $name = trim((string)($before['denominacion'] ?? '')) ?: "ID {$id}";
+                $document = $type === 'EMPRESA'
+                    ? optional_text($before['cuit'] ?? null, 20, false)
+                    : optional_text($before['dni'] ?? null, 20, false);
+                $deletedAt = date('Y-m-d H:i:s');
 
-                // Las FK del modelo son RESTRICT para evitar borrados accidentales.
-                // La eliminación definitiva solo existe detrás de una doble confirmación
-                // y limpia primero todas las relaciones conocidas, dentro de la misma transacción.
-                $db->prepare('DELETE FROM familias_socios WHERE id_socio = ?')->execute([$id]);
-                $db->prepare('DELETE FROM pagos WHERE id_socio = ?')->execute([$id]);
-                $db->prepare('DELETE FROM socios_historial_estados WHERE id_socio = ?')->execute([$id]);
-                $db->prepare('DELETE FROM socios WHERE id_socio = ?')->execute([$id]);
+                $snapshotJson = json_encode(
+                    $before,
+                    JSON_UNESCAPED_UNICODE
+                        | JSON_UNESCAPED_SLASHES
+                        | JSON_INVALID_UTF8_SUBSTITUTE
+                        | JSON_PARTIAL_OUTPUT_ON_ERROR
+                        | JSON_PRESERVE_ZERO_FRACTION
+                );
+                $impactJson = json_encode(
+                    $impact,
+                    JSON_UNESCAPED_UNICODE
+                        | JSON_UNESCAPED_SLASHES
+                        | JSON_INVALID_UTF8_SUBSTITUTE
+                        | JSON_PARTIAL_OUTPUT_ON_ERROR
+                        | JSON_PRESERVE_ZERO_FRACTION
+                );
+                if (!is_string($snapshotJson) || !is_string($impactJson)) {
+                    throw new RuntimeException('No se pudo serializar el archivo histórico del socio.');
+                }
 
+                $archive = $db->prepare(
+                    'INSERT INTO socios_eliminados
+                     (id_socio, tipo_socio, denominacion, documento, fecha_eliminacion, id_usuario, datos_socio, impacto)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $archive->execute([
+                    $id,
+                    $type,
+                    $name,
+                    $document,
+                    $deletedAt,
+                    (int)$auth['id_usuario'],
+                    $snapshotJson,
+                    $impactJson,
+                ]);
+
+                // Igual que RH: el vínculo familiar histórico se conserva y solo
+                // se cierra el que estuviera vigente. Nunca se elimina la fila.
+                $closeFamily = $db->prepare(
+                    "UPDATE familias_socios
+                     SET fecha_desvinculacion = CASE
+                            WHEN fecha_incorporacion > CURDATE() THEN fecha_incorporacion
+                            ELSE CURDATE()
+                         END,
+                         motivo_desvinculacion = COALESCE(
+                            NULLIF(TRIM(motivo_desvinculacion), ''),
+                            'SOCIO ELIMINADO DEFINITIVAMENTE'
+                         )
+                     WHERE id_socio = ?
+                       AND fecha_desvinculacion IS NULL"
+                );
+                $closeFamily->execute([$id]);
+                $closedFamilyLinks = $closeFamily->rowCount();
+
+                // Se libera el identificador único para permitir una futura alta
+                // correcta con el mismo DNI/CUIT. El original permanece en el
+                // tombstone y dentro del snapshot JSON.
+                if ($type === 'EMPRESA') {
+                    $db->prepare('UPDATE socios_empresas SET cuit = NULL WHERE id_socio = ?')->execute([$id]);
+                } else {
+                    $db->prepare('UPDATE socios_personas SET dni = NULL WHERE id_socio = ?')->execute([$id]);
+                }
+
+                // IMPORTANTE: pagos, historial, ficha de socio y ficha persona/
+                // empresa NO se borran. Las FK siguen apuntando al mismo id_socio.
+                return [
+                    'id_socio' => $id,
+                    'tipo_socio' => $type,
+                    'denominacion' => $name,
+                    'fecha_eliminacion' => $deletedAt,
+                    'impacto_eliminacion' => $impact,
+                    'preservados' => [
+                        'pagos' => (int)($impact['pagos'] ?? 0),
+                        'pagos_inscripciones' => (int)($impact['pagos_inscripciones'] ?? 0),
+                        'historial_estados' => (int)($impact['historial_estados'] ?? 0),
+                        'vinculos_familiares_historicos' => (int)($impact['vinculos_familiares'] ?? 0),
+                    ],
+                    'vinculos_familiares_cerrados' => (int)$closedFamilyLinks,
+                    '_audit_before' => $before,
+                    '_audit_module' => $module,
+                ];
+            });
+
+            // Como en RH, la preservación principal ya quedó confirmada. Un
+            // eventual error aislado de auditoría no debe destruir el archivo.
+            $before = $result['_audit_before'];
+            $module = (string)$result['_audit_module'];
+            unset($result['_audit_before'], $result['_audit_module']);
+            try {
                 audit_change(
                     $db,
                     $auth,
@@ -279,26 +372,28 @@ trait SociosGestion
                     'ELIMINAR_DEFINITIVO',
                     'socios',
                     $id,
-                    "Se eliminó definitivamente {$name}, junto con sus pagos, vínculos familiares e historial de estados.",
+                    "Se eliminó definitivamente {$result['denominacion']} del padrón operativo. Pagos e historial fueron preservados.",
                     [
                         'socio' => $before,
-                        'impacto_eliminacion' => $impact,
+                        'impacto_eliminacion' => $result['impacto_eliminacion'],
                     ],
-                    null
+                    [
+                        'archivado' => true,
+                        'fecha_eliminacion' => $result['fecha_eliminacion'],
+                        'preservados' => $result['preservados'],
+                        'vinculos_familiares_cerrados' => $result['vinculos_familiares_cerrados'],
+                    ]
                 );
+                $result['auditoria_registrada'] = true;
+            } catch (Throwable $auditError) {
+                error_log('No se pudo auditar la eliminación archivada del socio ' . $id . ': ' . $auditError->getMessage());
+                $result['auditoria_registrada'] = false;
+            }
 
-                return [
-                    'id_socio' => $id,
-                    'impacto_eliminacion' => $impact,
-                ];
-            });
+            return $result;
         } catch (PDOException $error) {
-            if ((string)$error->getCode() === '23000') {
-                api_error(
-                    'No se pudo eliminar el socio porque existe otra relación protegida en la base. Revisá los datos vinculados.',
-                    'SOCIO_CON_RELACIONES_PROTEGIDAS',
-                    409
-                );
+            if (duplicate_key($error)) {
+                api_error('El socio ya fue eliminado definitivamente.', 'SOCIO_YA_ELIMINADO', 409);
             }
             throw $error;
         }
@@ -326,7 +421,9 @@ trait SociosGestion
                 $statement = $db->prepare('SELECT * FROM socios WHERE id_socio = ? FOR UPDATE');
                 $statement->execute([$id]);
                 $locked = $statement->fetch();
-                if (!$locked) api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                if (!$locked || socio_esta_eliminado($db, $id)) {
+                    api_error('El socio no existe.', 'SOCIO_NO_ENCONTRADO', 404);
+                }
                 $previous = (string)$locked['estado'];
                 if ($previous === $newStatus) {
                     api_error(

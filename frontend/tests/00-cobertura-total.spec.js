@@ -173,6 +173,7 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Ver integrantes',
   'Hay cuotas ya pagadas en la selección.',
   'Monto personalizado',
+  'Desc. familiar',
   'Secciones del pago',
   'Datos del pago',
   '+ Agregar',
@@ -361,7 +362,136 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     });
 
     expect(disabled, `Specs deshabilitados o exclusivos: ${disabled.join(', ')}`).toEqual([]);
-    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(110);
+    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(121);
+  });
+
+
+  test('los cambios recientes de pagos, concurrencia y socios eliminados conservan cobertura de regresión explícita', () => {
+    const sociosGestion = read(
+      path.join(BACKEND_ROOT, 'modules', 'socios', 'socios_gestion.php'),
+    );
+    const sociosConsultas = read(
+      path.join(BACKEND_ROOT, 'modules', 'socios', 'socios_consultas.php'),
+    );
+    const familiasConsultas = read(
+      path.join(BACKEND_ROOT, 'modules', 'socios', 'familias_consultas.php'),
+    );
+    const cuotasBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'cuotas', 'cuotas.php'),
+    );
+    const contableBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'contable', 'contable_consultas.php'),
+    );
+    const discountsBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'categorias', 'descuentos_familiares.php'),
+    );
+    const categoriasBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'categorias', 'categorias_consultas.php'),
+    );
+    const dashboardBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'dashboard', 'dashboard.php'),
+    );
+    const cleanupBackend = read(
+      path.join(BACKEND_ROOT, 'modules', 'testing_cleanup', 'testing_cleanup.php'),
+    );
+
+    for (const marker of [
+      'INSERT INTO socios_eliminados',
+      'UPDATE socios_personas SET dni = NULL',
+      'UPDATE socios_empresas SET cuit = NULL',
+      'vinculos_familiares_cerrados',
+      'auditoria_registrada',
+      'Pagos e historial fueron preservados',
+    ]) {
+      expect(sociosGestion, `Falta blindaje de eliminación histórica: ${marker}`).toContain(marker);
+    }
+    expect(sociosGestion).not.toContain('DELETE FROM pagos WHERE id_socio');
+    expect(sociosGestion).not.toContain('DELETE FROM socios_historial_estados WHERE id_socio');
+
+    for (const marker of [
+      'impacto_eliminacion',
+      'pagos_inscripciones',
+      'vinculos_familiares',
+      'total_relaciones',
+    ]) {
+      expect(sociosConsultas, `Falta impacto histórico de socios: ${marker}`).toContain(marker);
+    }
+
+    for (const marker of [
+      'LEFT JOIN socios_eliminados sdel',
+      'socio_eliminado',
+      'historial_integrantes',
+    ]) {
+      expect(familiasConsultas, `Falta trazabilidad familiar histórica: ${marker}`).toContain(marker);
+    }
+
+    for (const marker of [
+      'tipo_pago',
+      'porcentaje_descuento_familiar',
+      "MONTO_PERSONALIZADO",
+      "DESCUENTO_FAMILIAR",
+      'PAGO_SOCIO_ELIMINADO_PROTEGIDO',
+      'COTIZACION_MODIFICADA',
+      'FAMILIA_MODIFICADA',
+      'FOR UPDATE',
+    ]) {
+      expect(cuotasBackend, `Falta blindaje reciente de Cuotas: ${marker}`).toContain(marker);
+    }
+
+    for (const marker of [
+      'LEFT JOIN socios_eliminados sdel',
+      'p.tipo_pago',
+      'p.porcentaje_descuento_familiar',
+      'sdel.documento',
+    ]) {
+      expect(contableBackend, `Falta trazabilidad contable reciente: ${marker}`).toContain(marker);
+    }
+
+    expect(discountsBackend).toContain('bloquearCatalogoDescuentosFamiliares');
+    expect(discountsBackend).toContain('FOR UPDATE');
+    expect(categoriasBackend).toContain('filtro_socios_no_eliminados');
+    expect(dashboardBackend).toContain('filtro_socios_no_eliminados');
+    expect(cleanupBackend).toContain("'socios_eliminados'");
+
+    const archiveSpec = read(path.join(__dirname, '17-socios-eliminacion-trazabilidad.spec.js'));
+    for (const marker of [
+      'archiva PERSONA, preserva varios pagos normales, libera DNI',
+      'archiva EMPRESA con MONTO_PERSONALIZADO',
+      'serializa la carrera eliminar socio vs eliminar pago',
+      'preserva DESCUENTO_FAMILIAR al eliminar un integrante',
+      'SOCIO_INVALIDO',
+      'socios_historial',
+      'e2eStatus',
+      'auditoria_registrada',
+      'PAGO_SOCIO_ELIMINADO_PROTEGIDO',
+      'categorias_obtener',
+      'familias_obtener',
+      'contable_ingresos_socios',
+    ]) {
+      expect(archiveSpec, `La regresión de socios eliminados dejó de cubrir: ${marker}`).toContain(marker);
+    }
+
+    const cuotasSpec = read(path.join(__dirname, '09-cuotas.spec.js'));
+    for (const marker of [
+      'serializa dos cobros concurrentes del mismo período',
+      'monto personalizado familiar se aplica a cada integrante',
+      'DESCUENTO_FAMILIAR',
+      'MONTO_PERSONALIZADO',
+      'conserva montos históricos por vigencia real',
+    ]) {
+      expect(cuotasSpec, `La regresión de pagos dejó de cubrir: ${marker}`).toContain(marker);
+    }
+
+    const discountSpec = read(path.join(__dirname, '08-categorias.spec.js'));
+    expect(discountSpec).toContain('serializa altas concurrentes de descuentos');
+    expect(discountSpec).toContain('DESCUENTO_FAMILIAR_DUPLICADO');
+
+    const cuotasUiSpec = read(path.join(__dirname, '13-cuotas-ui-completa.spec.js'));
+    expect(cuotasUiSpec).toContain('monto personalizado mantiene seleccionado el pago familiar');
+
+    const contableUiSpec = read(path.join(__dirname, '12-contabilidad-ui-completa.spec.js'));
+    expect(contableUiSpec).toContain('Monto personalizado');
+    expect(contableUiSpec).toContain('Desc. familiar 12,5%');
   });
 
   test('los filtros y el semáforo de deuda de Socios/Empresas conservan su contrato frontend-backend', () => {

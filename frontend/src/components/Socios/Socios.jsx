@@ -2054,7 +2054,7 @@ export default function Socios({ tipo = PERSON }) {
         row={deleteModal?.item}
         modalClassName="socios-delete-modal"
         title={`Eliminar definitivamente ${isCompany ? "la empresa" : "al socio"}`}
-        message="Confirmá la eliminación definitiva del registro. Esta operación es irreversible."
+        message="Confirmá la eliminación definitiva del padrón. Los pagos y el historial se conservarán para mantener la trazabilidad contable."
         details={
           deleteModal?.item
             ? [
@@ -2069,15 +2069,15 @@ export default function Socios({ tipo = PERSON }) {
                     : deleteModal.item.dni,
                 },
                 {
-                  label: "Pagos / condonaciones que se borrarán",
+                  label: "Pagos / condonaciones que se conservarán",
                   value: deleteImpact.pagos ?? "Calculando...",
                 },
                 {
-                  label: "Estados que se borrarán",
+                  label: "Estados históricos que se conservarán",
                   value: deleteImpact.historial_estados ?? "Calculando...",
                 },
                 {
-                  label: "Vínculos familiares",
+                  label: "Vínculos familiares históricos",
                   value: deleteImpact.vinculos_familiares ?? "Calculando...",
                 },
               ]
@@ -2100,7 +2100,7 @@ export default function Socios({ tipo = PERSON }) {
         }
         confirmLabel="Eliminar definitivamente"
         loadingLabel="Eliminando..."
-        successMessage="El socio y toda su información relacionada fueron eliminados definitivamente."
+        successMessage="El socio fue eliminado definitivamente del padrón. Sus pagos e historial quedaron preservados para trazabilidad."
         errorMessage="No se pudo eliminar definitivamente el socio."
       />
     </>

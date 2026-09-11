@@ -5,6 +5,7 @@ trait FamiliasConsultas
 {
     private static function listarDatos(PDO $db, array $filters): array
     {
+        ensure_socios_eliminados_schema($db);
         $where = [];
         $params = [];
 
@@ -25,6 +26,7 @@ trait FamiliasConsultas
                     INNER JOIN socios_personas pb ON pb.id_socio = fsb.id_socio
                     WHERE fsb.id_familia = f.id_familia
                       AND fsb.fecha_desvinculacion IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM socios_eliminados se_b WHERE se_b.id_socio = fsb.id_socio)
                       AND CONCAT_WS(' ', pb.apellido, pb.nombre, pb.dni) LIKE {param}
                 )",
             ],
@@ -66,7 +68,8 @@ trait FamiliasConsultas
              FROM familias_socios fs
              INNER JOIN familias f ON f.id_familia = fs.id_familia AND f.activo = 1
              INNER JOIN socios s ON s.id_socio = fs.id_socio AND s.estado = 'ACTIVO'
-             WHERE fs.fecha_desvinculacion IS NULL"
+             WHERE fs.fecha_desvinculacion IS NULL
+               AND " . filtro_socios_no_eliminados($db, 's')
         )->fetchColumn();
 
         return [
@@ -83,6 +86,7 @@ trait FamiliasConsultas
 
     private static function obtenerDatos(PDO $db, int $id): array
     {
+        ensure_socios_eliminados_schema($db);
         $item = self::familyDetail($db, $id, true);
         if (!$item) api_error('La familia no existe.', 'FAMILIA_NO_ENCONTRADA', 404);
         return [
@@ -106,6 +110,7 @@ trait FamiliasConsultas
                 ON fs.id_socio = s.id_socio AND fs.fecha_desvinculacion IS NULL
              LEFT JOIN familias f ON f.id_familia = fs.id_familia
              WHERE s.tipo_socio = 'PERSONA'
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              ORDER BY (s.estado = 'ACTIVO') DESC, p.apellido ASC, p.nombre ASC"
         )->fetchAll();
 
@@ -172,6 +177,7 @@ trait FamiliasConsultas
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
              WHERE fs.id_familia IN ({$placeholders})
                AND fs.fecha_desvinculacion IS NULL
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              ORDER BY fs.es_titular DESC, p.apellido ASC, p.nombre ASC"
         );
         $active->execute($ids);
@@ -192,9 +198,11 @@ trait FamiliasConsultas
                 "SELECT fs.id_familia_socio, fs.id_familia, fs.id_socio, fs.parentesco,
                         fs.es_titular, fs.observaciones, fs.fecha_incorporacion,
                         fs.fecha_desvinculacion, fs.motivo_desvinculacion,
-                        p.apellido, p.nombre, p.dni
+                        p.apellido, p.nombre, COALESCE(p.dni, sdel.documento) AS dni,
+                        CASE WHEN sdel.id_socio IS NULL THEN 0 ELSE 1 END AS socio_eliminado
                  FROM familias_socios fs
                  INNER JOIN socios_personas p ON p.id_socio = fs.id_socio
+                 LEFT JOIN socios_eliminados sdel ON sdel.id_socio = fs.id_socio
                  WHERE fs.id_familia IN ({$placeholders})
                  ORDER BY fs.fecha_incorporacion DESC, fs.id_familia_socio DESC"
             );
@@ -205,7 +213,8 @@ trait FamiliasConsultas
                 $member['id_familia'] = $familyId;
                 $member['id_socio'] = (int)$member['id_socio'];
                 $member['es_titular'] = (bool)$member['es_titular'];
-                $member['activo'] = $member['fecha_desvinculacion'] === null;
+                $member['socio_eliminado'] = (bool)($member['socio_eliminado'] ?? false);
+                $member['activo'] = $member['fecha_desvinculacion'] === null && !$member['socio_eliminado'];
                 $member['denominacion'] = trim((string)$member['apellido'] . ', ' . (string)$member['nombre'], ', ');
                 $indexed[$familyId]['historial_integrantes'][] = $member;
             }

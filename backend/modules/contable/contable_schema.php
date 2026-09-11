@@ -111,6 +111,7 @@ function ensure_contable_schema(PDO $db): void
 {
     static $validatedConnections = [];
 
+    ensure_socios_eliminados_schema($db);
     ensure_contable_opciones_estado($db);
     ensure_contable_campos_desvinculables($db);
     $connectionId = spl_object_id($db);

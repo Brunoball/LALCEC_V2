@@ -36,7 +36,7 @@ async function permanentDeleteCurrentPartner(page, row) {
   await deleteDialog
     .getByRole('button', { name: 'Eliminar definitivamente' })
     .click();
-  await expectToast(page, /eliminados definitivamente/i);
+  await expectToast(page, /eliminado definitivamente del padr[oó]n.*pagos.*historial.*preservados/i);
 }
 
 // Cada caso usa datos propios y cleanup independiente.

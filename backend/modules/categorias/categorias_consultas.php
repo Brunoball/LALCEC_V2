@@ -34,7 +34,7 @@ trait CategoriasConsultas
                     c.activo,
                     c.creado_en AS created_at,
                     c.actualizado_en AS updated_at,
-                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' THEN s.id_socio END) AS cantidad_socios
+                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' AND " . filtro_socios_no_eliminados($db, 's') . " THEN s.id_socio END) AS cantidad_socios
              FROM categorias c
              LEFT JOIN socios s ON s.id_categoria = c.id_categoria
              {$sqlWhere}
@@ -113,7 +113,7 @@ trait CategoriasConsultas
                     c.activo,
                     c.creado_en AS created_at,
                     c.actualizado_en AS updated_at,
-                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' THEN s.id_socio END) AS cantidad_socios
+                    COUNT(DISTINCT CASE WHEN s.estado = 'ACTIVO' AND " . filtro_socios_no_eliminados($db, 's') . " THEN s.id_socio END) AS cantidad_socios
              FROM categorias c
              LEFT JOIN socios s ON s.id_categoria = c.id_categoria
              WHERE c.id_categoria = ?

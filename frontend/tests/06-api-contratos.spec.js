@@ -25,6 +25,65 @@ const { loadTestEnv } = require('./helpers/env.helper');
 
 loadTestEnv();
 
+const PRIVATE_ROUTE_TRANSIENT_HTTP_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const PRIVATE_ROUTE_RETRY_DELAYS_MS = [300, 800, 1600];
+
+function isTransientPrivateRouteNetworkError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return [
+    'socket hang up',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'esockettimedout',
+    'eai_again',
+    'enotfound',
+    'network socket disconnected',
+    'connection reset',
+    'connection closed',
+    'fetch failed',
+  ].some((token) => message.includes(token));
+}
+
+function waitForRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function privateRouteWithoutSession(requestContext, action, options = {}) {
+  let lastError = null;
+  const maxAttempts = PRIVATE_ROUTE_RETRY_DELAYS_MS.length + 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await apiResult(requestContext, action, {
+        ...options,
+        session: null,
+      });
+
+      if (
+        PRIVATE_ROUTE_TRANSIENT_HTTP_STATUS.has(result.status) &&
+        attempt < maxAttempts
+      ) {
+        await waitForRetry(PRIVATE_ROUTE_RETRY_DELAYS_MS[attempt - 1]);
+        continue;
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt >= maxAttempts ||
+        !isTransientPrivateRouteNetworkError(error)
+      ) {
+        throw error;
+      }
+      await waitForRetry(PRIVATE_ROUTE_RETRY_DELAYS_MS[attempt - 1]);
+    }
+  }
+
+  throw lastError || new Error(`No se pudo verificar la ruta privada ${action}.`);
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Contratos, validaciones y seguridad de la API actual', () => {
@@ -203,12 +262,19 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     ];
 
     for (const [action, method, extra = {}] of endpoints) {
-      await expectApiError(
+      // Este barrido hace decenas de requests seguidas contra Hostinger. LiteSpeed
+      // puede cortar una conexión keep-alive de forma transitoria ("socket hang up")
+      // aun cuando la API está sana. Como TODAS estas solicitudes van sin sesión,
+      // reintentar incluso los POST es seguro: el middleware de autenticación debe
+      // rechazarlos antes de que cualquier mutación pueda ejecutarse.
+      const result = await privateRouteWithoutSession(
         request,
         action,
-        { method, session: null, ...extra },
-        { status: 401, code: 'SESSION_REQUIRED' },
+        { method, ...extra },
       );
+
+      expect(result.status, `${method} ${action}`).toBe(401);
+      expect(result.body?.codigo, `${method} ${action}`).toBe('SESSION_REQUIRED');
     }
   });
 

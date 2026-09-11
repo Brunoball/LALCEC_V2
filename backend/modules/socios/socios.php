@@ -76,7 +76,7 @@ final class Socios
         }
         api_success(
             self::eliminarDefinitivoDatos($auth, $id),
-            'El socio y toda su información relacionada fueron eliminados definitivamente.'
+            'El socio fue eliminado definitivamente del padrón. Sus pagos e historial quedaron preservados para trazabilidad.'
         );
     }
 }

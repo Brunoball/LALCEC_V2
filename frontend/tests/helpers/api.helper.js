@@ -221,23 +221,23 @@ async function findSocioByDocument(requestContext, { tipo, documento }) {
 async function cleanupSocioByDocument(requestContext, { tipo, documento }) {
   const item = await findSocioByDocument(requestContext, { tipo, documento });
   if (!item) return false;
-  await apiCall(requestContext, 'socios_eliminar_definitivo', {
-    method: 'POST',
-    data: { id: item.id_socio, confirmacion: 'ELIMINAR' },
-  });
-  return true;
+  return cleanupSocioById(requestContext, item.id_socio);
 }
 
 async function cleanupSocioById(requestContext, id) {
   const numericId = Number(id);
   if (!Number.isInteger(numericId) || numericId <= 0) return false;
-  const result = await apiResult(requestContext, 'socios_eliminar_definitivo', {
+  const result = await apiResult(requestContext, 'e2e_cleanup_scope', {
     method: 'POST',
-    data: { id: numericId, confirmacion: 'ELIMINAR' },
+    data: {
+      confirmacion: 'LIMPIAR_PLAYWRIGHT',
+      scope: 'socio_id',
+      value: numericId,
+    },
   });
   if (!result.ok && result.status !== 404) {
     const error = new Error(
-      result.body?.mensaje || `No se pudo limpiar el socio ${numericId}.`,
+      result.body?.mensaje || `No se pudo limpiar el socio E2E ${numericId}.`,
     );
     error.status = result.status;
     error.code = result.body?.codigo;

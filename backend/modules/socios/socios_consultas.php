@@ -5,7 +5,7 @@ trait SociosConsultas
 {
     private static function listarDatos(PDO $db, array $filters): array
     {
-        $where = [];
+        $where = [filtro_socios_no_eliminados($db, 's')];
         $params = [];
 
         $type = strtoupper(trim((string)($filters['tipo'] ?? '')));
@@ -251,12 +251,25 @@ trait SociosConsultas
         $paymentCount = (int)$payments->fetchColumn();
         $stateCount = (int)$states->fetchColumn();
         $familyCount = (int)$families->fetchColumn();
+        $registrationCount = 0;
+
+        $registrationTable = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pagos_inscripciones'"
+        );
+        $registrationTable->execute();
+        if ((int)$registrationTable->fetchColumn() === 1) {
+            $registrations = $db->prepare('SELECT COUNT(*) FROM pagos_inscripciones WHERE id_socio = ?');
+            $registrations->execute([$id]);
+            $registrationCount = (int)$registrations->fetchColumn();
+        }
 
         return [
             'pagos' => $paymentCount,
+            'pagos_inscripciones' => $registrationCount,
             'historial_estados' => $stateCount,
             'vinculos_familiares' => $familyCount,
-            'total_relaciones' => $paymentCount + $stateCount + $familyCount,
+            'total_relaciones' => $paymentCount + $registrationCount + $stateCount + $familyCount,
         ];
     }
 
@@ -318,11 +331,12 @@ trait SociosConsultas
     private static function resumen(PDO $db, string $type): array
     {
         $params = [];
-        $typeWhere = '';
+        $conditions = [filtro_socios_no_eliminados($db, 's')];
         if ($type !== '') {
-            $typeWhere = 'WHERE s.tipo_socio = :tipo';
+            $conditions[] = 's.tipo_socio = :tipo';
             $params['tipo'] = $type;
         }
+        $typeWhere = 'WHERE ' . implode(' AND ', $conditions);
 
         $statement = $db->prepare(
             "SELECT COUNT(*) AS total,
@@ -437,7 +451,9 @@ trait SociosConsultas
 
     private static function detalle(PDO $db, int $id): ?array
     {
-        $statement = $db->prepare(self::baseQuery('WHERE s.id_socio = :id') . ' LIMIT 1');
+        $statement = $db->prepare(
+            self::baseQuery('WHERE s.id_socio = :id AND ' . filtro_socios_no_eliminados($db, 's')) . ' LIMIT 1'
+        );
         $statement->execute(['id' => $id]);
         $row = $statement->fetch();
         return $row ? self::castSocio($row) : null;

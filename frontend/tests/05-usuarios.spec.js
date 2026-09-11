@@ -11,10 +11,11 @@ loadTestEnv();
 const user = userData();
 
 function userRow(page, username) {
+  const exactUsername = String(username || '').trim();
   return page
     .getByRole('table', { name: 'Usuarios del sistema' })
     .getByRole('row')
-    .filter({ hasText: username })
+    .filter({ has: page.getByText(exactUsername, { exact: true }) })
     .last();
 }
 

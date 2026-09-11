@@ -16,20 +16,22 @@ final class Dashboard
         $monthEnd = $monthStart->modify('+1 month');
         $currentYear = (int)$today->format('Y');
         $currentMonth = (int)$today->format('n');
+        $liveSocios = filtro_socios_no_eliminados($db, 'socios');
+        $liveS = filtro_socios_no_eliminados($db, 's');
 
-        $activePartners = self::count($db, "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO'");
-        $inactivePartners = self::count($db, "SELECT COUNT(*) FROM socios WHERE estado = 'INACTIVO'");
+        $activePartners = self::count($db, "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO' AND {$liveSocios}");
+        $inactivePartners = self::count($db, "SELECT COUNT(*) FROM socios WHERE estado = 'INACTIVO' AND {$liveSocios}");
         $activePeople = self::count(
             $db,
-            "SELECT COUNT(*) FROM socios WHERE tipo_socio = 'PERSONA' AND estado = 'ACTIVO'"
+            "SELECT COUNT(*) FROM socios WHERE tipo_socio = 'PERSONA' AND estado = 'ACTIVO' AND {$liveSocios}"
         );
         $activeCompanies = self::count(
             $db,
-            "SELECT COUNT(*) FROM socios WHERE tipo_socio = 'EMPRESA' AND estado = 'ACTIVO'"
+            "SELECT COUNT(*) FROM socios WHERE tipo_socio = 'EMPRESA' AND estado = 'ACTIVO' AND {$liveSocios}"
         );
         $newPartners = self::count(
             $db,
-            'SELECT COUNT(*) FROM socios WHERE fecha_alta >= ? AND fecha_alta < ?',
+            "SELECT COUNT(*) FROM socios WHERE fecha_alta >= ? AND fecha_alta < ? AND {$liveSocios}",
             [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
         );
         $activeFamilies = self::count($db, 'SELECT COUNT(*) FROM familias WHERE activo = 1');
@@ -39,6 +41,7 @@ final class Dashboard
              FROM socios s
              WHERE s.tipo_socio = 'PERSONA'
                AND s.estado = 'ACTIVO'
+               AND {$liveS}
                AND EXISTS (
                     SELECT 1
                     FROM familias_socios fs
@@ -51,11 +54,11 @@ final class Dashboard
         );
         $withCategory = self::count(
             $db,
-            "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO' AND id_categoria IS NOT NULL"
+            "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO' AND id_categoria IS NOT NULL AND {$liveSocios}"
         );
         $withReminder = self::count(
             $db,
-            "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO' AND enviar_recordatorio = 1"
+            "SELECT COUNT(*) FROM socios WHERE estado = 'ACTIVO' AND enviar_recordatorio = 1 AND {$liveSocios}"
         );
         $activeCategories = self::count($db, 'SELECT COUNT(*) FROM categorias WHERE activo = 1');
 
@@ -65,6 +68,7 @@ final class Dashboard
              FROM socios
              WHERE estado = 'ACTIVO'
                AND id_categoria IS NOT NULL
+               AND {$liveSocios}
                AND (fecha_alta IS NULL OR fecha_alta < ?)",
             [$monthEnd->format('Y-m-d')]
         );
@@ -76,7 +80,8 @@ final class Dashboard
              WHERE p.anio = ?
                AND p.mes = ?
                AND s.estado = 'ACTIVO'
-               AND s.id_categoria IS NOT NULL",
+               AND s.id_categoria IS NOT NULL
+               AND {$liveS}",
             [$currentYear, $currentMonth]
         );
         $paidCurrent = self::count(
@@ -88,7 +93,8 @@ final class Dashboard
                AND p.mes = ?
                AND p.estado = 'PAGADO'
                AND s.estado = 'ACTIVO'
-               AND s.id_categoria IS NOT NULL",
+               AND s.id_categoria IS NOT NULL
+               AND {$liveS}",
             [$currentYear, $currentMonth]
         );
         $condonedCurrent = max(0, $resolvedCurrent - $paidCurrent);
@@ -271,6 +277,7 @@ final class Dashboard
              FROM socios s
              LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
              WHERE s.estado = 'ACTIVO'
+               AND " . filtro_socios_no_eliminados($db, 's') . "
              GROUP BY s.id_categoria, c.nombre
              ORDER BY cantidad DESC, categoria ASC
              LIMIT 8"

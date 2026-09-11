@@ -8,6 +8,7 @@ trait FamiliasGestion
     private static function guardarDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
+        ensure_socios_eliminados_schema($db);
         $id = isset($body['id_familia']) && $body['id_familia'] !== ''
             ? positive_id($body['id_familia'], 'familia')
             : null;
@@ -84,6 +85,7 @@ trait FamiliasGestion
                      INNER JOIN socios_personas p ON p.id_socio = s.id_socio
                      WHERE s.id_socio IN ({$placeholders})
                        AND s.tipo_socio = 'PERSONA'
+                       AND " . filtro_socios_no_eliminados($db, 's') . "
                      FOR UPDATE"
                 );
                 $people->execute($memberIds);
