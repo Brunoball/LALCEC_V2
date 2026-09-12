@@ -39,6 +39,8 @@ function postPaymentSingleFlight(action, payload) {
 
 export const cuotasApi = {
   listar: (params) => apiGet("cuotas_listar", params),
+  saldosFavor: (params) => apiGet("cuotas_saldos_favor", params),
+  ajustarSaldoFavor: (payload) => apiPost("cuotas_ajustar_saldo_favor", payload),
   catalogos: (params) => apiGet("cuotas_catalogos", params),
   contextoPago: (params) => apiGet("cuotas_contexto_pago", params),
   contextosPago: (params) => apiGet("cuotas_contextos_pago", params),

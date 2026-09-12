@@ -15,6 +15,22 @@ final class Cuotas
         api_success(self::listarDatos($auth['db'], $_GET));
     }
 
+    public static function saldosFavor(): never
+    {
+        $auth = auth_context();
+        api_success(self::saldosFavorDatos($auth['db'], $_GET));
+    }
+
+    public static function ajustarSaldoFavor(): never
+    {
+        $auth = require_admin();
+        $item = self::ajustarSaldoFavorDatos($auth, request_body());
+        api_success(
+            ['item' => $item],
+            'Saldo a favor actualizado correctamente.'
+        );
+    }
+
     public static function catalogos(): never
     {
         $auth = auth_context();
@@ -34,7 +50,9 @@ final class Cuotas
         $year = self::validYear($_GET['anio'] ?? date('Y'));
         $month = self::validMonth($_GET['mes'] ?? date('n'));
         $paymentDate = valid_date($_GET['fecha_pago'] ?? date('Y-m-d'), 'pago');
-        api_success(self::paymentContextData($auth['db'], $partnerId, $year, $month, $paymentDate));
+        $context = self::paymentContextData($auth['db'], $partnerId, $year, $month, $paymentDate);
+        $context['saldo_favor'] = self::saldoFavorResumen($auth['db'], $partnerId);
+        api_success($context);
     }
 
     public static function contextosPago(): never
@@ -53,6 +71,7 @@ final class Cuotas
                 $year,
                 $paymentDate
             ),
+            'saldo_favor' => self::saldoFavorResumen($auth['db'], $partnerId),
         ]);
     }
 
@@ -197,6 +216,7 @@ final class Cuotas
                 p.mes,
                 p.fecha_pago,
                 p.monto,
+                p.monto_saldo_favor_aplicado,
                 p.tipo_pago AS tipo_pago_registrado,
                 p.porcentaje_descuento_familiar AS porcentaje_descuento_familiar_registrado,
                 p.id_medio_pago,
@@ -316,6 +336,315 @@ final class Cuotas
         }
 
         return $result;
+    }
+
+    private static function saldosFavorDatos(PDO $db, array $filters): array
+    {
+        ensure_socios_eliminados_schema($db);
+        $tipo = strtoupper(trim((string)($filters['tipo'] ?? 'PERSONA')));
+        if (!in_array($tipo, self::TIPOS, true)) {
+            api_error('El tipo solicitado no es válido.', 'FILTRO_INVALIDO');
+        }
+
+        $buscar = clean_text($filters['buscar'] ?? '', 120, false);
+        $page = max(1, (int)($filters['pagina'] ?? 1));
+        $perPage = max(1, min(200, (int)($filters['por_pagina'] ?? 100)));
+
+        $where = ["COALESCE(s.tipo_socio, sdel.tipo_socio) = ?"];
+        $params = [$tipo];
+        $searchFilter = build_search_filter(
+            $buscar,
+            ["CONCAT_WS(' ',
+                sp.apellido, sp.nombre, sp.dni,
+                se.razon_social, se.cuit,
+                sdel.denominacion, sdel.documento,
+                c.nombre
+            ) LIKE {param}"],
+            120,
+            null
+        );
+        if ($searchFilter['sql'] !== '') {
+            $where[] = $searchFilter['sql'];
+            array_push($params, ...$searchFilter['params']);
+        }
+
+        $statement = $db->prepare(
+            "SELECT
+                sf.id_socio,
+                COALESCE(s.tipo_socio, sdel.tipo_socio) AS tipo_socio,
+                COALESCE(s.estado, 'INACTIVO') AS estado_socio,
+                CASE WHEN sdel.id_socio IS NULL THEN 0 ELSE 1 END AS socio_eliminado,
+                COALESCE(
+                    CASE
+                        WHEN COALESCE(s.tipo_socio, sdel.tipo_socio) = 'EMPRESA' THEN NULLIF(se.razon_social, '')
+                        ELSE NULLIF(TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))), ', ')
+                    END,
+                    NULLIF(sdel.denominacion, ''),
+                    CONCAT('SOCIO #', sf.id_socio)
+                ) AS denominacion,
+                COALESCE(
+                    CASE WHEN COALESCE(s.tipo_socio, sdel.tipo_socio) = 'EMPRESA' THEN se.cuit ELSE sp.dni END,
+                    sdel.documento
+                ) AS documento,
+                c.nombre AS categoria,
+                SUM(sf.monto) AS saldo_favor,
+                MAX(sf.fecha) AS ultima_fecha,
+                (
+                    SELECT sf2.tipo
+                    FROM saldos_favor_movimientos sf2
+                    WHERE sf2.id_socio = sf.id_socio
+                    ORDER BY sf2.fecha DESC, sf2.id_movimiento DESC
+                    LIMIT 1
+                ) AS ultimo_tipo,
+                (
+                    SELECT sf3.origen
+                    FROM saldos_favor_movimientos sf3
+                    WHERE sf3.id_socio = sf.id_socio
+                    ORDER BY sf3.fecha DESC, sf3.id_movimiento DESC
+                    LIMIT 1
+                ) AS ultimo_origen
+             FROM saldos_favor_movimientos sf
+             LEFT JOIN socios s ON s.id_socio = sf.id_socio
+             LEFT JOIN socios_personas sp ON sp.id_socio = sf.id_socio
+             LEFT JOIN socios_empresas se ON se.id_socio = sf.id_socio
+             LEFT JOIN socios_eliminados sdel ON sdel.id_socio = sf.id_socio
+             LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
+             WHERE " . implode(' AND ', $where) . "
+             GROUP BY
+                sf.id_socio,
+                s.tipo_socio, s.estado, sdel.tipo_socio, sdel.id_socio,
+                sp.apellido, sp.nombre, sp.dni,
+                se.razon_social, se.cuit,
+                sdel.denominacion, sdel.documento,
+                c.nombre
+             HAVING SUM(sf.monto) > 0.004
+             ORDER BY saldo_favor DESC, denominacion ASC, sf.id_socio ASC"
+        );
+        $statement->execute($params);
+
+        $items = [];
+        $totalAmount = 0.0;
+        foreach ($statement->fetchAll() as $row) {
+            $balance = max(0.0, round((float)$row['saldo_favor'], 2));
+            $totalAmount += $balance;
+            $items[] = [
+                'id_socio' => (int)$row['id_socio'],
+                'tipo_socio' => (string)$row['tipo_socio'],
+                'estado_socio' => (string)$row['estado_socio'],
+                'socio_eliminado' => (bool)$row['socio_eliminado'],
+                'denominacion' => trim((string)$row['denominacion']),
+                'documento' => $row['documento'] === null ? null : (string)$row['documento'],
+                'categoria' => $row['categoria'] === null ? null : (string)$row['categoria'],
+                'saldo_favor' => number_format($balance, 2, '.', ''),
+                'ultima_fecha' => $row['ultima_fecha'] ?? null,
+                'ultimo_tipo' => $row['ultimo_tipo'] ?? null,
+                'ultimo_origen' => $row['ultimo_origen'] ?? null,
+            ];
+        }
+
+        $totalItems = count($items);
+        $totalPages = $totalItems === 0 ? 0 : (int)ceil($totalItems / $perPage);
+        if ($totalPages > 0 && $page > $totalPages) $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+        $pagedItems = array_slice($items, $offset, $perPage);
+
+        return [
+            'items' => $pagedItems,
+            'resumen' => [
+                'total' => $totalItems,
+                'importe' => number_format($totalAmount, 2, '.', ''),
+            ],
+            'paginacion' => [
+                'pagina' => $page,
+                'por_pagina' => $perPage,
+                'total' => $totalItems,
+                'total_paginas' => $totalPages,
+                'desde' => $totalItems === 0 ? 0 : $offset + 1,
+                'hasta' => $totalItems === 0 ? 0 : min($offset + count($pagedItems), $totalItems),
+                'tiene_anterior' => $page > 1,
+                'tiene_siguiente' => $totalPages > 0 && $page < $totalPages,
+            ],
+        ];
+    }
+
+    private static function ajustarSaldoFavorDatos(array $auth, array $body): array
+    {
+        $db = $auth['db'];
+        ensure_socios_eliminados_schema($db);
+
+        $partnerId = positive_id($body['id_socio'] ?? null, 'socio o empresa');
+        $operation = strtoupper(trim((string)($body['operacion'] ?? 'EDITAR')));
+        if (!in_array($operation, ['CREAR', 'EDITAR', 'ELIMINAR'], true)) {
+            api_error('La operación de saldo a favor no es válida.', 'VALIDATION_ERROR', 422);
+        }
+        $targetBalance = $operation === 'ELIMINAR'
+            ? 0.0
+            : (float)decimal_amount(
+                $body['saldo_objetivo'] ?? null,
+                'saldo a favor',
+                0.01,
+                9999999999.99
+            );
+        $detail = optional_text($body['detalle'] ?? null, 500);
+
+        return transaction($db, static function () use (
+            $db,
+            $auth,
+            $partnerId,
+            $targetBalance,
+            $operation,
+            $detail
+        ): array {
+            $partnerStatement = $db->prepare(
+                "SELECT
+                    s.id_socio,
+                    s.tipo_socio,
+                    s.estado,
+                    CASE
+                        WHEN s.tipo_socio = 'EMPRESA' THEN se.razon_social
+                        ELSE TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, '')))
+                    END AS denominacion
+                 FROM socios s
+                 LEFT JOIN socios_personas sp ON sp.id_socio = s.id_socio
+                 LEFT JOIN socios_empresas se ON se.id_socio = s.id_socio
+                 WHERE s.id_socio = ?
+                 FOR UPDATE"
+            );
+            $partnerStatement->execute([$partnerId]);
+            $partner = $partnerStatement->fetch();
+
+            if (!$partner) {
+                $deletedStatement = $db->prepare(
+                    "SELECT id_socio, tipo_socio, 'ELIMINADO' AS estado, denominacion
+                     FROM socios_eliminados
+                     WHERE id_socio = ?
+                     FOR UPDATE"
+                );
+                $deletedStatement->execute([$partnerId]);
+                $partner = $deletedStatement->fetch();
+            }
+
+            if (!$partner) {
+                api_error(
+                    'El socio o empresa seleccionado no existe.',
+                    'SOCIO_NO_ENCONTRADO',
+                    404
+                );
+            }
+
+            // Bloquea todos los movimientos actuales del socio antes de calcular
+            // la diferencia. Así dos operadores no pueden editar el mismo saldo
+            // a la vez y terminar acreditando/debitando dos veces.
+            $movementsStatement = $db->prepare(
+                'SELECT id_movimiento, monto
+                 FROM saldos_favor_movimientos
+                 WHERE id_socio = ?
+                 ORDER BY id_movimiento
+                 FOR UPDATE'
+            );
+            $movementsStatement->execute([$partnerId]);
+
+            $currentBalance = 0.0;
+            foreach ($movementsStatement->fetchAll() as $movement) {
+                $currentBalance += (float)$movement['monto'];
+            }
+            $currentBalance = max(0.0, round($currentBalance, 2));
+            $targetBalance = round($targetBalance, 2);
+
+            if ($operation === 'CREAR' && $currentBalance > 0.004) {
+                api_error(
+                    'Ese socio ya tiene saldo a favor. Usá Editar para modificarlo.',
+                    'SALDO_FAVOR_YA_EXISTE',
+                    409
+                );
+            }
+            if (in_array($operation, ['EDITAR', 'ELIMINAR'], true) && $currentBalance <= 0.004) {
+                api_error(
+                    'El socio ya no tiene saldo a favor para modificar.',
+                    'SALDO_FAVOR_NO_EXISTE',
+                    409
+                );
+            }
+
+            $difference = round($targetBalance - $currentBalance, 2);
+
+            if (abs($difference) < 0.005) {
+                return [
+                    'id_socio' => $partnerId,
+                    'tipo_socio' => (string)$partner['tipo_socio'],
+                    'denominacion' => trim((string)($partner['denominacion'] ?? '')),
+                    'saldo_anterior' => number_format($currentBalance, 2, '.', ''),
+                    'saldo_favor' => number_format($currentBalance, 2, '.', ''),
+                    'ajuste' => '0.00',
+                    'tipo_movimiento' => null,
+                ];
+            }
+
+            $movementType = $difference > 0 ? 'AJUSTE_CREDITO' : 'AJUSTE_DEBITO';
+            $movementDetail = $detail;
+            if ($movementDetail === null || trim($movementDetail) === '') {
+                $movementDetail = $difference > 0
+                    ? 'Ajuste manual de saldo a favor.'
+                    : ($targetBalance <= 0.004
+                        ? 'Saldo a favor eliminado manualmente.'
+                        : 'Corrección manual de saldo a favor.');
+            }
+
+            $insert = $db->prepare(
+                "INSERT INTO saldos_favor_movimientos
+                    (id_socio, fecha, tipo, monto, origen, id_pago, id_medio_pago,
+                     id_usuario, referencia_externa, clave_idempotencia, detalle)
+                 VALUES (?, NOW(), ?, ?, 'MANUAL', NULL, NULL, ?, ?, NULL, ?)"
+            );
+            $insert->execute([
+                $partnerId,
+                $movementType,
+                $difference,
+                isset($auth['id_usuario']) ? (int)$auth['id_usuario'] : null,
+                'AJUSTE_MANUAL_SALDO',
+                $movementDetail,
+            ]);
+            $movementId = (int)$db->lastInsertId();
+
+            audit_change(
+                $db,
+                $auth,
+                'CUOTAS',
+                $operation === 'CREAR'
+                    ? 'CREAR_SALDO_FAVOR'
+                    : ($operation === 'ELIMINAR' ? 'ELIMINAR_SALDO_FAVOR' : 'AJUSTAR_SALDO_FAVOR'),
+                'saldos_favor_movimientos',
+                $movementId,
+                sprintf(
+                    'Se ajustó el saldo a favor de %s de %s a %s.',
+                    trim((string)($partner['denominacion'] ?? ('SOCIO #' . $partnerId))),
+                    number_format($currentBalance, 2, ',', '.'),
+                    number_format($targetBalance, 2, ',', '.')
+                ),
+                [
+                    'id_socio' => $partnerId,
+                    'saldo_favor' => number_format($currentBalance, 2, '.', ''),
+                ],
+                [
+                    'id_socio' => $partnerId,
+                    'saldo_favor' => number_format($targetBalance, 2, '.', ''),
+                    'ajuste' => number_format($difference, 2, '.', ''),
+                    'tipo_movimiento' => $movementType,
+                    'detalle' => $movementDetail,
+                ]
+            );
+
+            return [
+                'id_socio' => $partnerId,
+                'tipo_socio' => (string)$partner['tipo_socio'],
+                'denominacion' => trim((string)($partner['denominacion'] ?? '')),
+                'saldo_anterior' => number_format($currentBalance, 2, '.', ''),
+                'saldo_favor' => number_format($targetBalance, 2, '.', ''),
+                'ajuste' => number_format($difference, 2, '.', ''),
+                'tipo_movimiento' => $movementType,
+                'id_movimiento' => $movementId,
+            ];
+        });
     }
 
     private static function catalogosDatos(PDO $db, ?int $year = null, ?int $month = null): array
@@ -826,6 +1155,14 @@ final class Cuotas
         }
         $mediumId = positive_id($body['id_medio_pago'] ?? null, 'medio de pago');
         $applyFamily = filter_var($body['aplicar_familia'] ?? false, FILTER_VALIDATE_BOOL);
+        $useBalance = filter_var($body['usar_saldo_favor'] ?? false, FILTER_VALIDATE_BOOL);
+        if ($applyFamily && $useBalance) {
+            api_error(
+                'El saldo a favor es individual y no puede aplicarse a un pago familiar.',
+                'SALDO_FAVOR_PAGO_FAMILIAR',
+                409
+            );
+        }
 
         $mediumStatement = $db->prepare(
             'SELECT id_medio_pago, nombre FROM medios_pago WHERE id_medio_pago = ? AND activo = 1'
@@ -959,6 +1296,49 @@ final class Cuotas
             api_error('La operación supera el máximo de pagos permitidos.', 'VALIDATION_ERROR');
         }
 
+        $balancePartnerId = null;
+        if ($useBalance) {
+            $partnerIds = array_values(array_unique(array_map(
+                static fn(array $target): int => (int)$target['id_socio'],
+                $targets
+            )));
+            if (count($partnerIds) !== 1) {
+                api_error(
+                    'El saldo a favor sólo puede aplicarse a cuotas de un mismo socio.',
+                    'SALDO_FAVOR_MULTIPLES_SOCIOS',
+                    409
+                );
+            }
+            $balancePartnerId = $partnerIds[0];
+        }
+
+        $expectedBalanceApplication = 0.0;
+        if ($useBalance) {
+            if (!array_key_exists('saldo_favor_aplicacion_esperada', $body)) {
+                api_error(
+                    'Falta confirmar el saldo a favor que se esperaba aplicar. Actualizá la pantalla e intentá nuevamente.',
+                    'SALDO_FAVOR_APLICACION_ESPERADA_REQUERIDA',
+                    422
+                );
+            }
+            $expectedBalanceApplication = (float)decimal_amount(
+                $body['saldo_favor_aplicacion_esperada'],
+                'saldo a favor a aplicar',
+                0.01
+            );
+            $previewTotal = round(array_sum(array_map(
+                static fn(array $target): float => (float)$target['monto'],
+                $targets
+            )), 2);
+            if ($expectedBalanceApplication > $previewTotal + 0.004) {
+                api_error(
+                    'El saldo a favor esperado no puede superar el total de las cuotas seleccionadas.',
+                    'SALDO_FAVOR_APLICACION_INVALIDA',
+                    422
+                );
+            }
+        }
+
         $operationCode = self::operationCode();
         try {
             $saved = transaction($db, static function () use (
@@ -970,18 +1350,48 @@ final class Cuotas
                 $medium,
                 $operationCode,
                 $familyData,
-                $applyFamily
+                $applyFamily,
+                $useBalance,
+                $balancePartnerId,
+                $expectedBalanceApplication
             ): array {
                 $medium = self::lockPaymentDependencies($db, $targets, $mediumId);
+
+                // La fila del socio ya está bloqueada por lockPaymentDependencies.
+                // El frontend envía exactamente cuánto saldo vio y aceptó aplicar.
+                // Si el saldo bajó mientras el modal estaba abierto rechazamos la
+                // operación; si aumentó, no consumimos de más: usamos sólo lo que
+                // el operador había confirmado en pantalla.
+                $balanceAvailable = $useBalance && $balancePartnerId !== null
+                    ? round(self::saldoFavorSocio($db, $balancePartnerId), 2)
+                    : 0.0;
+                if ($useBalance && $balanceAvailable + 0.004 < $expectedBalanceApplication) {
+                    api_error(
+                        'El saldo a favor cambió mientras se registraba el pago. Se actualizó el importe disponible; revisalo antes de continuar.',
+                        'SALDO_FAVOR_MODIFICADO',
+                        409
+                    );
+                }
+                $balanceRemaining = $useBalance
+                    ? round($expectedBalanceApplication, 2)
+                    : 0.0;
 
                 $insert = $db->prepare(
                     "INSERT INTO pagos
                         (id_socio, mes, anio, fecha_pago, monto, tipo_pago,
-                         porcentaje_descuento_familiar, id_medio_pago, estado)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PAGADO')"
+                         porcentaje_descuento_familiar, monto_saldo_favor_aplicado,
+                         id_medio_pago, estado)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAGADO')"
+                );
+                $insertBalanceMovement = $db->prepare(
+                    "INSERT INTO saldos_favor_movimientos
+                        (id_socio, fecha, tipo, monto, origen, id_pago, id_medio_pago,
+                         id_usuario, referencia_externa, clave_idempotencia, detalle)
+                     VALUES (?, ?, 'APLICACION_PAGO', ?, 'SISTEMA', ?, ?, ?, ?, ?, ?)"
                 );
                 $items = [];
                 $lines = [];
+                $totalBalanceApplied = 0.0;
 
                 foreach ($targets as $target) {
                     // Recalcula el contexto dentro de la misma transacción y con
@@ -1029,6 +1439,15 @@ final class Cuotas
                     }
                     $target = $freshTarget;
 
+                    $balanceApplied = 0.0;
+                    if ($useBalance && $balanceRemaining > 0.004) {
+                        $balanceApplied = min(
+                            round($balanceRemaining, 2),
+                            round((float)$target['monto'], 2)
+                        );
+                        $balanceApplied = max(0.0, round($balanceApplied, 2));
+                    }
+
                     $insert->execute([
                         $target['id_socio'],
                         $target['mes'],
@@ -1037,9 +1456,31 @@ final class Cuotas
                         $target['monto'],
                         $target['tipo_pago'],
                         $target['porcentaje_descuento_familiar_persistido'],
+                        $balanceApplied,
                         $mediumId,
                     ]);
                     $paymentId = (int)$db->lastInsertId();
+
+                    if ($balanceApplied > 0.004) {
+                        $movementKey = 'PAGO:' . $paymentId . ':APLICACION_SALDO';
+                        $insertBalanceMovement->execute([
+                            $target['id_socio'],
+                            $paymentDate . ' 00:00:00',
+                            -$balanceApplied,
+                            $paymentId,
+                            $mediumId,
+                            isset($auth['id_usuario']) ? (int)$auth['id_usuario'] : null,
+                            $operationCode,
+                            $movementKey,
+                            sprintf(
+                                'Saldo aplicado a la cuota de %s %d.',
+                                self::monthName((int)$target['mes']),
+                                (int)$target['anio']
+                            ),
+                        ]);
+                        $balanceRemaining = max(0.0, round($balanceRemaining - $balanceApplied, 2));
+                        $totalBalanceApplied += $balanceApplied;
+                    }
 
                     $auditData = [
                         'id_pago' => $paymentId,
@@ -1055,6 +1496,13 @@ final class Cuotas
                         'tipo_pago' => $target['tipo_pago'],
                         'porcentaje_descuento_familiar' => $target['porcentaje_descuento_familiar_persistido'],
                         'monto' => $target['monto'],
+                        'monto_saldo_favor_aplicado' => number_format($balanceApplied, 2, '.', ''),
+                        'monto_cobrado_ahora' => number_format(
+                            max(0.0, (float)$target['monto'] - $balanceApplied),
+                            2,
+                            '.',
+                            ''
+                        ),
                         'id_medio_pago' => $mediumId,
                         'medio_pago' => $medium['nombre'],
                         'estado' => 'PAGADO',
@@ -1097,11 +1545,36 @@ final class Cuotas
                             ? null
                             : number_format((float)$target['porcentaje_descuento_familiar_persistido'], 2, '.', ''),
                         'monto' => number_format((float)$target['monto'], 2, '.', ''),
+                        'monto_saldo_favor_aplicado' => number_format($balanceApplied, 2, '.', ''),
+                        'monto_cobrado_ahora' => number_format(
+                            max(0.0, (float)$target['monto'] - $balanceApplied),
+                            2,
+                            '.',
+                            ''
+                        ),
                         'familia' => $target['familia'],
                     ];
                 }
 
-                return ['items' => $items, 'lineas' => $lines];
+                if (
+                    $useBalance
+                    && abs(round($totalBalanceApplied, 2) - round($expectedBalanceApplication, 2)) >= 0.005
+                ) {
+                    api_error(
+                        'El saldo a favor o el total del pago cambió mientras se registraba la operación. Actualizá la pantalla e intentá nuevamente.',
+                        'SALDO_FAVOR_MODIFICADO',
+                        409
+                    );
+                }
+
+                return [
+                    'items' => $items,
+                    'lineas' => $lines,
+                    'saldo_favor_aplicado' => round($totalBalanceApplied, 2),
+                    'saldo_favor_restante' => $useBalance
+                        ? max(0.0, round($balanceAvailable - $totalBalanceApplied, 2))
+                        : 0.0,
+                ];
             });
         } catch (PDOException $error) {
             if (duplicate_key($error)) {
@@ -1112,6 +1585,8 @@ final class Cuotas
 
         $totalBase = array_sum(array_map(static fn(array $line): float => (float)$line['monto_base'], $saved['lineas']));
         $total = array_sum(array_map(static fn(array $line): float => (float)$line['monto'], $saved['lineas']));
+        $totalBalanceApplied = (float)($saved['saldo_favor_aplicado'] ?? 0);
+        $totalCollectedNow = max(0.0, round($total - $totalBalanceApplied, 2));
         $names = array_values(array_unique(array_column($saved['lineas'], 'socio')));
         $familyPayment = $applyFamily && $familyData !== null && count($saved['lineas']) > 1;
 
@@ -1128,6 +1603,8 @@ final class Cuotas
             'medio_pago' => (string)$medium['nombre'],
             'monto_base' => number_format($totalBase, 2, '.', ''),
             'monto' => number_format($total, 2, '.', ''),
+            'monto_saldo_favor_aplicado' => number_format($totalBalanceApplied, 2, '.', ''),
+            'monto_cobrado_ahora' => number_format($totalCollectedNow, 2, '.', ''),
             'lineas' => $saved['lineas'],
             'familia' => $familyData === null ? null : [
                 'id_familia' => $familyData['id_familia'],
@@ -1142,6 +1619,10 @@ final class Cuotas
             'comprobante' => $receipt,
             'codigo_operacion' => $operationCode,
             'aplico_familia' => $familyPayment,
+            'saldo_favor' => [
+                'aplicado' => number_format($totalBalanceApplied, 2, '.', ''),
+                'restante' => number_format((float)($saved['saldo_favor_restante'] ?? 0), 2, '.', ''),
+            ],
         ];
     }
 
@@ -1579,6 +2060,42 @@ final class Cuotas
                 );
             }
 
+            $paymentLock = $db->prepare(
+                'SELECT monto_saldo_favor_aplicado, id_medio_pago, fecha_pago
+                 FROM pagos
+                 WHERE id_pago = ? AND id_socio = ?
+                 FOR UPDATE'
+            );
+            $paymentLock->execute([$paymentId, (int)$payment['id_socio']]);
+            $lockedPayment = $paymentLock->fetch();
+            if (!$lockedPayment) {
+                api_error('El pago ya no existe.', 'PAGO_NO_ENCONTRADO', 404);
+            }
+
+            $balanceApplied = max(0.0, round((float)($lockedPayment['monto_saldo_favor_aplicado'] ?? 0), 2));
+            if ($balanceApplied > 0.004) {
+                $reverse = $db->prepare(
+                    "INSERT INTO saldos_favor_movimientos
+                        (id_socio, fecha, tipo, monto, origen, id_pago, id_medio_pago,
+                         id_usuario, referencia_externa, clave_idempotencia, detalle)
+                     VALUES (?, NOW(), 'REVERSO', ?, 'SISTEMA', ?, ?, ?, ?, ?, ?)"
+                );
+                $reverse->execute([
+                    (int)$payment['id_socio'],
+                    $balanceApplied,
+                    $paymentId,
+                    $lockedPayment['id_medio_pago'] === null ? null : (int)$lockedPayment['id_medio_pago'],
+                    isset($auth['id_usuario']) ? (int)$auth['id_usuario'] : null,
+                    'ELIMINACION_PAGO:' . $paymentId,
+                    'PAGO:' . $paymentId . ':REVERSO_SALDO',
+                    sprintf(
+                        'Reintegro del saldo utilizado en la cuota de %s %d por eliminación del pago.',
+                        self::monthName((int)$payment['mes']),
+                        (int)$payment['anio']
+                    ),
+                ]);
+            }
+
             $delete = $db->prepare('DELETE FROM pagos WHERE id_pago = ?');
             $delete->execute([$paymentId]);
             if ($delete->rowCount() !== 1) {
@@ -1614,6 +2131,7 @@ final class Cuotas
         $statement = $db->prepare(
             "SELECT
                 p.id_pago, p.id_socio, p.mes, p.anio, p.fecha_pago, p.monto,
+                p.monto_saldo_favor_aplicado,
                 p.tipo_pago, p.porcentaje_descuento_familiar,
                 p.id_medio_pago, p.estado AS estado_pago,
                 s.tipo_socio, s.estado AS estado_socio, s.fecha_alta, s.id_categoria,
@@ -1684,11 +2202,38 @@ final class Cuotas
             'monto_sugerido' => number_format((float)($row['monto_sugerido'] ?? 0), 2, '.', ''),
             'opciones_monto' => is_array($row['opciones_monto'] ?? null) ? $row['opciones_monto'] : [],
             'monto' => !isset($row['monto']) || $row['monto'] === null ? null : number_format((float)$row['monto'], 2, '.', ''),
+            'monto_saldo_favor_aplicado' => number_format(
+                max(0.0, (float)($row['monto_saldo_favor_aplicado'] ?? 0)),
+                2,
+                '.',
+                ''
+            ),
             'id_medio_pago' => isset($row['id_medio_pago']) && $row['id_medio_pago'] !== null ? (int)$row['id_medio_pago'] : null,
             'medio_pago' => $row['medio_pago'] ?? null,
             'estado' => isset($row['estado_pago']) && $row['estado_pago'] !== null
                 ? (string)$row['estado_pago']
                 : (isset($row['id_pago']) && $row['id_pago'] !== null ? 'PAGADO' : null),
+        ];
+    }
+
+    private static function saldoFavorSocio(PDO $db, int $partnerId): float
+    {
+        $statement = $db->prepare(
+            'SELECT COALESCE(SUM(monto), 0)
+             FROM saldos_favor_movimientos
+             WHERE id_socio = ?'
+        );
+        $statement->execute([$partnerId]);
+        return max(0.0, round((float)$statement->fetchColumn(), 2));
+    }
+
+    private static function saldoFavorResumen(PDO $db, int $partnerId): array
+    {
+        $balance = self::saldoFavorSocio($db, $partnerId);
+        return [
+            'id_socio' => $partnerId,
+            'saldo' => number_format($balance, 2, '.', ''),
+            'tiene_saldo' => $balance > 0.004,
         ];
     }
 

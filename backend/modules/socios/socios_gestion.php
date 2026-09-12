@@ -352,6 +352,8 @@ trait SociosGestion
                         'pagos_inscripciones' => (int)($impact['pagos_inscripciones'] ?? 0),
                         'historial_estados' => (int)($impact['historial_estados'] ?? 0),
                         'vinculos_familiares_historicos' => (int)($impact['vinculos_familiares'] ?? 0),
+                        'saldos_favor_movimientos' => (int)($impact['saldos_favor_movimientos'] ?? 0),
+                        'saldo_favor_actual' => (string)($impact['saldo_favor_actual'] ?? '0.00'),
                     ],
                     'vinculos_familiares_cerrados' => (int)$closedFamilyLinks,
                     '_audit_before' => $before,

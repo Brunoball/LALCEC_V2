@@ -1345,3 +1345,136 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
   }
 }
 
+
+/* Saldos a favor */
+.cuotas-grid--balance {
+  grid-template-columns:
+    minmax(260px, 1.55fr)
+    minmax(130px, 0.78fr)
+    minmax(160px, 0.92fr)
+    minmax(115px, 0.68fr)
+    minmax(95px, 0.58fr)
+    minmax(130px, 0.76fr)
+    minmax(92px, 0.52fr);
+  min-width: 1080px;
+}
+
+.cuotas-grid--balance.mov-gridTable--head > .mov-gridCell--head:nth-child(n + 2) {
+  justify-content: center;
+  text-align: center;
+}
+
+.cuotas-grid--balance.mov-gridTable--head > .mov-gridCell--head:last-child {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.cuotas-balance-value {
+  color: var(--success-600, #15803d);
+  font-size: 0.95rem;
+}
+
+.cuotas-balance-note {
+  width: 100%;
+  color: var(--success-600, #15803d);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+
+/* Gestión manual de saldos a favor */
+.cuotas-balance-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.cuotas-balance-form {
+  display: grid;
+  gap: 16px;
+}
+
+.cuotas-balance-form__field {
+  display: grid;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.cuotas-balance-form__field > span {
+  color: var(--text-primary);
+}
+
+.cuotas-balance-form__field input,
+.cuotas-balance-form__field select,
+.cuotas-balance-form__field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 650;
+  outline: none;
+}
+
+.cuotas-balance-form__field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.cuotas-balance-form__field input:focus,
+.cuotas-balance-form__field select:focus,
+.cuotas-balance-form__field textarea:focus {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 14%, transparent);
+}
+
+.cuotas-balance-form__field small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cuotas-balance-form__readonly {
+  display: grid;
+  gap: 2px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--balto-bg) 72%, #fff);
+}
+
+.cuotas-balance-form__readonly strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.cuotas-balance-form__readonly small {
+  color: var(--text-secondary);
+}
+
+.cuotas-balance-form__help {
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-50) 72%, #fff);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cuotas-balance-partner-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.cuotas-balance-partner-picker input[type="search"] {
+  min-height: 42px;
+}
+
+.cuotas-balance-partner-picker__count {
+  margin-top: -2px;
+}

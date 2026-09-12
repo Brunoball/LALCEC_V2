@@ -308,13 +308,22 @@ test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
       }));
       for (const item of partnerIncome.items) {
         expect(item).toEqual(expect.objectContaining({
-          id_pago: expect.any(Number),
           fecha: expect.any(String),
           socio: expect.any(String),
           periodo: expect.any(String),
           monto: expect.any(String),
           monto_estimado: expect.any(Boolean),
         }));
+
+        if (item.tipo_pago === 'SALDO_FAVOR_SOBRANTE') {
+          expect(item.origen).toBe('SALDO_FAVOR');
+          expect(item.id_pago).toBeNull();
+          expect(Number(item.monto)).toBeGreaterThan(0);
+          expect(item.monto_saldo_favor_aplicado).toBe('0.00');
+        } else {
+          expect(item.id_pago).toEqual(expect.any(Number));
+          expect(item.monto_saldo_favor_aplicado).toEqual(expect.any(String));
+        }
       }
 
       const savedIncome = await apiCall(request, 'contable_ingreso_guardar', {

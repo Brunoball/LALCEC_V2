@@ -5,6 +5,7 @@ import {
   faChevronDown,
   faCreditCard,
   faUsers,
+  faWallet,
 } from "@fortawesome/free-solid-svg-icons";
 import CrudModal from "../../Global/Modales/CrudModal";
 import {
@@ -118,6 +119,9 @@ export default function ModalPagoCuota({
   familyPaymentCount,
   contextLoading,
   paymentTotal,
+  saldoFavorDisponible,
+  saldoFavorAplicado,
+  importeCobrarAhora,
   money,
   selectedPartner,
   principal,
@@ -323,10 +327,12 @@ export default function ModalPagoCuota({
       animateSize={!(activePaymentTab === "familia" && familyExpanded)}
       footerStart={
         <div className="cuotas-payment-footer-total">
-          <span>Total a pagar</span>
-          <strong>{money(paymentTotal)}</strong>
+          <span>{saldoFavorAplicado > 0 ? "Total a cobrar" : "Total a pagar"}</span>
+          <strong>{money(saldoFavorAplicado > 0 ? importeCobrarAhora : paymentTotal)}</strong>
           <small>
-            {paymentMode === "multiple"
+            {saldoFavorAplicado > 0
+              ? `Saldo a favor aplicado ${money(saldoFavorAplicado)} · Total cuotas ${money(paymentTotal)}`
+              : paymentMode === "multiple"
               ? `${paymentForm.pagos.length} cuotas seleccionadas`
               : `${selectedMonthIds.length} ${selectedMonthIds.length === 1 ? "mes seleccionado" : "meses seleccionados"}`}
           </small>
@@ -401,6 +407,9 @@ export default function ModalPagoCuota({
                         setPaymentForm((current) => ({
                           ...current,
                           aplicar_familia: event.target.checked,
+                          usar_saldo_favor: event.target.checked
+                            ? false
+                            : current.usar_saldo_favor,
                         }))
                       }
                       aria-label="Aplicar pago a todo el grupo familiar"
@@ -663,6 +672,50 @@ export default function ModalPagoCuota({
             className="cuotas-payment-tab-panel"
             bodyClassName="cuotas-payment-tab-panel__body"
           >
+
+            {Number(saldoFavorDisponible || 0) > 0 ? (
+              <section className="cuotas-balance-card" aria-label="Saldo a favor disponible">
+                <div className="cuotas-balance-card__head">
+                  <span className="cuotas-balance-card__icon" aria-hidden="true">
+                    <FontAwesomeIcon icon={faWallet} />
+                  </span>
+                  <div>
+                    <span>Saldo a favor disponible</span>
+                    <strong>{money(saldoFavorDisponible)}</strong>
+                  </div>
+                </div>
+
+                <label className="cuotas-balance-card__toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(paymentForm.usar_saldo_favor)}
+                    disabled={Boolean(paymentForm.aplicar_familia)}
+                    onChange={(event) =>
+                      setPaymentForm((current) => ({
+                        ...current,
+                        usar_saldo_favor: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <strong>Usar saldo a favor en este pago</strong>
+                    <small>
+                      {paymentForm.aplicar_familia
+                        ? "El saldo es individual. Desmarcá el pago familiar para utilizarlo."
+                        : "Se usa sólo lo necesario y cualquier remanente queda disponible."}
+                    </small>
+                  </span>
+                </label>
+
+                {paymentForm.usar_saldo_favor && !paymentForm.aplicar_familia ? (
+                  <div className="cuotas-balance-card__summary">
+                    <span><small>Total de cuotas</small><strong>{money(paymentTotal)}</strong></span>
+                    <span><small>Saldo aplicado</small><strong>- {money(saldoFavorAplicado)}</strong></span>
+                    <span className="is-total"><small>A cobrar ahora</small><strong>{money(importeCobrarAhora)}</strong></span>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             {selectedMonthIds.length ? (
               <div className="cuotas-month-amount-editor">

@@ -42,7 +42,10 @@ export function useCuotas(filtros = {}) {
     setLoading(true);
     setError("");
     try {
-      const result = await cuotasApi.listar(JSON.parse(listQuery));
+      const query = JSON.parse(listQuery);
+      const result = query.estado === "SALDOS_FAVOR"
+        ? await cuotasApi.saldosFavor(query)
+        : await cuotasApi.listar(query);
       if (currentRequest === requestId.current) {
         setResponse({
           items: result.items || [],

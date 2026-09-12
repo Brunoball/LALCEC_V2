@@ -7,6 +7,7 @@ function register_testing_cleanup_routes(Router $router): void
 {
     $router->register('e2e_cleanup', 'POST', [TestingCleanup::class, 'run'], true);
     $router->register('e2e_cleanup_scope', 'POST', [TestingCleanup::class, 'cleanupScope'], true);
+    $router->register('e2e_saldo_favor_fixture', 'POST', [TestingCleanup::class, 'saldoFavorFixture'], true);
     $router->register('e2e_guard_probe', 'POST', [TestingCleanup::class, 'guardProbe'], true);
     $router->register('e2e_auditoria', 'GET', [TestingCleanup::class, 'audit'], true);
     $router->register('e2e_status', 'GET', [TestingCleanup::class, 'status'], true);

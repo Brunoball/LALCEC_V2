@@ -36,6 +36,17 @@ trait ContableConsultas
             [$yearStart, $yearEnd],
             $partnerByMonth
         );
+        self::acumularTotalesMensuales(
+            $db,
+            "SELECT MONTH(sf.fecha) AS mes, SUM(sf.monto) AS total
+             FROM saldos_favor_movimientos sf
+             WHERE sf.tipo = 'SOBRANTE'
+               AND sf.monto > 0
+               AND sf.fecha >= ? AND sf.fecha < ?
+             GROUP BY MONTH(sf.fecha)",
+            [$yearStart, $yearEnd],
+            $partnerByMonth
+        );
         self::acumularConteosMensuales(
             $db,
             "SELECT MONTH(fecha_pago) AS mes, COUNT(*) AS total
@@ -169,6 +180,20 @@ trait ContableConsultas
         );
         self::acumularAgrupacion(
             $db,
+            "SELECT COALESCE(NULLIF(c.nombre, ''), 'CUOTAS SIN CATEGORÍA') AS nombre,
+                    SUM(sf.monto) AS total
+             FROM saldos_favor_movimientos sf
+             LEFT JOIN socios s ON s.id_socio = sf.id_socio
+             LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
+             WHERE sf.tipo = 'SOBRANTE'
+               AND sf.monto > 0
+               AND sf.fecha >= ? AND sf.fecha < ?
+             GROUP BY COALESCE(NULLIF(c.nombre, ''), 'CUOTAS SIN CATEGORÍA')",
+            [$monthStart, $monthEnd],
+            $totals
+        );
+        self::acumularAgrupacion(
+            $db,
             'SELECT categoria AS nombre, SUM(importe) AS total
              FROM contable_ingresos
              WHERE fecha >= ? AND fecha < ?
@@ -176,7 +201,6 @@ trait ContableConsultas
             [$monthStart, $monthEnd],
             $totals
         );
-
         return self::agruparRespuesta($totals);
     }
 
@@ -212,6 +236,19 @@ trait ContableConsultas
              LEFT JOIN medios_pago mp ON mp.id_medio_pago = p.id_medio_pago
              WHERE p.estado = 'PAGADO'
                AND p.fecha_pago >= ? AND p.fecha_pago < ?
+             GROUP BY COALESCE(NULLIF(mp.nombre, ''), 'SIN MEDIO ESPECIFICADO')",
+            [$monthStart, $monthEnd],
+            $totals
+        );
+        self::acumularAgrupacion(
+            $db,
+            "SELECT COALESCE(NULLIF(mp.nombre, ''), 'SIN MEDIO ESPECIFICADO') AS nombre,
+                    SUM(sf.monto) AS total
+             FROM saldos_favor_movimientos sf
+             LEFT JOIN medios_pago mp ON mp.id_medio_pago = sf.id_medio_pago
+             WHERE sf.tipo = 'SOBRANTE'
+               AND sf.monto > 0
+               AND sf.fecha >= ? AND sf.fecha < ?
              GROUP BY COALESCE(NULLIF(mp.nombre, ''), 'SIN MEDIO ESPECIFICADO')",
             [$monthStart, $monthEnd],
             $totals
@@ -299,6 +336,7 @@ trait ContableConsultas
             "SELECT
                 p.id_pago, p.id_socio, p.anio, p.mes, p.fecha_pago, p.id_medio_pago,
                 p.tipo_pago, p.porcentaje_descuento_familiar,
+                p.monto_saldo_favor_aplicado,
                 {$paymentAmount} AS monto_calculado,
                 CASE WHEN p.monto IS NULL THEN 1 ELSE 0 END AS monto_estimado,
                 s.tipo_socio, s.id_categoria,
@@ -356,6 +394,12 @@ trait ContableConsultas
                 'medio' => (string)$row['medio'],
                 'id_medio_pago' => $row['id_medio_pago'] === null ? null : (int)$row['id_medio_pago'],
                 'monto' => self::importeDesdeCentavos($amountCents),
+                'monto_saldo_favor_aplicado' => number_format(
+                    max(0.0, (float)($row['monto_saldo_favor_aplicado'] ?? 0)),
+                    2,
+                    '.',
+                    ''
+                ),
                 'tipo_pago' => (string)($row['tipo_pago'] ?? 'NORMAL'),
                 'porcentaje_descuento_familiar' => $row['porcentaje_descuento_familiar'] === null
                     ? null
@@ -369,6 +413,115 @@ trait ContableConsultas
             $categories[$summaryCategory]['registros']++;
             $categories[$summaryCategory]['total'] += $amountCents;
         }
+
+        // Los sobrantes son dinero que efectivamente ingresó ese día y quedó
+        // como crédito del socio. Se muestran como un ingreso separado. Cuando
+        // ese crédito se usa más adelante, importePagoSql descuenta el saldo
+        // aplicado para que la misma plata nunca se contabilice dos veces.
+        $balanceWhere = ["sf.tipo = 'SOBRANTE'", 'sf.monto > 0', 'sf.fecha >= ?', 'sf.fecha < ?'];
+        $balanceParams = [$start, $end];
+        if ($partnerType !== '') {
+            $balanceWhere[] = 'COALESCE(s.tipo_socio, sdel.tipo_socio) = ?';
+            $balanceParams[] = $partnerType;
+        }
+        if ($categoryId !== null) {
+            $balanceWhere[] = 's.id_categoria = ?';
+            $balanceParams[] = $categoryId;
+        }
+        if ($meanId !== null) {
+            $balanceWhere[] = 'sf.id_medio_pago = ?';
+            $balanceParams[] = $meanId;
+        }
+        $balanceSearch = build_search_filter(
+            $search,
+            ["CONCAT_WS(' ',
+                sp.apellido, sp.nombre, sp.dni,
+                se.razon_social, se.cuit,
+                sdel.denominacion, sdel.documento,
+                c.nombre, mp.nombre, sf.detalle
+            ) LIKE {param}"],
+            160,
+            null
+        );
+        if ($balanceSearch['sql'] !== '') {
+            $balanceWhere[] = $balanceSearch['sql'];
+            array_push($balanceParams, ...$balanceSearch['params']);
+        }
+
+        $balanceStatement = $db->prepare(
+            "SELECT
+                sf.id_movimiento, sf.id_socio, DATE(sf.fecha) AS fecha,
+                sf.id_medio_pago, sf.monto,
+                COALESCE(s.tipo_socio, sdel.tipo_socio, 'PERSONA') AS tipo_socio,
+                s.id_categoria,
+                COALESCE(
+                    CASE
+                        WHEN COALESCE(s.tipo_socio, sdel.tipo_socio) = 'EMPRESA' THEN NULLIF(se.razon_social, '')
+                        ELSE NULLIF(TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))), ', ')
+                    END,
+                    NULLIF(sdel.denominacion, ''),
+                    CONCAT('SOCIO #', sf.id_socio)
+                ) AS socio,
+                COALESCE(
+                    CASE WHEN COALESCE(s.tipo_socio, sdel.tipo_socio) = 'EMPRESA' THEN se.cuit ELSE sp.dni END,
+                    sdel.documento
+                ) AS documento,
+                COALESCE(NULLIF(c.nombre, ''), 'SIN CATEGORÍA') AS categoria,
+                COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio
+             FROM saldos_favor_movimientos sf
+             LEFT JOIN socios s ON s.id_socio = sf.id_socio
+             LEFT JOIN socios_personas sp ON sp.id_socio = sf.id_socio
+             LEFT JOIN socios_empresas se ON se.id_socio = sf.id_socio
+             LEFT JOIN socios_eliminados sdel ON sdel.id_socio = sf.id_socio
+             LEFT JOIN categorias c ON c.id_categoria = s.id_categoria
+             LEFT JOIN medios_pago mp ON mp.id_medio_pago = sf.id_medio_pago
+             WHERE " . implode(' AND ', $balanceWhere) . "
+             ORDER BY sf.fecha DESC, sf.id_movimiento DESC"
+        );
+        $balanceStatement->execute($balanceParams);
+        foreach ($balanceStatement->fetchAll() as $row) {
+            $amountCents = self::centavos($row['monto'] ?? 0);
+            $categoryName = $row['categoria'] === null ? null : (string)$row['categoria'];
+            $date = (string)$row['fecha'];
+            $dateParts = explode('-', $date);
+            $balanceYear = (int)($dateParts[0] ?? $year);
+            $balanceMonth = (int)($dateParts[1] ?? $month);
+            $items[] = [
+                'clave' => 'SALDO-' . (int)$row['id_movimiento'],
+                'origen' => 'SALDO_FAVOR',
+                'id_registro' => (int)$row['id_movimiento'],
+                'id_pago' => null,
+                'id_socio' => (int)$row['id_socio'],
+                'fecha' => $date,
+                'socio' => (string)$row['socio'],
+                'tipo_socio' => (string)$row['tipo_socio'],
+                'documento' => $row['documento'] === null ? '—' : (string)$row['documento'],
+                'dni' => $row['documento'] === null ? '—' : (string)$row['documento'],
+                'categoria' => $categoryName,
+                'id_categoria' => $row['id_categoria'] === null ? null : (int)$row['id_categoria'],
+                'periodo' => 'SALDO A FAVOR',
+                'anio' => $balanceYear,
+                'mes' => $balanceMonth,
+                'medio' => (string)$row['medio'],
+                'id_medio_pago' => $row['id_medio_pago'] === null ? null : (int)$row['id_medio_pago'],
+                'monto' => self::importeDesdeCentavos($amountCents),
+                'tipo_pago' => 'SALDO_FAVOR_SOBRANTE',
+                'porcentaje_descuento_familiar' => null,
+                'monto_saldo_favor_aplicado' => '0.00',
+                'monto_estimado' => false,
+            ];
+            $total += $amountCents;
+            $summaryCategory = $categoryName === null || trim($categoryName) === '' ? 'SIN CATEGORÍA' : $categoryName;
+            if (!isset($categories[$summaryCategory])) $categories[$summaryCategory] = ['registros' => 0, 'total' => 0];
+            $categories[$summaryCategory]['registros']++;
+            $categories[$summaryCategory]['total'] += $amountCents;
+        }
+
+        usort($items, static function (array $left, array $right): int {
+            $date = strcmp((string)$right['fecha'], (string)$left['fecha']);
+            if ($date !== 0) return $date;
+            return strcmp((string)$right['clave'], (string)$left['clave']);
+        });
 
         return [
             'items' => $items,

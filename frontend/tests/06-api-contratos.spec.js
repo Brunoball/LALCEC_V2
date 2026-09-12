@@ -147,6 +147,32 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     );
     await expectApiError(
       request,
+      'e2e_saldo_favor_fixture',
+      {
+        method: 'POST',
+        data: {
+          confirmacion: 'NO',
+          id_socio: 2147483647,
+          monto: 100,
+        },
+      },
+      { status: 422, code: 'E2E_CLEANUP_CONFIRMACION_INVALIDA' },
+    );
+    await expectApiError(
+      request,
+      'e2e_saldo_favor_fixture',
+      {
+        method: 'POST',
+        data: {
+          confirmacion: 'LIMPIAR_PLAYWRIGHT',
+          id_socio: 2147483647,
+          monto: 100,
+        },
+      },
+      { status: 409, code: 'E2E_SCOPE_BLOCKED' },
+    );
+    await expectApiError(
+      request,
       'e2e_auditoria',
       { params: { tabla: 'socios', id: 1 } },
       { status: 422, code: 'E2E_AUDITORIA_INVALIDA' },
@@ -204,6 +230,8 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['auth_logout', 'POST'],
       ['dashboard_resumen', 'GET'],
       ['cuotas_listar', 'GET'],
+      ['cuotas_saldos_favor', 'GET'],
+      ['cuotas_ajustar_saldo_favor', 'POST', { data: {} }],
       ['cuotas_catalogos', 'GET'],
       ['cuotas_contexto_pago', 'GET', { params: { id_socio: 2147483647, anio: 2026, mes: 8 } }],
       ['cuotas_contextos_pago', 'GET', { params: { id_socio: 2147483647, anio: 2026 } }],

@@ -304,7 +304,7 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
     $db = $auth['db'];
     $body = request_body();
 
-    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope'], true)) return;
+    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture'], true)) return;
 
     switch ($action) {
         case 'socios_guardar': {

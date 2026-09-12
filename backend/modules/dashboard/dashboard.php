@@ -112,9 +112,22 @@ final class Dashboard
         );
         $partnerIncome = self::sum(
             $db,
-            "SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE estado = 'PAGADO' AND fecha_pago >= ? AND fecha_pago < ?",
+            "SELECT COALESCE(SUM(GREATEST(COALESCE(monto, 0) - COALESCE(monto_saldo_favor_aplicado, 0), 0)), 0)
+             FROM pagos
+             WHERE estado = 'PAGADO' AND fecha_pago >= ? AND fecha_pago < ?",
             [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
         );
+        if (self::tableExists($db, 'saldos_favor_movimientos')) {
+            $partnerIncome += self::optionalSum(
+                $db,
+                "SELECT COALESCE(SUM(monto), 0)
+                 FROM saldos_favor_movimientos
+                 WHERE tipo = 'SOBRANTE'
+                   AND monto > 0
+                   AND fecha >= ? AND fecha < ?",
+                [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
+            );
+        }
 
         $contableAvailable = self::tableExists($db, 'contable_ingresos')
             && self::tableExists($db, 'contable_egresos');
@@ -233,7 +246,11 @@ final class Dashboard
         $endKey = ((int)$lastMonth->format('Y') * 100) + (int)$lastMonth->format('n');
 
         $statement = $db->prepare(
-            "SELECT anio, mes, COUNT(*) AS pagadas, COALESCE(SUM(monto), 0) AS importe
+            "SELECT
+                anio,
+                mes,
+                COUNT(*) AS pagadas,
+                COALESCE(SUM(GREATEST(COALESCE(monto, 0) - COALESCE(monto_saldo_favor_aplicado, 0), 0)), 0) AS importe
              FROM pagos
              WHERE estado = 'PAGADO'
                AND (anio * 100 + mes) BETWEEN ? AND ?

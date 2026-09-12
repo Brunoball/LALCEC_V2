@@ -150,7 +150,12 @@ async function selectPaymentTab(dialog, name) {
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
-async function expectReceiptPopup(page, trigger, expectedAddress = defaultTestAddress) {
+async function expectReceiptPopup(
+  page,
+  trigger,
+  expectedAddress = defaultTestAddress,
+  expectedPeriod = null,
+) {
   await page.context().addInitScript(() => {
     window.print = () => undefined;
   });
@@ -171,6 +176,11 @@ async function expectReceiptPopup(page, trigger, expectedAddress = defaultTestAd
     await expect(addressLine).not.toContainText(`${expectedAddress} 123`);
   }
   await expect(addressLine).not.toContainText(/N\/?A|Domicilio no registrado/i);
+  if (expectedPeriod) {
+    const periodLine = receipt.locator('p').filter({ hasText: /Período:/i });
+    await expect(periodLine).toHaveCount(1);
+    await expect(periodLine).toContainText(expectedPeriod);
+  }
   await popup.close();
 }
 
@@ -280,7 +290,9 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
     const receipt = await expectSuccessfulPaymentReceipt(page);
-    await expectReceiptPopup(page, () => receipt.getByRole('button', { name: 'Comprobante' }).click());
+    await expectReceiptPopup(page, () =>
+      receipt.getByRole('button', { name: 'Comprobante' }).click(),
+    );
     await captureDownload(
       page,
       () => receipt.getByRole('button', { name: 'PDF', exact: true }).click(),
@@ -574,7 +586,17 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar 2 cuotas' }).click();
 
-    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
+    await expect(receipt).toContainText('Se generó un único comprobante con 2 períodos.');
+    await expectReceiptPopup(
+      page,
+      () => receipt.getByRole('button', { name: 'Comprobante' }).click(),
+      defaultTestAddress,
+      new RegExp(
+        `Período:\\s*[^/]+\\s+${currentYear}\\s*\\/\\s*[^/]+\\s+${currentYear}`,
+        'i',
+      ),
+    );
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     let paidCount = 0;
@@ -647,7 +669,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
       expect(Number(payment.monto)).toBeCloseTo(expectedAmounts.get(Number(payment.mes)), 2);
     }
 
-    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
+    const receipt = await expectSuccessfulPaymentReceipt(page);
+    await expect(receipt).toContainText('Se generó un único comprobante con 2 períodos.');
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     for (const [month, amount] of expectedAmounts) {
@@ -924,7 +947,8 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await selectPaymentTab(dialog, /Meses a pagar/);
     await selectPreferredMedium(dialog);
     await dialog.getByRole('button', { name: 'Registrar pago familiar (3 cuotas)' }).click();
-    const receipt = await expectSuccessfulPaymentReceipt(page, 3);
+    const receipt = await expectSuccessfulPaymentReceipt(page, 2);
+    await expect(receipt).toContainText('Se generó un comprobante individual por cada socio.');
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     for (const [person, month] of [

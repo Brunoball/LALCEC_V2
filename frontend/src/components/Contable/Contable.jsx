@@ -89,21 +89,31 @@ const money = (value) =>
 
 const paymentTypeDetail = (item) => {
   const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
-  if (type === "MONTO_PERSONALIZADO") return "Monto personalizado";
+  if (type === "SALDO_FAVOR_SOBRANTE") return "Sobrante a saldo a favor";
+  let detail = "";
+  if (type === "MONTO_PERSONALIZADO") detail = "Monto personalizado";
   if (type === "DESCUENTO_FAMILIAR") {
     const percentage = Number(item?.porcentaje_descuento_familiar);
-    if (!Number.isFinite(percentage) || percentage <= 0) return "Desc. familiar";
-    const formatted = new Intl.NumberFormat("es-AR", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(percentage);
-    return `Desc. familiar ${formatted}%`;
+    if (!Number.isFinite(percentage) || percentage <= 0) detail = "Desc. familiar";
+    else {
+      const formatted = new Intl.NumberFormat("es-AR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(percentage);
+      detail = `Desc. familiar ${formatted}%`;
+    }
   }
-  return "";
+  const appliedBalance = Number(item?.monto_saldo_favor_aplicado || 0);
+  if (appliedBalance > 0) {
+    const balanceDetail = `Saldo aplicado ${money(appliedBalance)}`;
+    return detail ? `${detail} · ${balanceDetail}` : balanceDetail;
+  }
+  return detail;
 };
 
 const paymentTypeTone = (item) => {
   const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
+  if (type === "SALDO_FAVOR_SOBRANTE") return "is-family";
   if (type === "DESCUENTO_FAMILIAR") return "is-family";
   if (type === "DESCUENTO_PERSONALIZADO") return "is-custom-discount";
   if (type === "MONTO_PERSONALIZADO") return "is-custom";

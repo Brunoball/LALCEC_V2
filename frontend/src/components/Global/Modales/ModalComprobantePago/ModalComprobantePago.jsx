@@ -36,11 +36,21 @@ export default function ModalComprobantePago({
   const receipt = receipts[0] || summaryReceipt;
   const receiptCount = receipts.length;
   const isBatch = receiptCount > 1;
+  const periodCount = receipt.lineas.length;
   const isWaiver = receipts.every((item) => item.estado === "CONDONADO");
   const total = receipts.reduce(
     (amount, item) => amount + Number(item.monto || 0),
     0,
   );
+  const totalBalanceApplied = receipts.reduce(
+    (amount, item) => amount + Number(item.saldoFavorAplicado || 0),
+    0,
+  );
+  const totalCollectedNow = receipts.reduce(
+    (amount, item) => amount + Number(item.montoCobradoAhora ?? item.monto ?? 0),
+    0,
+  );
+  const usedBalance = totalBalanceApplied > 0.004;
 
   return (
     <CrudModal
@@ -56,10 +66,12 @@ export default function ModalComprobantePago({
       }
       subtitle={
         isBatch
-          ? "Se generó un comprobante individual por cada pago."
-          : receipt.codigo
-            ? `Operación ${receipt.codigo}`
-            : "La operación fue registrada correctamente."
+          ? "Se generó un comprobante individual por cada socio."
+          : periodCount > 1
+            ? `Se generó un único comprobante con ${periodCount} períodos.`
+            : receipt.codigo
+              ? `Operación ${receipt.codigo}`
+              : "La operación fue registrada correctamente."
       }
       onClose={onClose}
       hideCancel
@@ -105,15 +117,22 @@ export default function ModalComprobantePago({
           {loading
             ? "Estamos completando los datos del comprobante."
             : isBatch
-              ? "Al imprimir o descargar el PDF, cada pago ocupará una página separada."
-              : "Podés generar el comprobante ahora mismo."}
+              ? "Al imprimir o descargar el PDF, cada socio ocupará una página separada."
+              : periodCount > 1
+                ? "Los períodos pagados juntos se incluyen en el mismo comprobante."
+                : "Podés generar el comprobante ahora mismo."}
         </p>
       </section>
 
       <div className="payment-receipt-footer">
         <div className="payment-receipt-total-pill">
-          <span>Total:</span>
-          <strong>{money(total)}</strong>
+          <span>{usedBalance ? "Cobrado ahora:" : "Total:"}</span>
+          <strong>{money(usedBalance ? totalCollectedNow : total)}</strong>
+          {usedBalance ? (
+            <small>
+              Saldo aplicado {money(totalBalanceApplied)} · Total cuotas {money(total)}
+            </small>
+          ) : null}
         </div>
 
         <div className="payment-receipt-actions">

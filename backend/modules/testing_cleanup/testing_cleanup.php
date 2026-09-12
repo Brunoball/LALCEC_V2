@@ -50,6 +50,109 @@ final class TestingCleanup
         api_success($result, 'Limpieza E2E acotada completada.');
     }
 
+    /**
+     * Fixture controlado para probar el circuito de saldos a favor antes de que
+     * el backend conversacional del bot sea quien genere los SOBRANTES reales.
+     * Sólo admite socios E2E y nunca queda expuesto como API funcional normal.
+     */
+    public static function saldoFavorFixture(): never
+    {
+        $auth = self::requireE2EAdmin();
+        $body = request_body();
+        self::requireConfirmation($body);
+
+        $partnerId = filter_var(
+            $body['id_socio'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($partnerId === false) {
+            api_error('El socio E2E indicado no es válido.', 'E2E_SALDO_SOCIO_INVALIDO', 422);
+        }
+        $partnerId = (int)$partnerId;
+        if (!e2e_socio($auth['db'], $partnerId)) {
+            api_error(
+                'El fixture de saldo sólo puede aplicarse a socios creados por Playwright.',
+                'E2E_SCOPE_BLOCKED',
+                409
+            );
+        }
+        if (!self::tableExists($auth['db'], 'saldos_favor_movimientos')) {
+            api_error('La tabla de saldos a favor no está disponible.', 'E2E_SALDO_SCHEMA_FALTANTE', 409);
+        }
+
+        $rawAmount = str_replace(',', '.', trim((string)($body['monto'] ?? '')));
+        if ($rawAmount === '' || !is_numeric($rawAmount)) {
+            api_error('El monto del saldo E2E no es válido.', 'E2E_SALDO_MONTO_INVALIDO', 422);
+        }
+        $amount = round((float)$rawAmount, 2);
+        if ($amount <= 0 || $amount > 100000000) {
+            api_error('El monto del saldo E2E debe ser mayor a cero.', 'E2E_SALDO_MONTO_INVALIDO', 422);
+        }
+
+        $date = valid_date($body['fecha'] ?? date('Y-m-d'), 'saldo E2E');
+        $mediumId = null;
+        if (($body['id_medio_pago'] ?? null) !== null && ($body['id_medio_pago'] ?? '') !== '') {
+            $validatedMedium = filter_var(
+                $body['id_medio_pago'],
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            if ($validatedMedium === false) {
+                api_error('El medio de pago E2E no es válido.', 'E2E_SALDO_MEDIO_INVALIDO', 422);
+            }
+            $mediumId = (int)$validatedMedium;
+            $medium = $auth['db']->prepare(
+                'SELECT 1 FROM medios_pago WHERE id_medio_pago = ? AND activo = 1 LIMIT 1'
+            );
+            $medium->execute([$mediumId]);
+            if (!$medium->fetchColumn()) {
+                api_error('El medio de pago E2E no existe o está inactivo.', 'E2E_SALDO_MEDIO_INVALIDO', 422);
+            }
+        }
+
+        $token = strtoupper(bin2hex(random_bytes(8)));
+        $reference = 'PW E2E SALDO ' . $token;
+        $idempotencyKey = 'PW:E2E:SALDO:' . $partnerId . ':' . $token;
+        $statement = $auth['db']->prepare(
+            "INSERT INTO saldos_favor_movimientos
+                (id_socio, fecha, tipo, monto, origen, id_medio_pago, id_usuario,
+                 referencia_externa, clave_idempotencia, detalle)
+             VALUES (?, ?, 'SOBRANTE', ?, 'BOT', ?, ?, ?, ?, ?)"
+        );
+        // El fixture debe quedar cronológicamente antes que las acciones que
+        // el propio test ejecuta después (pago, reverso, etc.). No usar una
+        // hora fija futura como 12:00 porque, si la suite corre por la mañana,
+        // un REVERSO creado con NOW() parecería anterior al SOBRANTE.
+        $movementDate = $date === date('Y-m-d')
+            ? date('Y-m-d H:i:s')
+            : $date . ' 00:00:00';
+
+        $statement->execute([
+            $partnerId,
+            $movementDate,
+            $amount,
+            $mediumId,
+            (int)$auth['id_usuario'],
+            $reference,
+            $idempotencyKey,
+            'PW E2E SOBRANTE PARA PRUEBAS DE SALDO A FAVOR',
+        ]);
+
+        api_success([
+            'movimiento' => [
+                'id_movimiento' => (int)$auth['db']->lastInsertId(),
+                'id_socio' => $partnerId,
+                'fecha' => $date,
+                'tipo' => 'SOBRANTE',
+                'monto' => number_format($amount, 2, '.', ''),
+                'origen' => 'BOT',
+                'id_medio_pago' => $mediumId,
+                'referencia_externa' => $reference,
+            ],
+        ], 'Saldo E2E acreditado correctamente.');
+    }
+
     public static function audit(): never
     {
         $auth = self::requireE2EAdmin();
@@ -118,6 +221,7 @@ final class TestingCleanup
             'familias' => 0,
             'socios' => 0,
             'socios_eliminados' => 0,
+            'saldos_favor_movimientos' => 0,
             'pagos' => 0,
             'pagos_inscripciones' => 0,
             'categorias' => 0,
@@ -197,6 +301,14 @@ final class TestingCleanup
                 self::deleteByIds($db, 'familias_socios', 'id_familia', $testFamilies);
             }
             if ($testSocios !== []) {
+                if (self::tableExists($db, 'saldos_favor_movimientos')) {
+                    $counts['saldos_favor_movimientos'] += self::deleteByIds(
+                        $db,
+                        'saldos_favor_movimientos',
+                        'id_socio',
+                        $testSocios
+                    );
+                }
                 if (self::tableExists($db, 'socios_eliminados')) {
                     $counts['socios_eliminados'] += self::deleteByIds($db, 'socios_eliminados', 'id_socio', $testSocios);
                 }
@@ -389,6 +501,9 @@ final class TestingCleanup
 
                 // Limpieza física exclusiva del harness. La operación real de
                 // negocio archiva y conserva todos estos registros.
+                if (self::tableExists($db, 'saldos_favor_movimientos')) {
+                    $deleted += self::deleteByIds($db, 'saldos_favor_movimientos', 'id_socio', [$id]);
+                }
                 if (self::tableExists($db, 'socios_eliminados')) {
                     $deleted += self::deleteByIds($db, 'socios_eliminados', 'id_socio', [$id]);
                 }
@@ -508,6 +623,13 @@ final class TestingCleanup
             'SELECT COUNT(*) FROM pagos WHERE id_socio IN (' . self::placeholders(count($testSocios)) . ')',
             $testSocios
         );
+        $counts['saldos_favor_movimientos'] = self::tableExists($db, 'saldos_favor_movimientos') && $testSocios !== []
+            ? self::scalar(
+                $db,
+                'SELECT COUNT(*) FROM saldos_favor_movimientos WHERE id_socio IN (' . self::placeholders(count($testSocios)) . ')',
+                $testSocios
+            )
+            : 0;
         $counts['pagos_inscripciones'] = self::tableExists($db, 'pagos_inscripciones') && $testSocios !== []
             ? self::scalar(
                 $db,
@@ -536,6 +658,7 @@ final class TestingCleanup
             'categorias_historial_precios' => "SELECT h.* FROM categorias_historial_precios h WHERE NOT EXISTS (SELECT 1 FROM categorias c WHERE c.id_categoria = h.id_categoria AND (c.nombre LIKE 'PW E2E CAT %' OR c.nombre LIKE 'PW EE CAT %')) ORDER BY h.id_historial_precio",
             'descuentos_familiares' => "SELECT d.* FROM descuentos_familiares d WHERE NOT (d.descripcion LIKE 'PW E2E %' OR d.descripcion LIKE 'PW EE %') ORDER BY d.id_descuento_familiar",
             'pagos' => "SELECT p.* FROM pagos p WHERE NOT EXISTS (" . self::e2eSocioExistsSql('p.id_socio') . ") ORDER BY p.id_pago",
+            'saldos_favor_movimientos' => "SELECT sf.* FROM saldos_favor_movimientos sf WHERE NOT EXISTS (" . self::e2eSocioExistsSql('sf.id_socio') . ") ORDER BY sf.id_movimiento",
             'medios_pago' => "SELECT m.* FROM medios_pago m WHERE NOT (m.nombre LIKE 'PW E2E %' OR m.nombre LIKE 'PW EE %') ORDER BY m.id_medio_pago",
             'condiciones_iva' => "SELECT c.* FROM condiciones_iva c WHERE NOT (c.nombre LIKE 'PW E2E %' OR c.nombre LIKE 'PW EE %') ORDER BY c.id_condicion_iva",
             'contable_opciones' => "SELECT o.* FROM contable_opciones o WHERE NOT (o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %') ORDER BY o.id_opcion",

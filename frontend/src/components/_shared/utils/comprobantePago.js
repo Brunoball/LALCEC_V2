@@ -58,6 +58,10 @@ export const normalizePaymentReceipt = (source = {}) => {
       line.id ||
       line.id_linea ||
       `${index}-${line.periodo || line.concepto || "linea"}`,
+    idSocio:
+      line.id_socio ??
+      line.idSocio ??
+      null,
     codigo: firstValue(
       line.codigo_operacion,
       line.numero_comprobante,
@@ -73,11 +77,23 @@ export const normalizePaymentReceipt = (source = {}) => {
     categoria:
       line.categoria || operation.categorias_label || operation.categoria || "—",
     periodo: line.periodo || line.descripcion || line.concepto || "—",
-    montoBase: Number(line.monto_base ?? line.monto ?? 0),
+    montoBase: Number(line.monto_base ?? line.montoBase ?? line.monto ?? 0),
     descuento: Number(
       line.porcentaje_descuento_familiar ?? line.porcentaje_descuento ?? 0,
     ),
     monto: Number(line.monto ?? 0),
+    saldoFavorAplicado: Number(
+      line.monto_saldo_favor_aplicado ?? line.saldoFavorAplicado ?? 0,
+    ),
+    montoCobradoAhora: Number(
+      line.monto_cobrado_ahora ??
+        line.montoCobradoAhora ??
+        Math.max(
+          0,
+          Number(line.monto ?? 0) -
+            Number(line.monto_saldo_favor_aplicado ?? line.saldoFavorAplicado ?? 0),
+        ),
+    ),
     domicilio: firstValue(
       line.domicilio_2,
       line.domicilio,
@@ -130,14 +146,32 @@ export const normalizePaymentReceipt = (source = {}) => {
     ),
     cobrador: firstValue(operation.cobrador, lines[0]?.cobrador),
     tipoEntidad: String(
-      operation.tipo_entidad || operation.tipo || safeSource.tipo_entidad || "",
+      operation.tipo_entidad ||
+        operation.tipoEntidad ||
+        operation.tipo ||
+        safeSource.tipo_entidad ||
+        safeSource.tipoEntidad ||
+        "",
     ).toUpperCase(),
     montoBase: Number(
       operation.monto_base ??
+        operation.montoBase ??
         lines.reduce((total, line) => total + line.montoBase, 0),
     ),
     monto: Number(
       operation.monto ?? lines.reduce((total, line) => total + line.monto, 0),
+    ),
+    saldoFavorAplicado: Number(
+      operation.monto_saldo_favor_aplicado ??
+        operation.saldoFavorAplicado ??
+        lines.reduce((total, line) => total + line.saldoFavorAplicado, 0),
+    ),
+    montoCobradoAhora: Number(
+      operation.monto_cobrado_ahora ??
+        operation.montoCobradoAhora ??
+        (lines.length
+          ? lines.reduce((total, line) => total + line.montoCobradoAhora, 0)
+          : operation.monto ?? 0),
     ),
     observaciones: operation.observaciones || "",
     motivoCondonacion: operation.motivo_condonacion || "",
@@ -163,21 +197,57 @@ export const normalizePaymentReceipts = (source = {}) => {
   const receipt = normalizePaymentReceipt(source);
   if (receipt.lineas.length <= 1) return [receipt];
 
-  return receipt.lineas.map((line, index) => ({
-    ...receipt,
-    codigo:
-      line.codigo ||
-      (receipt.codigo
-        ? `${receipt.codigo}-${String(index + 1).padStart(2, "0")}`
-        : ""),
-    socios: line.socio || receipt.socios,
-    medio: line.medio || receipt.medio,
-    domicilio: line.domicilio || receipt.domicilio,
-    cobrador: line.cobrador || receipt.cobrador,
-    montoBase: Number(line.montoBase || line.monto || 0),
-    monto: Number(line.monto || 0),
-    lineas: [line],
-  }));
+  // Una operación puede contener varios períodos para la misma persona.
+  // Eso sigue siendo un único pago/comprobante: agrupamos por socio y dejamos
+  // los meses dentro del mismo comprobante. Si la operación incluye distintas
+  // personas (selección múltiple o familia), cada una conserva su comprobante.
+  const grouped = new Map();
+  receipt.lineas.forEach((line) => {
+    const partnerLabel = String(line.socio || receipt.socios || "—").trim() || "—";
+    const partnerKey = line.idSocio != null && String(line.idSocio).trim() !== ""
+      ? `ID:${String(line.idSocio)}`
+      : `SOCIO:${partnerLabel}`;
+
+    if (!grouped.has(partnerKey)) {
+      grouped.set(partnerKey, {
+        socio: partnerLabel,
+        lineas: [],
+      });
+    }
+    grouped.get(partnerKey).lineas.push(line);
+  });
+
+  return Array.from(grouped.values()).map((group, index) => {
+    const firstLine = group.lineas[0] || {};
+    return {
+      ...receipt,
+      codigo:
+        grouped.size > 1 && receipt.codigo
+          ? `${receipt.codigo}-${String(index + 1).padStart(2, "0")}`
+          : receipt.codigo || firstLine.codigo || "",
+      socios: group.socio,
+      medio: firstLine.medio || receipt.medio,
+      domicilio: firstLine.domicilio || receipt.domicilio,
+      cobrador: firstLine.cobrador || receipt.cobrador,
+      montoBase: group.lineas.reduce(
+        (total, line) => total + Number(line.montoBase || line.monto || 0),
+        0,
+      ),
+      monto: group.lineas.reduce(
+        (total, line) => total + Number(line.monto || 0),
+        0,
+      ),
+      saldoFavorAplicado: group.lineas.reduce(
+        (total, line) => total + Number(line.saldoFavorAplicado || 0),
+        0,
+      ),
+      montoCobradoAhora: group.lineas.reduce(
+        (total, line) => total + Number(line.montoCobradoAhora || 0),
+        0,
+      ),
+      lineas: group.lineas,
+    };
+  });
 };
 
 const receiptDisplayData = (source) => {
@@ -192,8 +262,13 @@ const receiptDisplayData = (source) => {
     receipt.lineas.map((line) => line.socio),
   ).length > 1;
   const unitAmount = amounts.length === 1 ? amounts[0] : 0;
-  const amountDetail =
-    unitAmount > 0 && unitAmount !== receipt.monto
+  const hasAppliedBalance = Number(receipt.saldoFavorAplicado || 0) > 0.004;
+  const amountPaidNow = hasAppliedBalance
+    ? Number(receipt.montoCobradoAhora || 0)
+    : Number(receipt.monto || 0);
+  const amountDetail = hasAppliedBalance
+    ? money(amountPaidNow)
+    : unitAmount > 0 && unitAmount !== receipt.monto
       ? `${money(unitAmount)} · Total ${money(receipt.monto)}`
       : money(receipt.monto);
 
@@ -212,8 +287,12 @@ const receiptDisplayData = (source) => {
     people: compact(receipt.socios, 116),
     address: compact(receipt.domicilio || "-", 94),
     category: compact(categories.join(" · ") || "—", 68),
-    periods: compact(periods.join(", ") || receipt.modalidad, 112),
+    periods: compact(periods.join(" / ") || receipt.modalidad, 112),
     amountDetail,
+    hasAppliedBalance,
+    amountPaidNow,
+    balanceApplied: Number(receipt.saldoFavorAplicado || 0),
+    totalSettled: Number(receipt.monto || 0),
     paymentLabel: receipt.cobrador ? "Cobrador" : "Medio de pago",
     paymentValue: compact(receipt.cobrador || receipt.medio || "—", 54),
     state: receipt.estado || "PAGADO",
@@ -230,7 +309,8 @@ const receiptBodyHtml = (source) => {
         <div class="gcuotas-talon-socio">
           <p><strong>${htmlEscape(data.entityLabel)}:</strong> ${htmlEscape(data.people)}</p>
           <p><strong>Domicilio:</strong> ${htmlEscape(data.address)}</p>
-          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          <p><strong>${data.hasAppliedBalance ? "Categoría / Monto abonado" : "Categoría / Monto"}:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          ${data.hasAppliedBalance ? `<p><strong>Saldo a favor aplicado:</strong> ${htmlEscape(money(data.balanceApplied))}</p><p><strong>Total de cuotas:</strong> ${htmlEscape(money(data.totalSettled))}</p>` : ""}
           <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
           <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
           <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
@@ -241,7 +321,8 @@ const receiptBodyHtml = (source) => {
 
         <div class="gcuotas-talon-cobrador">
           <p><strong>${htmlEscape(data.copyEntityLabel)}:</strong> ${htmlEscape(data.people)}</p>
-          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          <p><strong>${data.hasAppliedBalance ? "Categoría / Monto abonado" : "Categoría / Monto"}:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
+          ${data.hasAppliedBalance ? `<p><strong>Saldo a favor aplicado:</strong> ${htmlEscape(money(data.balanceApplied))}</p><p><strong>Total de cuotas:</strong> ${htmlEscape(money(data.totalSettled))}</p>` : ""}
           <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
           <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
           <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
@@ -612,11 +693,18 @@ const paymentReceiptPdfContent = (source, { hasLogo = false } = {}) => {
     }),
   );
   commands.push(
-    pdfText(438, 151, 18, money(receipt.monto), {
+    pdfText(438, 151, 18, money(data.amountPaidNow), {
       bold: true,
       color: pdfColor.orange,
     }),
   );
+  if (data.hasAppliedBalance) {
+    commands.push(
+      pdfText(64, 141, 7.1, `Saldo aplicado ${money(data.balanceApplied)} · Cuotas ${money(data.totalSettled)}`, {
+        color: pdfColor.muted,
+      }),
+    );
+  }
 
   commands.push(pdfText(634, 365, 10.5, "LALCEC", { bold: true }));
   pdfField(commands, 602, 326, data.copyEntityLabel, data.people, { width: 188, valueSize: 8.2 });
@@ -629,11 +717,18 @@ const paymentReceiptPdfContent = (source, { hasLogo = false } = {}) => {
     pdfText(614, 151, 7.2, "TOTAL", { bold: true, color: pdfColor.orangeDark }),
   );
   commands.push(
-    pdfText(692, 143, 12, money(receipt.monto), {
+    pdfText(692, 143, 12, money(data.amountPaidNow), {
       bold: true,
       color: pdfColor.orange,
     }),
   );
+  if (data.hasAppliedBalance) {
+    commands.push(
+      pdfText(614, 132, 6.4, pdfFittedText(`Saldo ${money(data.balanceApplied)} · Cuotas ${money(data.totalSettled)}`, 168, 6.4), {
+        color: pdfColor.muted,
+      }),
+    );
+  }
 
   commands.push(
     pdfText(602, 112, 7, date(receipt.fecha), { color: pdfColor.muted }),

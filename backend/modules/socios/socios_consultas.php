@@ -251,6 +251,24 @@ trait SociosConsultas
         $paymentCount = (int)$payments->fetchColumn();
         $stateCount = (int)$states->fetchColumn();
         $familyCount = (int)$families->fetchColumn();
+        $balanceMovements = 0;
+        $balanceCurrent = 0.0;
+        $balanceTable = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'saldos_favor_movimientos'"
+        );
+        $balanceTable->execute();
+        if ((int)$balanceTable->fetchColumn() === 1) {
+            $balance = $db->prepare(
+                'SELECT COUNT(*) AS movimientos, COALESCE(SUM(monto), 0) AS saldo
+                 FROM saldos_favor_movimientos
+                 WHERE id_socio = ?'
+            );
+            $balance->execute([$id]);
+            $balanceRow = $balance->fetch() ?: [];
+            $balanceMovements = (int)($balanceRow['movimientos'] ?? 0);
+            $balanceCurrent = (float)($balanceRow['saldo'] ?? 0);
+        }
         $registrationCount = 0;
 
         $registrationTable = $db->prepare(
@@ -269,7 +287,9 @@ trait SociosConsultas
             'pagos_inscripciones' => $registrationCount,
             'historial_estados' => $stateCount,
             'vinculos_familiares' => $familyCount,
-            'total_relaciones' => $paymentCount + $registrationCount + $stateCount + $familyCount,
+            'saldos_favor_movimientos' => $balanceMovements,
+            'saldo_favor_actual' => number_format($balanceCurrent, 2, '.', ''),
+            'total_relaciones' => $paymentCount + $registrationCount + $stateCount + $familyCount + $balanceMovements,
         ];
     }
 

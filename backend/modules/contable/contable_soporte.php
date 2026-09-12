@@ -128,7 +128,7 @@ trait ContableSoporte
         string $partnerAlias = 's',
         string $categoryAlias = 'c'
     ): string {
-        return "COALESCE(
+        return "GREATEST(0, COALESCE(
             {$paymentAlias}.monto,
             (
                 SELECT hp.monto_nuevo
@@ -149,7 +149,7 @@ trait ContableSoporte
             ),
             {$categoryAlias}.monto_cuota,
             0
-        )";
+        ) - COALESCE({$paymentAlias}.monto_saldo_favor_aplicado, 0))";
     }
 
     protected static function opcionConfiguracion(PDO $db, int $id, bool $lock = false): ?array

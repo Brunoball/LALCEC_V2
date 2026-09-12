@@ -224,6 +224,23 @@ async function cleanupSocioByDocument(requestContext, { tipo, documento }) {
   return cleanupSocioById(requestContext, item.id_socio);
 }
 
+async function seedSaldoFavorE2E(
+  requestContext,
+  { id_socio, monto, fecha, id_medio_pago = null },
+) {
+  const response = await apiCall(requestContext, 'e2e_saldo_favor_fixture', {
+    method: 'POST',
+    data: {
+      confirmacion: 'LIMPIAR_PLAYWRIGHT',
+      id_socio,
+      monto,
+      fecha,
+      ...(id_medio_pago ? { id_medio_pago } : {}),
+    },
+  });
+  return response.movimiento;
+}
+
 async function cleanupSocioById(requestContext, id) {
   const numericId = Number(id);
   if (!Number.isInteger(numericId) || numericId <= 0) return false;
@@ -420,4 +437,5 @@ module.exports = {
   normalizedApiBase,
   readAuditActions,
   readAuthSession,
+  seedSaldoFavorE2E,
 };

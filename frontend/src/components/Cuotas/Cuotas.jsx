@@ -3,9 +3,12 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBan,
   faDollarSign,
+  faPen,
+  faPlus,
   faPrint,
   faReceipt,
   faTimes,
+  faTrashCan,
   faUserGroup,
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
@@ -14,6 +17,7 @@ import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import GlobalDivTable from "../Global/GlobalDivTable";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
 import ModalComprobantePago from "../Global/Modales/ModalComprobantePago";
+import CrudModal from "../Global/Modales/CrudModal";
 import ModalExportarGlobal from "../Global/Modales/ModalExportarGlobal";
 import ModuleFeedback from "../Global/ModuleFeedback";
 import Toast from "../Global/Toast";
@@ -51,6 +55,13 @@ const decimalInput = (value, maxIntegerDigits = 12, maxDecimals = 2) => {
   const decimals = decimalParts.join("").slice(0, maxDecimals);
   return `${integer || "0"}.${decimals}`;
 };
+
+const normalizeSearchText = (value) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
 const DEFAULT_MONTHS = [
   "Enero",
@@ -359,7 +370,14 @@ const emptyForm = () => ({
   montos_por_mes: {},
   id_medio_pago: "",
   aplicar_familia: false,
+  usar_saldo_favor: false,
   pagos: [],
+});
+
+const emptyBalanceForm = () => ({
+  id_socio: "",
+  saldo_objetivo: "",
+  detalle: "",
 });
 
 const defaultAmountOption = (principal) => {
@@ -593,6 +611,11 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
             </div>
             <div className="mov-gridCell cuotas-money-cell">
               {money(item.monto)}
+              {Number(item.monto_saldo_favor_aplicado || 0) > 0 ? (
+                <small className="cuotas-balance-note">
+                  Saldo aplicado {money(item.monto_saldo_favor_aplicado)}
+                </small>
+              ) : null}
             </div>
           </>
         ) : (
@@ -673,6 +696,93 @@ const CuotasTableRows = React.memo(function CuotasTableRows({
   });
 });
 
+const balanceMovementLabel = (type) => ({
+  SOBRANTE: "Sobrante acreditado",
+  APLICACION_PAGO: "Saldo utilizado",
+  REVERSO: "Saldo reintegrado",
+  AJUSTE_CREDITO: "Ajuste a favor",
+  AJUSTE_DEBITO: "Ajuste descontado",
+}[type] || "Movimiento de saldo");
+
+const SaldoFavorTableRows = React.memo(function SaldoFavorTableRows({
+  items,
+  tipo,
+  writable,
+  onEdit,
+  onDelete,
+}) {
+  return items.map((item) => (
+    <div
+      className="mov-gridTable mov-gridTable--row global-divTable__row entity-table-row cuotas-grid cuotas-grid--balance"
+      role="row"
+      key={`saldo-${item.id_socio}`}
+    >
+      <div className="mov-gridCell entity-main-cell">
+        <strong>{item.denominacion || "SIN DENOMINACIÓN"}</strong>
+        <small>
+          {[
+            item.documento
+              ? `${tipo === "EMPRESA" ? "CUIT" : "DNI"} ${item.documento}`
+              : null,
+            item.socio_eliminado
+              ? "REGISTRO ELIMINADO"
+              : item.estado_socio === "INACTIVO"
+                ? "REGISTRO DADO DE BAJA"
+                : null,
+          ].filter(Boolean).join(" · ")}
+        </small>
+      </div>
+      <div className="mov-gridCell is-center">
+        <span className={`cuotas-category-chip ${item.categoria ? "" : "is-empty"}`}>
+          {item.categoria || "SIN CATEGORÍA"}
+        </span>
+      </div>
+      <div className="mov-gridCell is-center">
+        {balanceMovementLabel(item.ultimo_tipo)}
+      </div>
+      <div className="mov-gridCell is-center">
+        {item.ultima_fecha ? formatDate(String(item.ultima_fecha).slice(0, 10)) : "—"}
+      </div>
+      <div className="mov-gridCell is-center">
+        {item.ultimo_origen === "BOT"
+          ? "Bot"
+          : item.ultimo_origen === "MANUAL"
+            ? "Manual"
+            : "Sistema"}
+      </div>
+      <div className="mov-gridCell cuotas-money-cell cuotas-balance-value">
+        {money(item.saldo_favor)}
+      </div>
+      <div className="mov-gridCell mov-gridCell--actions">
+        {writable ? (
+          <div className="mov-actionsInline">
+            <button
+              type="button"
+              className="mov-iconBtn"
+              title="Editar saldo a favor"
+              aria-label={`Editar saldo a favor de ${item.denominacion}`}
+              onClick={() => onEdit(item)}
+            >
+              <FontAwesomeIcon icon={faPen} />
+            </button>
+            <button
+              type="button"
+              className="mov-iconBtn mov-iconBtn--danger"
+              title="Eliminar saldo a favor"
+              aria-label={`Eliminar saldo a favor de ${item.denominacion}`}
+              onClick={() => onDelete(item)}
+            >
+              <FontAwesomeIcon icon={faTrashCan} />
+            </button>
+          </div>
+        ) : (
+          <span className="entity-readonly">CONSULTA</span>
+        )}
+      </div>
+    </div>
+  ));
+});
+
 export default function Cuotas() {
   const writable = canWrite();
   const contextRequestId = useRef(0);
@@ -699,8 +809,15 @@ export default function Cuotas() {
   const [paymentForm, setPaymentForm] = useState(emptyForm());
   const [paymentContext, setPaymentContext] = useState(null);
   const [paymentPeriods, setPaymentPeriods] = useState({});
+  const [paymentBalance, setPaymentBalance] = useState(0);
   const [contextLoading, setContextLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
+  const [balanceEditingRow, setBalanceEditingRow] = useState(null);
+  const [balanceForm, setBalanceForm] = useState(emptyBalanceForm());
+  const [balancePartnerSearch, setBalancePartnerSearch] = useState("");
+  const [balanceSaving, setBalanceSaving] = useState(false);
+  const [balanceDeleteRow, setBalanceDeleteRow] = useState(null);
   const [condoneRow, setCondoneRow] = useState(null);
   const [deleteRow, setDeleteRow] = useState(null);
   const [multiMode, setMultiMode] = useState(false);
@@ -716,6 +833,7 @@ export default function Cuotas() {
     DEUDORES: null,
     PAGADOS: null,
     CONDONADOS: null,
+    SALDOS_FAVOR: null,
   });
 
   useEffect(() => {
@@ -769,10 +887,11 @@ export default function Cuotas() {
       DEUDORES: null,
       PAGADOS: null,
       CONDONADOS: null,
+      SALDOS_FAVOR: null,
     });
 
     try {
-      const [deudoresResult, pagadosResult, condonadosResult] = await Promise.allSettled([
+      const [deudoresResult, pagadosResult, condonadosResult, saldosResult] = await Promise.allSettled([
         cuotasApi.listar({
           ...filtrosTotales,
           estado: "DEUDORES",
@@ -787,6 +906,12 @@ export default function Cuotas() {
           ...filtrosTotales,
           estado: "CONDONADOS",
           ...(medioPago ? { id_medio_pago: medioPago } : {}),
+        }),
+        cuotasApi.saldosFavor({
+          tipo,
+          buscar: debouncedBuscar,
+          pagina: 1,
+          por_pagina: 1,
         }),
       ]);
 
@@ -807,11 +932,12 @@ export default function Cuotas() {
         DEUDORES: totalFromResult(deudoresResult) ?? current.DEUDORES,
         PAGADOS: totalFromResult(pagadosResult) ?? current.PAGADOS,
         CONDONADOS: totalFromResult(condonadosResult) ?? current.CONDONADOS,
+        SALDOS_FAVOR: totalFromResult(saldosResult) ?? current.SALDOS_FAVOR,
       }));
     } catch {
       // El contador es informativo: una falla no debe bloquear la tabla principal.
     }
-  }, [filtrosTotales, medioPago]);
+  }, [filtrosTotales, medioPago, tipo, debouncedBuscar]);
 
   useEffect(() => {
     void cargarTotalesEstado();
@@ -924,11 +1050,14 @@ export default function Cuotas() {
     : DEFAULT_MONTHS;
   const isPaid = estado === "PAGADOS";
   const isCondoned = estado === "CONDONADOS";
+  const isBalanceView = estado === "SALDOS_FAVOR";
   const isResolved = isPaid || isCondoned;
   const exportStatusLabel = isPaid
     ? "Pagados"
     : isCondoned
       ? "Condonados"
+      : isBalanceView
+        ? "Saldos a favor"
       : "Deudores";
   const selectedMonthLabel =
     monthOptions.find((item) => String(item.id_mes) === String(mes))?.nombre ||
@@ -940,8 +1069,8 @@ export default function Cuotas() {
   const exportFilterSubtitle = [
     tipo === "EMPRESA" ? "Empresas" : "Socios",
     exportStatusLabel,
-    `${selectedMonthLabel} ${anio}`,
-    selectedPaymentMethodLabel
+    !isBalanceView ? `${selectedMonthLabel} ${anio}` : null,
+    !isBalanceView && selectedPaymentMethodLabel
       ? `Medio de pago: ${selectedPaymentMethodLabel}`
       : null,
     debouncedBuscar ? `Búsqueda: ${debouncedBuscar}` : null,
@@ -949,7 +1078,21 @@ export default function Cuotas() {
     .filter(Boolean)
     .join(" · ");
   const exportColumns = useMemo(
-    () => [
+    () => isBalanceView ? [
+      {
+        label: tipo === "EMPRESA" ? "Empresa" : "Socio/a",
+        value: (item) => item.denominacion || "SIN DENOMINACIÓN",
+      },
+      {
+        label: tipo === "EMPRESA" ? "CUIT" : "DNI",
+        value: (item) => item.documento || "—",
+      },
+      { label: "Categoría", value: (item) => item.categoria || "SIN CATEGORÍA" },
+      { label: "Último movimiento", value: (item) => balanceMovementLabel(item.ultimo_tipo) },
+      { label: "Fecha", value: (item) => item.ultima_fecha ? formatDate(String(item.ultima_fecha).slice(0, 10)) : "—" },
+      { label: "Origen", value: (item) => item.ultimo_origen || "SISTEMA" },
+      { label: "Saldo a favor", value: (item) => money(item.saldo_favor) },
+    ] : [
       {
         label: tipo === "EMPRESA" ? "Empresa" : "Socio/a",
         value: (item) => item.denominacion || "SIN DENOMINACIÓN",
@@ -985,11 +1128,14 @@ export default function Cuotas() {
         },
       },
     ],
-    [exportStatusLabel, isResolved, tipo],
+    [exportStatusLabel, isResolved, isBalanceView, tipo],
   );
   const obtenerTodosFiltrados = useCallback(async (filterOverrides = {}) => {
     const requestFilters = { ...filtros, ...filterOverrides };
-    const primeraRespuesta = await cuotasApi.listar({
+    const listFn = requestFilters.estado === "SALDOS_FAVOR"
+      ? cuotasApi.saldosFavor
+      : cuotasApi.listar;
+    const primeraRespuesta = await listFn({
       ...requestFilters,
       pagina: 1,
       por_pagina: PAGE_SIZE,
@@ -1005,7 +1151,7 @@ export default function Cuotas() {
     );
 
     for (let paginaActual = 2; paginaActual <= paginas; paginaActual += 1) {
-      const respuesta = await cuotasApi.listar({
+      const respuesta = await listFn({
         ...requestFilters,
         pagina: paginaActual,
         por_pagina: PAGE_SIZE,
@@ -1195,6 +1341,18 @@ export default function Cuotas() {
               ),
             0,
           );
+  const canUsePaymentBalance =
+    paymentMode === "single" &&
+    !paymentForm.aplicar_familia &&
+    paymentBalance > 0;
+  const paymentBalanceApplied =
+    canUsePaymentBalance && paymentForm.usar_saldo_favor
+      ? Math.min(paymentBalance, paymentTotal)
+      : 0;
+  const paymentAmountToCollect = Math.max(
+    0,
+    paymentTotal - paymentBalanceApplied,
+  );
 
   const clearSelectedPayments = () => {
     selectAllRequestId.current += 1;
@@ -1218,6 +1376,7 @@ export default function Cuotas() {
     if (saving) return;
     contextRequestId.current += 1;
     setContextLoading(false);
+    setPaymentBalance(0);
     setPaymentOpen(false);
     if (paymentMode === "multiple") clearMultipleSelection();
   };
@@ -1226,11 +1385,17 @@ export default function Cuotas() {
     partnerId,
     year,
     paymentDate,
-    { selectedMonths = [], activeMonth = "", defaultFamily = false } = {},
+    {
+      selectedMonths = [],
+      activeMonth = "",
+      defaultFamily = false,
+      defaultUseBalance = false,
+    } = {},
   ) => {
     if (!partnerId || !year || !paymentDate) {
       setPaymentContext(null);
       setPaymentPeriods({});
+      setPaymentBalance(0);
       return null;
     }
 
@@ -1244,6 +1409,10 @@ export default function Cuotas() {
         anio: year,
         fecha_pago: paymentDate,
       });
+      const availableBalance = Math.max(
+        0,
+        Number(annualResponse?.saldo_favor?.saldo || 0),
+      );
       const annualContexts = annualResponse?.periodos || {};
       const periods = monthOptions.map((monthItem) => {
         const monthId = String(monthItem.id_mes);
@@ -1280,6 +1449,7 @@ export default function Cuotas() {
 
       setPaymentPeriods(periodMap);
       setPaymentContext(activeContext);
+      setPaymentBalance(availableBalance);
       setPaymentForm((current) => {
         const monthAmounts = reconcileMonthAmountStates(
           periodMap,
@@ -1298,6 +1468,11 @@ export default function Cuotas() {
           aplicar_familia: defaultFamily
             ? hasFamilyToPay
             : current.aplicar_familia && hasFamilyToPay,
+          usar_saldo_favor: hasFamilyToPay
+            ? false
+            : defaultUseBalance
+              ? availableBalance > 0
+              : current.usar_saldo_favor && availableBalance > 0,
         };
       });
       return periodMap;
@@ -1305,6 +1480,7 @@ export default function Cuotas() {
       if (requestId === contextRequestId.current) {
         setPaymentContext(null);
         setPaymentPeriods({});
+        setPaymentBalance(0);
         setFeedback({
           type: "error",
           message: err.message || "No se pudieron consultar los períodos.",
@@ -1336,6 +1512,7 @@ export default function Cuotas() {
       selectedMonths: next.meses,
       activeMonth: next.mes,
       defaultFamily: next.meses.length === 1,
+      defaultUseBalance: true,
     });
   };
 
@@ -1343,6 +1520,7 @@ export default function Cuotas() {
     setFeedback(null);
     setPaymentMode("single");
     setPaymentContext(null);
+    setPaymentBalance(0);
     const next = {
       ...emptyForm(),
       id_socio: String(row?.id_socio || partners?.[0]?.id_socio || ""),
@@ -1369,6 +1547,7 @@ export default function Cuotas() {
       selectedMonths: resolved.meses,
       activeMonth: resolved.mes,
       defaultFamily: true,
+      defaultUseBalance: true,
     });
   };
 
@@ -1384,6 +1563,7 @@ export default function Cuotas() {
     setFeedback(null);
     setPaymentMode("multiple");
     setPaymentContext(null);
+    setPaymentBalance(0);
     const selectedPreferredPaymentMethods = selectedItems.map((item) =>
       String(item.id_medio_pago_preferido ?? item.id_medio_pago ?? ""),
     );
@@ -1802,6 +1982,14 @@ export default function Cuotas() {
         response = await cuotasApi.registrarPagos({
           fecha_pago: paymentForm.fecha_pago,
           id_medio_pago: Number(paymentForm.id_medio_pago),
+          usar_saldo_favor: Boolean(paymentForm.usar_saldo_favor),
+          ...(paymentForm.usar_saldo_favor
+            ? {
+                saldo_favor_aplicacion_esperada: Number(
+                  paymentBalanceApplied.toFixed(2),
+                ),
+              }
+            : {}),
           pagos: selectedMonthIds.map((monthId) => {
             const periodPrincipal =
               paymentPeriods[monthId]?.context?.principal;
@@ -1839,6 +2027,14 @@ export default function Cuotas() {
           ),
           id_medio_pago: Number(paymentForm.id_medio_pago),
           aplicar_familia: false,
+          usar_saldo_favor: Boolean(paymentForm.usar_saldo_favor),
+          ...(paymentForm.usar_saldo_favor
+            ? {
+                saldo_favor_aplicacion_esperada: Number(
+                  paymentBalanceApplied.toFixed(2),
+                ),
+              }
+            : {}),
           monto_personalizado: Boolean(
             paymentForm.montos_por_mes?.[selectedMonthIds[0]]?.personalizado,
           ),
@@ -1948,6 +2144,19 @@ export default function Cuotas() {
       // en el contexto desde el que abrió el modal.
       await Promise.all([cargar(), cargarTotalesEstado()]);
     } catch (err) {
+      if (err.code === "SALDO_FAVOR_MODIFICADO" && paymentMode !== "multiple") {
+        await loadPaymentPeriods(
+          paymentForm.id_socio,
+          paymentForm.anio,
+          paymentForm.fecha_pago,
+          {
+            selectedMonths: selectedMonthIds,
+            activeMonth: paymentForm.mes,
+            defaultFamily: false,
+            defaultUseBalance: false,
+          },
+        );
+      }
       setFeedback({ type: "error", message: err.message });
     } finally {
       paymentSubmitInFlightRef.current = false;
@@ -2103,7 +2312,11 @@ export default function Cuotas() {
       label: "Estado",
       ariaLabel: "Estado de las cuotas",
       value: estado,
-      onChange: setEstado,
+      onChange: (value) => {
+        setEstado(value);
+        setPagina(1);
+        if (value === "SALDOS_FAVOR") clearMultipleSelection();
+      },
       options: [
         {
           value: "DEUDORES",
@@ -2143,6 +2356,20 @@ export default function Cuotas() {
                 aria-label={estadoTotales.CONDONADOS == null ? "Total de condonados cargando" : `${estadoTotales.CONDONADOS} condonados`}
               >
                 {estadoTotales.CONDONADOS ?? "…"}
+              </span>
+            </span>
+          ),
+        },
+        {
+          value: "SALDOS_FAVOR",
+          label: (
+            <span className="cuotas-state-tabContent">
+              <span className="cuotas-state-tabText">Saldos a favor</span>
+              <span
+                className={`cuotas-state-tabBadge ${estadoTotales.SALDOS_FAVOR == null ? "is-pending" : ""}`.trim()}
+                aria-label={estadoTotales.SALDOS_FAVOR == null ? "Total de saldos a favor cargando" : `${estadoTotales.SALDOS_FAVOR} saldos a favor`}
+              >
+                {estadoTotales.SALDOS_FAVOR ?? "…"}
               </span>
             </span>
           ),
@@ -2194,9 +2421,14 @@ export default function Cuotas() {
       })),
       className: "cuotas-payment-method-filter",
     },
-  ];
+  ].filter(
+    (filter) =>
+      !isBalanceView || !["anio", "mes", "medio_pago"].includes(filter.key),
+  );
 
-  const tableLabel = `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : isCondoned ? "condonadas" : "adeudadas"}`;
+  const tableLabel = isBalanceView
+    ? `Saldos a favor de ${tipo === "EMPRESA" ? "empresas" : "socios"}`
+    : `Cuotas de ${tipo === "EMPRESA" ? "empresas" : "socios"} ${isPaid ? "pagadas" : isCondoned ? "condonadas" : "adeudadas"}`;
   const baseDebtColumns = [
     tipo === "EMPRESA" ? "Empresa" : "Socio",
     "Categoría",
@@ -2205,7 +2437,17 @@ export default function Cuotas() {
     "Importe",
     "Acciones",
   ];
-  const columns = isResolved
+  const columns = isBalanceView
+    ? [
+        tipo === "EMPRESA" ? "Empresa" : "Socio",
+        "Categoría",
+        "Último movimiento",
+        "Fecha",
+        "Origen",
+        "Saldo a favor",
+        "Acciones",
+      ]
+    : isResolved
     ? [
         tipo === "EMPRESA" ? "Empresa" : "Socio",
         "Categoría",
@@ -2243,6 +2485,117 @@ export default function Cuotas() {
     setExportOpen(true);
   };
 
+  const balancePartnerOptions =
+    tipo === "EMPRESA" ? catalogos.empresas || [] : catalogos.socios || [];
+  const filteredBalancePartnerOptions = useMemo(() => {
+    const query = normalizeSearchText(balancePartnerSearch);
+    if (!query) return balancePartnerOptions;
+
+    return balancePartnerOptions.filter((partner) =>
+      normalizeSearchText(
+        `${partner.denominacion || ""} ${partner.documento || ""}`,
+      ).includes(query),
+    );
+  }, [balancePartnerOptions, balancePartnerSearch]);
+
+  const openNewBalance = () => {
+    setBalanceEditingRow(null);
+    setBalanceForm(emptyBalanceForm());
+    setBalancePartnerSearch("");
+    setBalanceModalOpen(true);
+  };
+
+  const openEditBalance = (row) => {
+    setBalanceEditingRow(row);
+    setBalanceForm({
+      id_socio: String(row.id_socio),
+      saldo_objetivo: Number(row.saldo_favor || 0).toFixed(2),
+      detalle: "",
+    });
+    setBalanceModalOpen(true);
+  };
+
+  const closeBalanceModal = () => {
+    if (balanceSaving) return;
+    setBalanceModalOpen(false);
+    setBalanceEditingRow(null);
+    setBalanceForm(emptyBalanceForm());
+    setBalancePartnerSearch("");
+  };
+
+  const saveBalance = async (event) => {
+    event.preventDefault();
+    if (balanceSaving) return;
+
+    const partnerId = Number(
+      balanceEditingRow?.id_socio || balanceForm.id_socio || 0,
+    );
+    const targetBalance = Number(balanceForm.saldo_objetivo || 0);
+    if (!partnerId) {
+      setFeedback({
+        type: "error",
+        message: `Seleccioná ${tipo === "EMPRESA" ? "una empresa" : "un socio"}.`,
+      });
+      return;
+    }
+    if (!Number.isFinite(targetBalance) || targetBalance <= 0) {
+      setFeedback({
+        type: "error",
+        message: "Ingresá un saldo a favor mayor a cero.",
+      });
+      return;
+    }
+
+    setBalanceSaving(true);
+    try {
+      await cuotasApi.ajustarSaldoFavor({
+        id_socio: partnerId,
+        operacion: balanceEditingRow ? "EDITAR" : "CREAR",
+        saldo_objetivo: targetBalance,
+        detalle: balanceForm.detalle.trim() || undefined,
+      });
+      setFeedback({
+        type: "success",
+        message: balanceEditingRow
+          ? "Saldo a favor actualizado correctamente."
+          : "Saldo a favor agregado correctamente.",
+      });
+      setBalanceModalOpen(false);
+      setBalanceEditingRow(null);
+      setBalanceForm(emptyBalanceForm());
+      await Promise.all([cargar(), cargarTotalesEstado()]);
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err.message || "No se pudo actualizar el saldo a favor.",
+      });
+    } finally {
+      setBalanceSaving(false);
+    }
+  };
+
+  const deleteBalance = async ({ motivo }) => {
+    if (!balanceDeleteRow) return { ok: false, mensaje: "No hay saldo seleccionado." };
+
+    try {
+      await cuotasApi.ajustarSaldoFavor({
+        id_socio: balanceDeleteRow.id_socio,
+        operacion: "ELIMINAR",
+        detalle: motivo || "Saldo a favor eliminado manualmente.",
+      });
+      await Promise.all([cargar(), cargarTotalesEstado()]);
+      return {
+        ok: true,
+        mensaje: "Saldo a favor eliminado correctamente.",
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        mensaje: err.message || "No se pudo eliminar el saldo a favor.",
+      };
+    }
+  };
+
   return (
     <>
       <ModulePage
@@ -2264,22 +2617,32 @@ export default function Cuotas() {
           />
         }
         secondaryActions={
-          !isResolved && writable
+          isBalanceView && writable
             ? [
                 {
-                  key: "multiple-selection",
-                  label: multiMode
-                    ? "Cancelar selección"
-                    : "Selección múltiple",
-                  icon: faUserGroup,
-                  onClick: toggleMultipleMode,
-                  disabled: selectingAll,
-                  className: multiMode
-                    ? "mov-btn--danger cuotas-multiple-action"
-                    : "mov-btn--primary cuotas-multiple-action",
+                  key: "add-balance",
+                  label: "Agregar saldo",
+                  icon: faPlus,
+                  onClick: openNewBalance,
+                  className: "mov-btn--primary",
                 },
               ]
-            : []
+            : !isResolved && writable
+              ? [
+                  {
+                    key: "multiple-selection",
+                    label: multiMode
+                      ? "Cancelar selección"
+                      : "Selección múltiple",
+                    icon: faUserGroup,
+                    onClick: toggleMultipleMode,
+                    disabled: selectingAll,
+                    className: multiMode
+                      ? "mov-btn--danger cuotas-multiple-action"
+                      : "mov-btn--primary cuotas-multiple-action",
+                  },
+                ]
+              : []
         }
         canCreate={false}
         refreshing={loading}
@@ -2359,12 +2722,16 @@ export default function Cuotas() {
           bodyClassName="entity-table-wrap"
           bodyRef={tableBodyRef}
           gridClassName={
-            isResolved ? "cuotas-grid cuotas-grid--paid" : debtGridClass
+            isBalanceView
+              ? "cuotas-grid cuotas-grid--balance"
+              : isResolved
+                ? "cuotas-grid cuotas-grid--paid"
+                : debtGridClass
           }
           ariaLabel={tableLabel}
           empty={!loading && !error && !items.length}
           loading={loading}
-          loadingLabel="Cargando cuotas..."
+          loadingLabel={isBalanceView ? "Cargando saldos a favor..." : "Cargando cuotas..."}
           skeletonRows={8}
           columns={columns}
         >
@@ -2372,14 +2739,18 @@ export default function Cuotas() {
             <div className="module-empty">
               <FontAwesomeIcon icon={isResolved ? faReceipt : faWallet} />
               <strong>
-                {isPaid
+                {isBalanceView
+                  ? "No hay saldos a favor"
+                  : isPaid
                   ? "No hay pagos registrados"
                   : isCondoned
                     ? "No hay cuotas condonadas"
                     : "No hay deudores"}
               </strong>
               <span>
-                {isPaid
+                {isBalanceView
+                  ? "No hay socios con crédito disponible para los filtros seleccionados."
+                  : isPaid
                   ? "No existen pagos para el mes, año y filtros seleccionados."
                   : isCondoned
                     ? "No existen condonaciones para el mes, año y filtros seleccionados."
@@ -2388,17 +2759,27 @@ export default function Cuotas() {
             </div>
           ) : null}
 
-          <CuotasTableRows
-            items={itemsPagina}
-            selectedPayments={selectedPayments}
-            isResolved={isResolved}
-            isCondoned={isCondoned}
-            multiMode={multiMode}
-            writable={writable}
-            tipo={tipo}
-            debtRowClass={debtRowClass}
-            actionsRef={rowActionsRef}
-          />
+          {isBalanceView ? (
+            <SaldoFavorTableRows
+              items={itemsPagina}
+              tipo={tipo}
+              writable={writable}
+              onEdit={openEditBalance}
+              onDelete={setBalanceDeleteRow}
+            />
+          ) : (
+            <CuotasTableRows
+              items={itemsPagina}
+              selectedPayments={selectedPayments}
+              isResolved={isResolved}
+              isCondoned={isCondoned}
+              multiMode={multiMode}
+              writable={writable}
+              tipo={tipo}
+              debtRowClass={debtRowClass}
+              actionsRef={rowActionsRef}
+            />
+          )}
         </GlobalDivTable>
 
         <div className="cuotas-table-footer">
@@ -2463,16 +2844,18 @@ export default function Cuotas() {
             className="cuotas-lower-actions"
             aria-label="Acciones de cuotas"
           >
-            <button
-              type="button"
-              className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-print-all-action"
-              onClick={openPrintAll}
-              disabled={loading || printingAll || totalRegistros === 0}
-              title="Imprimir todos los comprobantes"
-            >
-              <FontAwesomeIcon icon={faPrint} />
-              Imprimir todos
-            </button>
+            {!isBalanceView ? (
+              <button
+                type="button"
+                className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-print-all-action"
+                onClick={openPrintAll}
+                disabled={loading || printingAll || totalRegistros === 0}
+                title="Imprimir todos los comprobantes"
+              >
+                <FontAwesomeIcon icon={faPrint} />
+                Imprimir todos
+              </button>
+            ) : null}
 
             <BotonExportarGlobal
               className="mov-btn--compact cuotas-lower-action cuotas-export-action"
@@ -2483,7 +2866,7 @@ export default function Cuotas() {
               title="Exportar cuotas"
             />
 
-            {writable && !isResolved ? (
+            {writable && !isResolved && !isBalanceView ? (
               <button
                 type="button"
                 className={`mov-btn cuotas-lower-action cuotas-multiple-action ${multiMode ? "mov-btn--danger" : "mov-btn--primary"}`}
@@ -2497,6 +2880,168 @@ export default function Cuotas() {
           </div>
         </div>
       </ModulePage>
+
+      <CrudModal
+        open={balanceModalOpen}
+        title={balanceEditingRow ? "Editar saldo a favor" : "Agregar saldo a favor"}
+        subtitle={
+          balanceEditingRow
+            ? "Definí el saldo total que debe quedar disponible para esta persona."
+            : "Cargá un saldo manual para un socio o empresa. El ajuste queda registrado en el historial."
+        }
+        onClose={closeBalanceModal}
+        onSubmit={saveBalance}
+        saving={balanceSaving}
+        submitLabel={balanceEditingRow ? "Guardar cambios" : "Agregar saldo"}
+        closeOnBackdrop={false}
+        modalClassName="cuotas-balance-modal"
+      >
+        <div className="cuotas-balance-form">
+          <label className="cuotas-balance-form__field">
+            <span>{tipo === "EMPRESA" ? "Empresa" : "Socio"} *</span>
+            {balanceEditingRow ? (
+              <div className="cuotas-balance-form__readonly">
+                <strong>{balanceEditingRow.denominacion}</strong>
+                <small>
+                  {balanceEditingRow.documento
+                    ? `${tipo === "EMPRESA" ? "CUIT" : "DNI"} ${balanceEditingRow.documento}`
+                    : `ID ${balanceEditingRow.id_socio}`}
+                </small>
+              </div>
+            ) : (
+              <div className="cuotas-balance-partner-picker">
+                <input
+                  type="search"
+                  aria-label={tipo === "EMPRESA" ? "Buscar empresa" : "Buscar socio"}
+                  placeholder={
+                    tipo === "EMPRESA"
+                      ? "Buscar por razón social o CUIT..."
+                      : "Buscar por nombre, apellido o DNI..."
+                  }
+                  value={balancePartnerSearch}
+                  onChange={(event) => {
+                    setBalancePartnerSearch(event.target.value);
+                    setBalanceForm((current) => ({
+                      ...current,
+                      id_socio: "",
+                    }));
+                  }}
+                  autoFocus
+                />
+                <select
+                  aria-label={tipo === "EMPRESA" ? "Empresa" : "Socio"}
+                  value={balanceForm.id_socio}
+                  onChange={(event) =>
+                    setBalanceForm((current) => ({
+                      ...current,
+                      id_socio: event.target.value,
+                    }))
+                  }
+                  required
+                >
+                  <option value="">
+                    {filteredBalancePartnerOptions.length
+                      ? "Seleccionar..."
+                      : "Sin resultados"}
+                  </option>
+                  {filteredBalancePartnerOptions.map((partner) => (
+                    <option key={partner.id_socio} value={partner.id_socio}>
+                      {partner.denominacion}
+                      {partner.documento ? ` · ${partner.documento}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <small className="cuotas-balance-partner-picker__count">
+                  {balancePartnerSearch
+                    ? `${filteredBalancePartnerOptions.length} resultado${
+                        filteredBalancePartnerOptions.length === 1 ? "" : "s"
+                      }`
+                    : `${balancePartnerOptions.length} ${
+                        tipo === "EMPRESA" ? "empresas" : "socios"
+                      } disponibles`}
+                </small>
+              </div>
+            )}
+          </label>
+
+          <label className="cuotas-balance-form__field">
+            <span>Saldo a favor total *</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label="Saldo a favor total"
+              value={balanceForm.saldo_objetivo}
+              onChange={(event) =>
+                setBalanceForm((current) => ({
+                  ...current,
+                  saldo_objetivo: decimalInput(event.target.value, 10, 2),
+                }))
+              }
+              placeholder="0,00"
+              required
+            />
+            <small>
+              {balanceEditingRow
+                ? `Saldo actual: ${money(balanceEditingRow.saldo_favor)}. Se registrará sólo la diferencia necesaria.`
+                : "Este importe quedará disponible para próximos pagos."}
+            </small>
+          </label>
+
+          <label className="cuotas-balance-form__field">
+            <span>Observación</span>
+            <textarea
+              aria-label="Observación del saldo a favor"
+              value={balanceForm.detalle}
+              onChange={(event) =>
+                setBalanceForm((current) => ({
+                  ...current,
+                  detalle: event.target.value,
+                }))
+              }
+              rows={3}
+              maxLength={500}
+              placeholder="Motivo opcional del ajuste..."
+            />
+          </label>
+
+          <p className="cuotas-balance-form__help">
+            Agregar, editar o eliminar un saldo no borra movimientos anteriores:
+            el sistema registra un ajuste manual para conservar toda la trazabilidad.
+          </p>
+        </div>
+      </CrudModal>
+
+      <ModalEliminarGlobal
+        open={Boolean(balanceDeleteRow)}
+        operacion="eliminar"
+        row={balanceDeleteRow}
+        onClose={() => setBalanceDeleteRow(null)}
+        onConfirm={deleteBalance}
+        title="Eliminar saldo a favor"
+        message="¿Seguro que querés dejar este saldo a favor en $0,00?"
+        warning="No se borra el historial. Se registrará un ajuste manual por el saldo completo y quedará trazabilidad del cambio."
+        confirmLabel="Eliminar saldo"
+        loadingMessage="Eliminando saldo a favor…"
+        successMessage="Saldo a favor eliminado correctamente."
+        errorMessage="No se pudo eliminar el saldo a favor."
+        showReason
+        reasonLabel="Motivo u observación"
+        reasonPlaceholder="Motivo opcional de la eliminación..."
+        details={[
+          {
+            label: tipo === "EMPRESA" ? "Empresa" : "Socio",
+            value: balanceDeleteRow?.denominacion,
+          },
+          {
+            label: "Saldo actual",
+            value: money(balanceDeleteRow?.saldo_favor),
+          },
+          {
+            label: "Saldo final",
+            value: money(0),
+          },
+        ]}
+      />
 
       <ModalExportarGlobal
         open={exportOpen}
@@ -2552,6 +3097,9 @@ export default function Cuotas() {
         familyPaymentCount={familyPaymentCount}
         contextLoading={contextLoading}
         paymentTotal={paymentTotal}
+        saldoFavorDisponible={paymentBalance}
+        saldoFavorAplicado={paymentBalanceApplied}
+        importeCobrarAhora={paymentAmountToCollect}
         money={money}
         selectedPartner={selectedPartner}
         principal={principal}
@@ -2613,7 +3161,11 @@ export default function Cuotas() {
         onConfirm={deletePayment}
         title={deleteRow?.estado === "CONDONADO" ? "Eliminar condonación" : "Eliminar pago registrado"}
         message={deleteRow?.estado === "CONDONADO" ? "¿Seguro que querés eliminar esta condonación?" : "¿Seguro que querés eliminar este pago?"}
-        warning="La cuota volverá a aparecer en Deudores para el mismo mes y año."
+        warning={
+          Number(deleteRow?.monto_saldo_favor_aplicado || 0) > 0
+            ? `La cuota volverá a aparecer en Deudores y ${money(deleteRow?.monto_saldo_favor_aplicado)} volverán al saldo a favor del socio.`
+            : "La cuota volverá a aparecer en Deudores para el mismo mes y año."
+        }
         confirmLabel={deleteRow?.estado === "CONDONADO" ? "Eliminar condonación" : "Eliminar pago"}
         loadingMessage={deleteRow?.estado === "CONDONADO" ? "Eliminando condonación…" : "Eliminando pago…"}
         successMessage={deleteRow?.estado === "CONDONADO" ? "Condonación eliminada correctamente." : "Pago eliminado correctamente."}
@@ -2626,6 +3178,12 @@ export default function Cuotas() {
           { label: "Período", value: deleteRow?.periodo },
           { label: "Estado", value: deleteRow?.estado || "PAGADO" },
           { label: "Importe", value: money(deleteRow?.monto) },
+          ...(Number(deleteRow?.monto_saldo_favor_aplicado || 0) > 0
+            ? [{
+                label: "Saldo aplicado",
+                value: money(deleteRow?.monto_saldo_favor_aplicado),
+              }]
+            : []),
           { label: "Medio", value: deleteRow?.medio_pago || "—" },
         ]}
       />

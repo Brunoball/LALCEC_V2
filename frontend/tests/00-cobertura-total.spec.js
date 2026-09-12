@@ -117,6 +117,7 @@ const E2E_INFRA_ACTIONS = new Set([
   'e2e_auditoria',
   'e2e_cleanup',
   'e2e_cleanup_scope',
+  'e2e_saldo_favor_fixture',
   'e2e_guard_probe',
   'e2e_snapshot',
   'e2e_status',
@@ -167,6 +168,14 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Registrar pago',
   'Condonar cuota',
   'Condonados',
+  'Saldos a favor',
+  'Agregar saldo',
+  'Editar saldo a favor',
+  'Eliminar saldo a favor',
+  'Saldo a favor disponible',
+  'Usar saldo a favor en este pago',
+  'Saldo aplicado',
+  'A cobrar ahora',
   'Eliminar condonación',
   'Registrar 2 pagos',
   'Aplicar pago a todo el grupo familiar',
@@ -291,6 +300,8 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(cuotasSource).toContain('toggleAllFilteredPayments');
     expect(cuotasSource).toContain('id_medio_pago');
     expect(cuotasApiSource).toContain('cuotas_contextos_pago');
+    expect(cuotasApiSource).toContain('cuotas_saldos_favor');
+    expect(cuotasApiSource).toContain('cuotas_ajustar_saldo_favor');
     expect(cuotasHookSource).toContain('incluir_catalogos: 0');
     expect(cuotasHookSource).toContain('cuotasApi.catalogos');
     expect(cuotasModalCss).toContain('.cuotas-modal--payment.entity-modal');
@@ -433,6 +444,11 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
       'PAGO_SOCIO_ELIMINADO_PROTEGIDO',
       'COTIZACION_MODIFICADA',
       'FAMILIA_MODIFICADA',
+      'monto_saldo_favor_aplicado',
+      'APLICACION_PAGO',
+      'REVERSO',
+      'SALDO_FAVOR_PAGO_FAMILIAR',
+      'SALDO_FAVOR_MULTIPLES_SOCIOS',
       'FOR UPDATE',
     ]) {
       expect(cuotasBackend, `Falta blindaje reciente de Cuotas: ${marker}`).toContain(marker);
@@ -442,6 +458,9 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
       'LEFT JOIN socios_eliminados sdel',
       'p.tipo_pago',
       'p.porcentaje_descuento_familiar',
+      'p.monto_saldo_favor_aplicado',
+      "sf.tipo = 'SOBRANTE'",
+      'SALDO_FAVOR_SOBRANTE',
       'sdel.documento',
     ]) {
       expect(contableBackend, `Falta trazabilidad contable reciente: ${marker}`).toContain(marker);
@@ -452,6 +471,8 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(categoriasBackend).toContain('filtro_socios_no_eliminados');
     expect(dashboardBackend).toContain('filtro_socios_no_eliminados');
     expect(cleanupBackend).toContain("'socios_eliminados'");
+    expect(cleanupBackend).toContain("'saldos_favor_movimientos'");
+    expect(cleanupBackend).toContain('saldoFavorFixture');
 
     const archiveSpec = read(path.join(__dirname, '17-socios-eliminacion-trazabilidad.spec.js'));
     for (const marker of [
@@ -488,6 +509,20 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
 
     const cuotasUiSpec = read(path.join(__dirname, '13-cuotas-ui-completa.spec.js'));
     expect(cuotasUiSpec).toContain('monto personalizado mantiene seleccionado el pago familiar');
+
+    const balanceSpec = read(path.join(__dirname, '18-saldos-favor.spec.js'));
+    for (const marker of [
+      'acredita un SOBRANTE, lo aplica parcialmente y Contable no cuenta la plata dos veces',
+      'si el saldo cubre toda la cuota no registra dinero nuevo y conserva el remanente',
+      'serializa dos cobros concurrentes y nunca permite gastar más saldo del disponible',
+      'la eliminación definitiva preserva el saldo y lo mantiene trazable en Saldos a favor',
+      'SALDO_FAVOR_PAGO_FAMILIAR',
+      'SALDO_FAVOR_MULTIPLES_SOCIOS',
+      'Saldo a favor disponible',
+      'Saldos a favor de socios',
+    ]) {
+      expect(balanceSpec, `La regresión de saldos a favor dejó de cubrir: ${marker}`).toContain(marker);
+    }
 
     const contableUiSpec = read(path.join(__dirname, '12-contabilidad-ui-completa.spec.js'));
     expect(contableUiSpec).toContain('Monto personalizado');

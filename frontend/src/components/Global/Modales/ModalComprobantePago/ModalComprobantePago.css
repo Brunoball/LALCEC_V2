@@ -200,3 +200,19 @@ html[data-theme="oscuro"]
     width: 100%;
   }
 }
+
+.payment-receipt-total-pill small {
+  flex-basis: 100%;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  opacity: 0.9;
+}
+
+.payment-receipt-total-pill:has(small) {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  white-space: normal;
+}
