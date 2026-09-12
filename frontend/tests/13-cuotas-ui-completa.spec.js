@@ -177,9 +177,24 @@ async function expectReceiptPopup(
   }
   await expect(addressLine).not.toContainText(/N\/?A|Domicilio no registrado/i);
   if (expectedPeriod) {
-    const periodLine = receipt.locator('p').filter({ hasText: /Período:/i });
-    await expect(periodLine).toHaveCount(1);
-    await expect(periodLine).toContainText(expectedPeriod);
+    // Un comprobante físico contiene dos talones (socio y cobrador).
+    // Ambos repiten el mismo período agrupado; siguen siendo un único
+    // comprobante y no dos comprobantes separados.
+    await expect(
+      popup.locator('.gcuotas-comprobante[aria-label="Comprobante de pago"]'),
+    ).toHaveCount(1);
+
+    const socioPeriod = receipt
+      .locator('.gcuotas-talon-socio p')
+      .filter({ hasText: /Período:/i });
+    const collectorPeriod = receipt
+      .locator('.gcuotas-talon-cobrador p')
+      .filter({ hasText: /Período:/i });
+
+    await expect(socioPeriod).toHaveCount(1);
+    await expect(collectorPeriod).toHaveCount(1);
+    await expect(socioPeriod).toContainText(expectedPeriod);
+    await expect(collectorPeriod).toContainText(expectedPeriod);
   }
   await popup.close();
 }

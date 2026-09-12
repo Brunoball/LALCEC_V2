@@ -288,7 +288,8 @@
 }
 
 .cuotas-lower-actions .cuotas-print-all-action.mov-btn--primary,
-.cuotas-lower-actions .cuotas-multiple-action.mov-btn--primary {
+.cuotas-lower-actions .cuotas-multiple-action.mov-btn--primary,
+.cuotas-lower-actions .cuotas-add-balance-action.mov-btn--primary {
   border-color: transparent;
   color: var(--balto-action, var(--primary-color));
   background: transparent;
@@ -299,7 +300,9 @@
 .cuotas-lower-actions
   .cuotas-print-all-action.mov-btn--primary:hover:not(:disabled),
 .cuotas-lower-actions
-  .cuotas-multiple-action.mov-btn--primary:hover:not(:disabled) {
+  .cuotas-multiple-action.mov-btn--primary:hover:not(:disabled),
+.cuotas-lower-actions
+  .cuotas-add-balance-action.mov-btn--primary:hover:not(:disabled) {
   border-color: color-mix(
     in srgb,
     var(--balto-action, var(--primary-color)) 20%,
@@ -322,7 +325,9 @@
 .cuotas-lower-actions
   .cuotas-print-all-action.mov-btn--primary:focus-visible,
 .cuotas-lower-actions
-  .cuotas-multiple-action.mov-btn--primary:focus-visible {
+  .cuotas-multiple-action.mov-btn--primary:focus-visible,
+.cuotas-lower-actions
+  .cuotas-add-balance-action.mov-btn--primary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px
     color-mix(
@@ -333,12 +338,14 @@
 }
 
 .cuotas-lower-actions .cuotas-print-all-action svg,
-.cuotas-lower-actions .cuotas-multiple-action svg {
+.cuotas-lower-actions .cuotas-multiple-action svg,
+.cuotas-lower-actions .cuotas-add-balance-action svg {
   font-size: 12px;
 }
 
 .cuotas-lower-actions .cuotas-export-action,
-.cuotas-lower-actions .cuotas-multiple-action {
+.cuotas-lower-actions .cuotas-multiple-action,
+.cuotas-lower-actions .cuotas-add-balance-action {
   display: none;
 }
 
@@ -561,7 +568,8 @@
   }
 
   .cuotas-lower-actions .cuotas-export-action,
-  .cuotas-lower-actions .cuotas-multiple-action {
+  .cuotas-lower-actions .cuotas-multiple-action,
+  .cuotas-lower-actions .cuotas-add-balance-action {
     display: inline-flex;
   }
 }

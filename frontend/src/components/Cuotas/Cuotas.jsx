@@ -2864,6 +2864,17 @@ export default function Cuotas() {
               title="Exportar cuotas"
             />
 
+            {writable && isBalanceView ? (
+              <button
+                type="button"
+                className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-add-balance-action"
+                onClick={openNewBalance}
+              >
+                <FontAwesomeIcon icon={faPlus} />
+                Agregar saldo
+              </button>
+            ) : null}
+
             {writable && !isResolved && !isBalanceView ? (
               <button
                 type="button"

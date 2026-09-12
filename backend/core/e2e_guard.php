@@ -78,6 +78,25 @@ function e2e_socio(PDO $db, int $id): bool
     );
 }
 
+function e2e_deleted_socio(PDO $db, int $id): bool
+{
+    return e2e_exists(
+        $db,
+        "SELECT 1
+         FROM socios_eliminados
+         WHERE id_socio = ?
+           AND (
+                denominacion LIKE 'PW E2E %'
+                OR denominacion LIKE 'PW EE %'
+                OR datos_socio LIKE '%@example.test%'
+                OR datos_socio LIKE '%PW E2E%'
+                OR datos_socio LIKE '%PW EE%'
+           )
+         LIMIT 1",
+        [$id]
+    );
+}
+
 function e2e_family(PDO $db, int $id): bool
 {
     return e2e_exists(
@@ -516,6 +535,31 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
         case 'contable_egreso_eliminar':
             e2e_require_target_or_missing($db, $action, $body['id_egreso'] ?? $body['id'] ?? null, 'e2e_expense', 'contable_egresos', 'id_egreso');
             return;
+
+        case 'cuotas_ajustar_saldo_favor': {
+            if ($body === []) return;
+            $id = e2e_positive_int($body['id_socio'] ?? null);
+            if ($id === null) return; // La validación funcional devolverá el 422 correspondiente.
+
+            if (e2e_socio($db, $id) || e2e_deleted_socio($db, $id)) return;
+
+            $existsCurrent = e2e_exists(
+                $db,
+                'SELECT 1 FROM socios WHERE id_socio = ? LIMIT 1',
+                [$id]
+            );
+            $existsArchived = e2e_exists(
+                $db,
+                'SELECT 1 FROM socios_eliminados WHERE id_socio = ? LIMIT 1',
+                [$id]
+            );
+            if (!$existsCurrent && !$existsArchived) return; // Conserva las pruebas funcionales de 404.
+
+            e2e_scope_error(
+                $action,
+                "El socio {$id} no pertenece al conjunto E2E."
+            );
+        }
 
         case 'cuotas_registrar_pago':
         case 'cuotas_registrar_pagos':
