@@ -13,6 +13,7 @@ import {
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
 import { ModulePage } from "../Global/ModulePage";
+import { FloatingField } from "../Global/Formularios/TabbedForm";
 import BotonExportarGlobal from "../Global/Botones/BotonExportarGlobal";
 import GlobalDivTable from "../Global/GlobalDivTable";
 import ModalEliminarGlobal from "../Global/Modales/ModalEliminarGlobal";
@@ -1616,60 +1617,52 @@ export default function Cuotas() {
   };
 
   const printPaymentRow = (item) => {
-    const amount = Number(
-      isPaid ? item.monto || 0 : item.monto_sugerido || item.monto_base || 0,
-    );
+    const printWindow = window.open("", "_blank", "width=960,height=720");
+    if (!printWindow) {
+      setFeedback({
+        type: "error",
+        message:
+          "El navegador bloqueó la ventana de impresión. Habilitá las ventanas emergentes e intentá nuevamente.",
+      });
+      return;
+    }
+
     const receiptPartner =
       partners.find(
         (partner) => String(partner.id_socio) === String(item.id_socio),
       ) || item;
-    const domicilio =
-      receiptPartner.domicilio_2 ||
-      receiptPartner.domicilio ||
-      receiptPartner.direccion ||
-      "";
-    const cobrador = receiptPartner.cobrador || item.cobrador || "";
 
-    openPaymentReceipt(
-      enrichPaymentReceipt(
-        {
-          operacion: {
-            codigo_operacion:
-              item.codigo_operacion ||
-              item.numero_comprobante ||
-              (item.id_pago ? `PAGO-${item.id_pago}` : ""),
-            estado: isPaid ? "PAGADO" : "PENDIENTE",
-            fecha_pago: isPaid ? item.fecha_pago : localToday(),
-            socios_label: item.denominacion || `ID ${item.id_socio}`,
-            modalidad_label: isPaid ? "Pago de cuotas" : "Cuota pendiente",
-            medio_pago: isPaid ? item.medio_pago || "—" : "PENDIENTE",
-            monto_base: Number(item.monto_base || amount),
-            monto: amount,
+    try {
+      printReceiptsBatch({
+        printWindow,
+        records: [
+          {
+            ...item,
+            domicilio:
+              receiptPartner.domicilio_2 ||
+              receiptPartner.domicilio ||
+              receiptPartner.direccion ||
+              item.domicilio ||
+              item.domicilio_2 ||
+              item.direccion ||
+              "",
+            cobrador: receiptPartner.cobrador || item.cobrador || "",
+            estado:
+              item.estado ||
+              (isPaid ? "PAGADO" : isCondoned ? "CONDONADO" : "PENDIENTE"),
+            periodo_impresion: item.periodo || "—",
           },
-          lineas: [
-            {
-              id: item.id_pago || selectionKey(item),
-              socio: item.denominacion || `ID ${item.id_socio}`,
-              categoria: item.categoria || "SIN CATEGORÍA",
-              periodo: item.periodo,
-              monto_base: Number(item.monto_base || amount),
-              porcentaje_descuento_familiar: Number(
-                item.porcentaje_descuento_familiar || 0,
-              ),
-              monto: amount,
-            },
-          ],
-        },
-        {
-          socios: item.denominacion || `ID ${item.id_socio}`,
-          domicilio,
-          cobrador,
-          medio: isPaid ? item.medio_pago || "—" : "PENDIENTE",
-          tipoEntidad: tipo,
-        },
-      ),
-      { openPrintDialog: true },
-    );
+        ],
+        entityType: tipo,
+      });
+    } catch (error) {
+      if (!printWindow.closed) printWindow.close();
+      setFeedback({
+        type: "error",
+        message: error?.message || "No se pudo preparar el comprobante.",
+        duration: 5200,
+      });
+    }
   };
 
   const applyMonthSelection = (months, activeMonth, defaultFamily = true) => {
@@ -2506,10 +2499,15 @@ export default function Cuotas() {
   };
 
   const openEditBalance = (row) => {
+    const currentBalance = Number(row.saldo_favor || 0);
+
     setBalanceEditingRow(row);
     setBalanceForm({
       id_socio: String(row.id_socio),
-      saldo_objetivo: Number(row.saldo_favor || 0).toFixed(2),
+      saldo_objetivo:
+        Number.isFinite(currentBalance) && currentBalance > 0
+          ? currentBalance.toFixed(2)
+          : "",
       detalle: "",
     });
     setBalanceModalOpen(true);
@@ -2605,7 +2603,7 @@ export default function Cuotas() {
         filters={pageFilters}
         tabsInTitle
         headLeftClassName="cuotas-header-row"
-        headFiltersContainerClassName="cuotas-head-filters"
+        headFiltersContainerClassName={`cuotas-head-filters ${isBalanceView ? "cuotas-head-filters--balance" : ""}`.trim()}
         headerActions={
           <BotonExportarGlobal
             className="cuotas-export-action"
@@ -2900,13 +2898,31 @@ export default function Cuotas() {
           <label className="cuotas-balance-form__field">
             <span>{tipo === "EMPRESA" ? "Empresa" : "Socio"} *</span>
             {balanceEditingRow ? (
-              <div className="cuotas-balance-form__readonly">
-                <strong>{balanceEditingRow.denominacion}</strong>
-                <small>
-                  {balanceEditingRow.documento
-                    ? `${tipo === "EMPRESA" ? "CUIT" : "DNI"} ${balanceEditingRow.documento}`
-                    : `ID ${balanceEditingRow.id_socio}`}
-                </small>
+              <div
+                className="cuotas-balance-partner-card"
+                aria-label={`${tipo === "EMPRESA" ? "Empresa" : "Socio"} seleccionado`}
+              >
+                <span className="cuotas-balance-partner-card__icon" aria-hidden="true">
+                  <FontAwesomeIcon icon={faUserGroup} />
+                </span>
+                <div className="cuotas-balance-partner-card__identity">
+                  <small>{tipo === "EMPRESA" ? "Empresa seleccionada" : "Socio seleccionado"}</small>
+                  <strong title={balanceEditingRow.denominacion || ""}>
+                    {balanceEditingRow.denominacion || "SIN DENOMINACIÓN"}
+                  </strong>
+                  <span>
+                    {balanceEditingRow.documento
+                      ? `${tipo === "EMPRESA" ? "CUIT" : "DNI"} ${balanceEditingRow.documento}`
+                      : `ID ${balanceEditingRow.id_socio}`}
+                    {balanceEditingRow.categoria
+                      ? ` · ${balanceEditingRow.categoria}`
+                      : ""}
+                  </span>
+                </div>
+                <div className="cuotas-balance-partner-card__balance">
+                  <small>Saldo actual</small>
+                  <strong>{money(balanceEditingRow.saldo_favor)}</strong>
+                </div>
               </div>
             ) : (
               <div className="cuotas-balance-partner-picker">
@@ -2964,45 +2980,58 @@ export default function Cuotas() {
             )}
           </label>
 
-          <label className="cuotas-balance-form__field">
-            <span>Saldo a favor total *</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              aria-label="Saldo a favor total"
-              value={balanceForm.saldo_objetivo}
-              onChange={(event) =>
-                setBalanceForm((current) => ({
-                  ...current,
-                  saldo_objetivo: decimalInput(event.target.value, 10, 2),
-                }))
-              }
-              placeholder="0,00"
-              required
-            />
+          <div className="cuotas-balance-form__field cuotas-balance-form__field--floating">
+            <FloatingField
+              label="Saldo a favor total *"
+              active
+              placeholderOnFloat
+              className="cuotas-balance-floating-field"
+            >
+              <input
+                type="text"
+                inputMode="decimal"
+                aria-label="Saldo a favor total"
+                value={balanceForm.saldo_objetivo}
+                onChange={(event) =>
+                  setBalanceForm((current) => ({
+                    ...current,
+                    saldo_objetivo: decimalInput(event.target.value, 10, 2),
+                  }))
+                }
+                placeholder="0.00"
+                required
+              />
+            </FloatingField>
             <small>
               {balanceEditingRow
                 ? `Saldo actual: ${money(balanceEditingRow.saldo_favor)}. Se registrará sólo la diferencia necesaria.`
                 : "Este importe quedará disponible para próximos pagos."}
             </small>
-          </label>
+          </div>
 
-          <label className="cuotas-balance-form__field">
-            <span>Observación</span>
-            <textarea
-              aria-label="Observación del saldo a favor"
-              value={balanceForm.detalle}
-              onChange={(event) =>
-                setBalanceForm((current) => ({
-                  ...current,
-                  detalle: event.target.value,
-                }))
-              }
-              rows={3}
-              maxLength={500}
-              placeholder="Motivo opcional del ajuste..."
-            />
-          </label>
+          <div className="cuotas-balance-form__field cuotas-balance-form__field--floating">
+            <FloatingField
+              label="Observación"
+              active
+              textarea
+              placeholderOnFloat
+              className="cuotas-balance-floating-field"
+            >
+              <textarea
+                aria-label="Observación del saldo a favor"
+                value={balanceForm.detalle}
+                onChange={(event) =>
+                  setBalanceForm((current) => ({
+                    ...current,
+                    detalle: event.target.value,
+                  }))
+                }
+                rows={3}
+                maxLength={500}
+                placeholder="Motivo opcional del ajuste..."
+              />
+            </FloatingField>
+          </div>
 
           <p className="cuotas-balance-form__help">
             Agregar, editar o eliminar un saldo no borra movimientos anteriores:
