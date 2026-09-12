@@ -349,6 +349,21 @@
   display: none;
 }
 
+/* El selector Año comparte el mismo comportamiento responsive que las
+   acciones secundarias: arriba en escritorio amplio y abajo desde 1499px. */
+.cuotas-lower-year-filter {
+  display: none;
+  flex: 0 0 82px;
+  width: 82px;
+  min-width: 82px;
+  max-width: 82px;
+}
+
+.cuotas-lower-year-filter .module-filterControl {
+  width: 100%;
+  min-width: 0;
+}
+
 .cuotas-lower-actions .mov-btn--ghost:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--balto-ink) 12%, transparent);
   background: color-mix(in srgb, var(--balto-ink) 5%, transparent);
@@ -563,6 +578,26 @@
     display: none !important;
   }
 
+  /* Igual que Selección múltiple: Año baja al pie en pantallas menores a
+     1500px y desaparece del encabezado, sin cambiar el valor seleccionado. */
+  .cuotas-head-filters .cuotas-year-filter {
+    display: none !important;
+  }
+
+  .cuotas-lower-year-filter {
+    display: block;
+  }
+
+  /* Al sacar Año del encabezado eliminamos también su track para no dejar
+     un hueco vacío entre Búsqueda, Mes y Medio de pago. */
+  .cuotas-head-filters:not(.cuotas-head-filters--balance) {
+    grid-template-columns:
+      minmax(440px, 500px)
+      minmax(100px, 220px)
+      minmax(92px, 120px)
+      minmax(130px, 160px);
+  }
+
   .cuotas-table-footer {
     gap: 6px;
   }
@@ -586,7 +621,6 @@
     grid-template-columns:
       minmax(390px, 430px)
       minmax(80px, 150px)
-      minmax(78px, 105px)
       minmax(88px, 110px)
       minmax(120px, 140px);
   }
@@ -608,7 +642,7 @@
   .cuotas-head-filters {
     max-width: none;
     flex-basis: 100%;
-    grid-template-columns: minmax(240px, 1fr) 120px 120px;
+    grid-template-columns: minmax(240px, 1fr) 120px;
     justify-content: end;
   }
 
@@ -617,14 +651,9 @@
     grid-column: 1 / -1;
   }
 
-  .cuotas-head-filters .cuotas-year-filter {
+  .cuotas-head-filters .cuotas-month-filter {
     grid-column: 2;
     justify-self: end;
-  }
-
-  .cuotas-head-filters .cuotas-month-filter {
-    grid-column: 3;
-    justify-self: start;
   }
 
   .cuotas-head-filters .cuotas-payment-method-filter {
@@ -655,7 +684,7 @@
 
 @media (max-width: 600px) {
   .cuotas-head-filters {
-    grid-template-columns: minmax(0, 1fr) 120px 120px;
+    grid-template-columns: minmax(0, 1fr) 120px;
   }
 
   .cuotas-head-filters .module-filter--tabs {
@@ -1518,7 +1547,6 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
 }
 
 .cuotas-balance-form__field small {
-  color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1631,12 +1659,16 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
 }
 
 .cuotas-balance-form__help {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   padding: 11px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--primary-50) 72%, #fff);
   color: var(--text-secondary);
   font-size: 11px;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -1650,7 +1682,7 @@ html[data-theme="oscuro"] .cuotas-family-expand-btn:hover {
 }
 
 .cuotas-balance-partner-picker__count {
-  margin-top: -2px;
+  margin-top: 0;
 }
 
 .cuotas-balance-form__field input::placeholder,
@@ -1687,4 +1719,26 @@ html[data-theme="oscuro"] .cuotas-balance-partner-card {
 
 html[data-theme="oscuro"] .cuotas-balance-partner-card__icon {
   background: color-mix(in srgb, var(--balto-action) 13%, var(--surface-color));
+}
+
+/* Alta de saldo a favor: selector de socio con floating labels globales siempre activos */
+.cuotas-balance-form__field--partner {
+  gap: 0;
+}
+
+.cuotas-balance-partner-floating-field {
+  width: 100%;
+}
+
+.cuotas-balance-partner-floating-field > input,
+.cuotas-balance-partner-floating-field > select {
+  min-height: 47px;
+  box-sizing: border-box;
+  padding: 12px 12px;
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.cuotas-balance-partner-floating-field > select {
+  cursor: pointer;
 }

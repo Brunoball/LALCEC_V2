@@ -2843,6 +2843,24 @@ export default function Cuotas() {
             aria-label="Acciones de cuotas"
           >
             {!isBalanceView ? (
+              <label className="module-filter module-filter--select is-active cuotas-lower-year-filter">
+                <select
+                  className="module-filterControl"
+                  aria-label="Año"
+                  value={anio}
+                  onChange={(event) => setYearFilter(event.target.value)}
+                >
+                  {visibleYearOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <span className="module-floatingLabel">Año</span>
+              </label>
+            ) : null}
+
+            {!isBalanceView ? (
               <button
                 type="button"
                 className="mov-btn mov-btn--primary mov-btn--compact cuotas-lower-action cuotas-print-all-action"
@@ -2906,9 +2924,8 @@ export default function Cuotas() {
         modalClassName="cuotas-balance-modal"
       >
         <div className="cuotas-balance-form">
-          <label className="cuotas-balance-form__field">
-            <span>{tipo === "EMPRESA" ? "Empresa" : "Socio"} *</span>
-            {balanceEditingRow ? (
+          {balanceEditingRow ? (
+            <div className="cuotas-balance-form__field">
               <div
                 className="cuotas-balance-partner-card"
                 aria-label={`${tipo === "EMPRESA" ? "Empresa" : "Socio"} seleccionado`}
@@ -2935,50 +2952,67 @@ export default function Cuotas() {
                   <strong>{money(balanceEditingRow.saldo_favor)}</strong>
                 </div>
               </div>
-            ) : (
+            </div>
+          ) : (
+            <div className="cuotas-balance-form__field cuotas-balance-form__field--floating cuotas-balance-form__field--partner">
               <div className="cuotas-balance-partner-picker">
-                <input
-                  type="search"
-                  aria-label={tipo === "EMPRESA" ? "Buscar empresa" : "Buscar socio"}
-                  placeholder={
-                    tipo === "EMPRESA"
-                      ? "Buscar por razón social o CUIT..."
-                      : "Buscar por nombre, apellido o DNI..."
-                  }
-                  value={balancePartnerSearch}
-                  onChange={(event) => {
-                    setBalancePartnerSearch(event.target.value);
-                    setBalanceForm((current) => ({
-                      ...current,
-                      id_socio: "",
-                    }));
-                  }}
-                  autoFocus
-                />
-                <select
-                  aria-label={tipo === "EMPRESA" ? "Empresa" : "Socio"}
-                  value={balanceForm.id_socio}
-                  onChange={(event) =>
-                    setBalanceForm((current) => ({
-                      ...current,
-                      id_socio: event.target.value,
-                    }))
-                  }
-                  required
+                <FloatingField
+                  label={tipo === "EMPRESA" ? "Buscar empresa" : "Buscar socio"}
+                  active
+                  placeholderOnFloat
+                  className="cuotas-balance-floating-field cuotas-balance-partner-floating-field"
                 >
-                  <option value="">
-                    {filteredBalancePartnerOptions.length
-                      ? "Seleccionar..."
-                      : "Sin resultados"}
-                  </option>
-                  {filteredBalancePartnerOptions.map((partner) => (
-                    <option key={partner.id_socio} value={partner.id_socio}>
-                      {partner.denominacion}
-                      {partner.documento ? ` · ${partner.documento}` : ""}
+                  <input
+                    type="search"
+                    aria-label={tipo === "EMPRESA" ? "Buscar empresa" : "Buscar socio"}
+                    placeholder={
+                      tipo === "EMPRESA"
+                        ? "Razón social o CUIT..."
+                        : "Nombre, apellido o DNI..."
+                    }
+                    value={balancePartnerSearch}
+                    onChange={(event) => {
+                      setBalancePartnerSearch(event.target.value);
+                      setBalanceForm((current) => ({
+                        ...current,
+                        id_socio: "",
+                      }));
+                    }}
+                    autoFocus
+                  />
+                </FloatingField>
+
+                <FloatingField
+                  label={`${tipo === "EMPRESA" ? "Empresa" : "Socio"} *`}
+                  active
+                  className="cuotas-balance-floating-field cuotas-balance-partner-floating-field"
+                >
+                  <select
+                    aria-label={tipo === "EMPRESA" ? "Empresa" : "Socio"}
+                    value={balanceForm.id_socio}
+                    onChange={(event) =>
+                      setBalanceForm((current) => ({
+                        ...current,
+                        id_socio: event.target.value,
+                      }))
+                    }
+                    required
+                  >
+                    <option value="">
+                      {filteredBalancePartnerOptions.length
+                        ? "Seleccionar..."
+                        : "Sin resultados"}
                     </option>
-                  ))}
-                </select>
-                <small className="cuotas-balance-partner-picker__count">
+                    {filteredBalancePartnerOptions.map((partner) => (
+                      <option key={partner.id_socio} value={partner.id_socio}>
+                        {partner.denominacion}
+                        {partner.documento ? ` · ${partner.documento}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </FloatingField>
+
+                <small className="cuotas-balance-form__help cuotas-balance-partner-picker__count">
                   {balancePartnerSearch
                     ? `${filteredBalancePartnerOptions.length} resultado${
                         filteredBalancePartnerOptions.length === 1 ? "" : "s"
@@ -2988,8 +3022,8 @@ export default function Cuotas() {
                       } disponibles`}
                 </small>
               </div>
-            )}
-          </label>
+            </div>
+          )}
 
           <div className="cuotas-balance-form__field cuotas-balance-form__field--floating">
             <FloatingField
@@ -3013,7 +3047,7 @@ export default function Cuotas() {
                 required
               />
             </FloatingField>
-            <small>
+            <small className="cuotas-balance-form__help">
               {balanceEditingRow
                 ? `Saldo actual: ${money(balanceEditingRow.saldo_favor)}. Se registrará sólo la diferencia necesaria.`
                 : "Este importe quedará disponible para próximos pagos."}
