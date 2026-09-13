@@ -1804,101 +1804,231 @@ html[data-theme="oscuro"]
   }
 }
 
-/* Saldo a favor dentro del cobro */
+/* Saldo a favor dentro del cobro.
+ * En escritorio divide disponibilidad/uso y resumen para aprovechar mejor
+ * el ancho del modal; en pantallas chicas vuelve a una sola columna.
+ */
 .cuotas-balance-card {
   display: grid;
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-  padding: 0.95rem 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(265px, 0.58fr);
+  grid-template-rows: auto 1fr;
+  column-gap: 18px;
+  row-gap: 12px;
+  margin-bottom: 0;
+  padding: 15px 16px;
   border: 1px solid color-mix(in srgb, var(--success-500, #22c55e) 28%, var(--mescuot_gray-300));
+  border-left: 4px solid var(--success-500, #22c55e);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--success-500, #22c55e) 6%, var(--mescuot_white, #fff));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--success-500, #22c55e) 6%, var(--mescuot_white, #fff)) 0%,
+      color-mix(in srgb, var(--success-500, #22c55e) 2.5%, var(--mescuot_white, #fff)) 100%
+    );
+  box-shadow: 0 10px 28px -26px rgb(15 23 42 / 0.72);
+}
+
+.cuotas-balance-card:not(:has(.cuotas-balance-card__summary)) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .cuotas-balance-card__head {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 11px;
 }
 
 .cuotas-balance-card__icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--success-500, #22c55e) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success-500, #22c55e) 18%, transparent);
+  border-radius: 11px;
   color: var(--success-600, #15803d);
+  background: color-mix(in srgb, var(--success-500, #22c55e) 13%, transparent);
 }
 
 .cuotas-balance-card__head > div {
+  min-width: 0;
   display: grid;
-  gap: 1px;
+  gap: 2px;
 }
 
 .cuotas-balance-card__head span {
   color: var(--mescuot_gray-600);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.015em;
 }
 
 .cuotas-balance-card__head strong {
   color: var(--success-600, #15803d);
-  font-size: 1.1rem;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 .cuotas-balance-card__toggle {
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--success-500, #22c55e) 15%, var(--mescuot_gray-200));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mescuot_white, #fff) 88%, transparent);
   cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 
-.cuotas-balance-card__toggle input {
-  margin-top: 3px;
+.cuotas-balance-card__toggle:hover {
+  border-color: color-mix(in srgb, var(--success-500, #22c55e) 30%, var(--mescuot_gray-200));
+  background: color-mix(in srgb, var(--success-500, #22c55e) 3.5%, var(--mescuot_white, #fff));
+}
+
+.cuotas-balance-card__toggle:has(input:focus-visible) {
+  border-color: color-mix(in srgb, var(--success-500, #22c55e) 44%, var(--mescuot_gray-200));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success-500, #22c55e) 10%, transparent);
+}
+
+.cuotas-balance-card__toggle > input {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .cuotas-balance-card__toggle > span {
+  min-width: 0;
   display: grid;
   gap: 2px;
 }
 
 .cuotas-balance-card__toggle strong {
-  font-size: 0.86rem;
+  color: var(--balto-ink, var(--mescuot_gray-800));
+  font-size: 0.84rem;
+  font-weight: 720;
+  line-height: 1.25;
 }
 
 .cuotas-balance-card__toggle small {
   color: var(--mescuot_gray-600);
+  font-size: 0.72rem;
   line-height: 1.35;
 }
 
 .cuotas-balance-card__summary {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
   display: grid;
-  gap: 0.35rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid color-mix(in srgb, var(--mescuot_gray-400) 48%, transparent);
+  align-content: center;
+  gap: 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--success-500, #22c55e) 16%, var(--mescuot_gray-200));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--mescuot_white, #fff) 92%, transparent);
 }
 
 .cuotas-balance-card__summary > span {
+  min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
+  padding: 7px 2px;
+}
+
+.cuotas-balance-card__summary > span + span {
+  border-top: 1px solid color-mix(in srgb, var(--mescuot_gray-300) 52%, transparent);
 }
 
 .cuotas-balance-card__summary small {
   color: var(--mescuot_gray-600);
-  font-weight: 650;
+  font-size: 0.72rem;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.cuotas-balance-card__summary strong {
+  color: var(--balto-ink, var(--mescuot_gray-900));
+  font-size: 0.88rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.cuotas-balance-card__summary > span:nth-child(2) strong {
+  color: var(--success-600, #15803d);
 }
 
 .cuotas-balance-card__summary .is-total {
-  margin-top: 0.2rem;
-  padding-top: 0.45rem;
-  border-top: 1px dashed color-mix(in srgb, var(--mescuot_gray-400) 55%, transparent);
+  margin: 3px -5px -1px;
+  padding: 9px 7px;
+  border-top: 1px solid color-mix(in srgb, var(--success-500, #22c55e) 20%, var(--mescuot_gray-300));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--success-500, #22c55e) 7%, transparent);
+}
+
+.cuotas-balance-card__summary .is-total small {
+  color: var(--balto-ink, var(--mescuot_gray-800));
+  font-weight: 760;
 }
 
 .cuotas-balance-card__summary .is-total strong {
+  color: var(--balto-ink, var(--mescuot_gray-900));
   font-size: 1rem;
+  font-weight: 820;
+}
+
+@media (max-width: 760px) {
+  .cuotas-balance-card,
+  .cuotas-balance-card:not(:has(.cuotas-balance-card__summary)) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .cuotas-balance-card__summary {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+html[data-theme="oscuro"] .cuotas-balance-card {
+  border-color: color-mix(in srgb, #4ade80 28%, var(--mov-border));
+  border-left-color: #4ade80;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, #166534 18%, var(--entity-modal-surface, #111827)) 0%,
+      color-mix(in srgb, #166534 8%, var(--entity-modal-surface, #111827)) 100%
+    );
+}
+
+html[data-theme="oscuro"] .cuotas-balance-card__icon {
+  border-color: rgb(74 222 128 / 0.25);
+  color: #86efac;
+  background: rgb(22 101 52 / 0.28);
+}
+
+html[data-theme="oscuro"] .cuotas-balance-card__head strong,
+html[data-theme="oscuro"] .cuotas-balance-card__summary > span:nth-child(2) strong {
+  color: #86efac;
+}
+
+html[data-theme="oscuro"] .cuotas-balance-card__toggle,
+html[data-theme="oscuro"] .cuotas-balance-card__summary {
+  border-color: color-mix(in srgb, #4ade80 16%, var(--mov-border));
+  background: color-mix(in srgb, #0f172a 86%, transparent);
+}
+
+html[data-theme="oscuro"] .cuotas-balance-card__toggle:hover,
+html[data-theme="oscuro"] .cuotas-balance-card__summary .is-total {
+  background: color-mix(in srgb, #166534 18%, #0f172a);
 }

@@ -2604,16 +2604,6 @@ export default function Cuotas() {
         tabsInTitle
         headLeftClassName="cuotas-header-row"
         headFiltersContainerClassName={`cuotas-head-filters ${isBalanceView ? "cuotas-head-filters--balance" : ""}`.trim()}
-        headerActions={
-          <BotonExportarGlobal
-            className="cuotas-export-action"
-            label="Exportar"
-            loading={loading}
-            disabled={totalRegistros === 0}
-            onClick={openExport}
-            title="Exportar cuotas"
-          />
-        }
         secondaryActions={
           isBalanceView && writable
             ? [

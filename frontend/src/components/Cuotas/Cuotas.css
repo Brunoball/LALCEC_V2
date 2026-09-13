@@ -1,3 +1,7 @@
+.cuotas-page > .module-card {
+  container-type: inline-size;
+}
+
 .cuotas-header-row {
   display: flex;
   flex-direction: row;
@@ -16,7 +20,8 @@
 .cuotas-head-filters {
   display: grid;
   align-items: end;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 3px;
   width: auto;
   min-width: 0;
   max-width: none;
@@ -24,14 +29,16 @@
   margin-left: auto;
   justify-self: end;
   justify-content: end;
-  /* Conserva los tamaños normales mientras hay lugar. Cuando la barra lateral
-     reduce el ancho disponible, primero ceden Búsqueda, Año y Mes. */
+  /* Estado conserva siempre el ancho real de sus pestañas. El buscador usa
+     un track acotado (no 1fr), evitando que una columna de grilla invisible
+     genere espacio extra entre Estado y Búsqueda. El gap visible queda igual
+     al del resto de los filtros. */
   grid-template-columns:
-    minmax(440px, 500px)
-    minmax(100px, 220px)
-    minmax(82px, 120px)
-    minmax(92px, 120px)
-    minmax(130px, 160px);
+    max-content
+    minmax(128px, 250px)
+    minmax(72px, 96px)
+    minmax(82px, 112px)
+    minmax(100px, 150px);
 }
 
 .cuotas-head-filters .module-filter--tabs {
@@ -67,6 +74,10 @@
 .cuotas-head-filters .module-filter--tabs .module-filterTabs {
   width: max-content;
   max-width: none;
+  box-sizing: border-box;
+  /* Sin colchón sobrante a la derecha: la última pestaña termina casi
+     donde comienza el buscador. */
+  padding: 5px 1px 5px 5px;
   overflow-x: visible;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -92,6 +103,7 @@
 
 .cuotas-head-filters .module-filter--tabs .module-filterTab:last-child {
   min-width: max-content;
+  padding-right: 5px;
 }
 
 .cuotas-head-filters .module-filter--tabs .module-tabContent,
@@ -148,6 +160,20 @@
   max-width: 250px;
   margin-left: 0;
   justify-self: end;
+}
+
+/* El buscador puede reducirse con el sidebar, pero nunca tanto como para
+   recortar el ícono o el texto "Búsqueda". */
+.cuotas-head-filters .cuotas-search-filter .module-floatingLabel {
+  max-width: calc(100% - 14px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cuotas-head-filters .cuotas-search-filter .module-filterControl--search {
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .cuotas-head-filters .cuotas-year-filter,
@@ -343,7 +369,10 @@
   font-size: 12px;
 }
 
-.cuotas-lower-actions .cuotas-export-action,
+.cuotas-lower-actions .cuotas-export-action {
+  display: inline-flex;
+}
+
 .cuotas-lower-actions .cuotas-multiple-action,
 .cuotas-lower-actions .cuotas-add-balance-action {
   display: none;
@@ -573,6 +602,48 @@
   color: #fff;
 }
 
+/* Cuando la barra lateral reduce el ancho útil del módulo, compactamos sólo
+   los controles auxiliares. La consulta usa el ancho REAL de la tarjeta, no
+   el viewport, por eso también funciona con el sidebar abierto. */
+@container (max-width: 1500px) {
+  .cuotas-head-filters:not(.cuotas-head-filters--balance) {
+    column-gap: 10px;
+    row-gap: 2px;
+    grid-template-columns:
+      max-content
+      minmax(128px, 180px)
+      minmax(68px, 86px)
+      minmax(78px, 100px)
+      minmax(92px, 126px);
+  }
+
+  .cuotas-head-filters .cuotas-search-filter {
+    max-width: 180px;
+  }
+
+  .cuotas-head-filters .cuotas-year-filter {
+    max-width: 86px;
+  }
+
+  .cuotas-head-filters .cuotas-month-filter {
+    max-width: 100px;
+  }
+
+  .cuotas-head-filters .cuotas-payment-method-filter {
+    max-width: 126px;
+  }
+
+  .cuotas-head-filters .module-filterControl {
+    padding-left: 10px;
+    padding-right: 26px;
+  }
+
+  .cuotas-head-filters .module-filter--select .module-filterControl {
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+}
+
 @media (max-width: 1499px) {
   .cuotas-page > .module-card > .module-card__head > .module-card__actions {
     display: none !important;
@@ -588,21 +659,21 @@
     display: block;
   }
 
-  /* Al sacar Año del encabezado eliminamos también su track para no dejar
-     un hueco vacío entre Búsqueda, Mes y Medio de pago. */
+  /* Al sacar Año del encabezado eliminamos también su track. Búsqueda usa un
+     ancho acotado para que no aparezca una columna flexible vacía entre
+     Estado y el buscador. */
   .cuotas-head-filters:not(.cuotas-head-filters--balance) {
     grid-template-columns:
-      minmax(440px, 500px)
-      minmax(100px, 220px)
-      minmax(92px, 120px)
-      minmax(130px, 160px);
+      max-content
+      minmax(128px, 180px)
+      minmax(82px, 112px)
+      minmax(100px, 150px);
   }
 
   .cuotas-table-footer {
     gap: 6px;
   }
 
-  .cuotas-lower-actions .cuotas-export-action,
   .cuotas-lower-actions .cuotas-multiple-action,
   .cuotas-lower-actions .cuotas-add-balance-action {
     display: inline-flex;
@@ -619,10 +690,10 @@
   .cuotas-head-filters {
     flex-basis: auto;
     grid-template-columns:
-      minmax(390px, 430px)
-      minmax(80px, 150px)
-      minmax(88px, 110px)
-      minmax(120px, 140px);
+      max-content
+      minmax(125px, 170px)
+      minmax(78px, 98px)
+      minmax(96px, 126px);
   }
 
   .cuotas-head-filters .module-filter--tabs {
