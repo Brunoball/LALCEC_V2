@@ -1,5 +1,5 @@
 const { test, expect } = require('./fixtures/auth.fixture');
-const { apiCall } = require('./helpers/api.helper');
+const { apiCall, expectApiError } = require('./helpers/api.helper');
 const { todayIso, uniqueSuffix } = require('./helpers/data.helper');
 
 const MONTHS = [
@@ -32,6 +32,89 @@ function rowByText(page, tableName, text) {
 }
 
 test.describe('Contabilidad: cuotas, otros ingresos, egresos y resumen', () => {
+
+  test('rechaza opciones contables duplicadas y referencias cruzadas de otro tipo', async ({ request }) => {
+    const suffix = uniqueSuffix();
+    const providerName = `PW E2E PROVEEDOR VALIDACION ${suffix}`;
+    const categoryName = `PW E2E CAT ING VALIDACION ${suffix}`;
+    let providerId = null;
+    let categoryId = null;
+
+    try {
+      const catalogs = await apiCall(request, 'contable_catalogos');
+      const medium = catalogs.medios_pago?.[0];
+      const concept = catalogs.opciones?.CONCEPTO_INGRESO?.[0];
+      expect(medium, 'Debe existir un medio de pago activo').toBeTruthy();
+      expect(concept, 'Debe existir un concepto de ingreso activo').toBeTruthy();
+
+      const provider = await apiCall(request, 'contable_opcion_guardar', {
+        method: 'POST',
+        data: { tipo: 'PROVEEDOR', nombre: providerName },
+      });
+      providerId = Number(provider.item.id_opcion);
+
+      await expectApiError(
+        request,
+        'contable_opcion_cambiar_estado',
+        { method: 'POST', data: { id_opcion: providerId, activo: 'quizas' } },
+        { status: 422, code: 'ESTADO_OPCION_INVALIDO' },
+      );
+
+      const disabledProvider = await apiCall(request, 'contable_opcion_cambiar_estado', {
+        method: 'POST',
+        data: { id_opcion: providerId, activo: false },
+      });
+      expect(disabledProvider.activo).toBe(false);
+      expect(disabledProvider.item.activo).toBe(false);
+
+      const reenabledProvider = await apiCall(request, 'contable_opcion_cambiar_estado', {
+        method: 'POST',
+        data: { id_opcion: providerId, activo: true },
+      });
+      expect(reenabledProvider.activo).toBe(true);
+      expect(reenabledProvider.item.activo).toBe(true);
+
+      await expectApiError(
+        request,
+        'contable_opcion_guardar',
+        { method: 'POST', data: { tipo: 'PROVEEDOR', nombre: providerName } },
+        { status: 409, code: 'OPCION_DUPLICADA' },
+      );
+
+      const category = await apiCall(request, 'contable_opcion_guardar', {
+        method: 'POST',
+        data: { tipo: 'CATEGORIA_INGRESO', nombre: categoryName },
+      });
+      categoryId = Number(category.item.id_opcion);
+
+      await expectApiError(
+        request,
+        'contable_ingreso_guardar',
+        {
+          method: 'POST',
+          data: {
+            fecha: todayIso(),
+            id_medio_pago: medium.id_medio_pago,
+            // Una categoría no puede reutilizarse como proveedor aunque el ID exista.
+            id_proveedor: categoryId,
+            id_categoria: categoryId,
+            id_concepto: concept.id_opcion,
+            importe: 100,
+            detalle: `PW E2E REFERENCIA CRUZADA ${suffix}`,
+          },
+        },
+        { status: 409, code: 'OPCION_CONTABLE_INVALIDA' },
+      );
+    } finally {
+      for (const id of [providerId, categoryId]) {
+        if (!id) continue;
+        await apiCall(request, 'contable_opcion_eliminar', {
+          method: 'POST',
+          data: { id_opcion: id },
+        }).catch(() => undefined);
+      }
+    }
+  });
 
   test('elimina definitivamente las cinco opciones contables usadas y conserva los movimientos con esos campos en null', async ({ request }) => {
     const suffix = uniqueSuffix();

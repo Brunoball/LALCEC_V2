@@ -633,6 +633,15 @@
     max-width: 126px;
   }
 
+  /* El track debe respetar el ancho real máximo del buscador. Si conserva
+     200-250px mientras el control queda en 180px, aparece un hueco visual
+     adicional entre las pestañas y Búsqueda. */
+  .cuotas-head-filters--balance {
+    grid-template-columns:
+      max-content
+      minmax(128px, 180px);
+  }
+
   .cuotas-head-filters .module-filterControl {
     padding-left: 10px;
     padding-right: 26px;
@@ -666,8 +675,8 @@
     grid-template-columns:
       max-content
       minmax(128px, 180px)
-      minmax(82px, 112px)
-      minmax(100px, 150px);
+      minmax(82px, 100px)
+      minmax(100px, 126px);
   }
 
   .cuotas-table-footer {

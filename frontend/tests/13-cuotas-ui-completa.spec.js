@@ -164,7 +164,8 @@ async function expectReceiptPopup(
   const popup = await popupPromise;
   await popup.waitForLoadState('domcontentloaded');
   // El comprobante actual es un div accesible por aria-label; no declara role="region".
-  const receipt = popup.locator('.gcuotas-comprobante[aria-label="Comprobante de pago"]');
+  const receipt = popup.locator('.gcuotas-comprobante');
+  await expect(receipt).toHaveCount(1);
   await expect(receipt).toBeVisible();
   await expect(receipt).toContainText(/Estado:\s*PAGADO/i);
   const addressLine = receipt.locator('p').filter({ hasText: /Domicilio:/i });
@@ -181,7 +182,7 @@ async function expectReceiptPopup(
     // Ambos repiten el mismo período agrupado; siguen siendo un único
     // comprobante y no dos comprobantes separados.
     await expect(
-      popup.locator('.gcuotas-comprobante[aria-label="Comprobante de pago"]'),
+      popup.locator('.gcuotas-comprobante'),
     ).toHaveCount(1);
 
     const socioPeriod = receipt
@@ -1023,7 +1024,9 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await receipt.getByText('Cerrar', { exact: true }).click();
 
     await page.reload();
-    await expect(page.getByLabel('Año').locator(`option[value="${addedYear}"]`)).toHaveCount(1);
+    const visibleYearFilter = page.locator('select[aria-label="Año"]:visible');
+    await expect(visibleYearFilter).toHaveCount(1);
+    await expect(visibleYearFilter.locator(`option[value="${addedYear}"]`)).toHaveCount(1);
   });
 
   test('imprime todos con el comprobante antiguo, recorre el selector de meses y mantiene las acciones en su ubicación responsiva', async ({ page, request }) => {
@@ -1046,15 +1049,22 @@ test.describe('Cuotas completas desde la interfaz', () => {
     });
     const headerExport = page.locator('.module-card__head .cuotas-export-action');
     const lowerExport = lowerActions.locator('.cuotas-export-action');
+    const headerYear = page.locator('.cuotas-head-filters .cuotas-year-filter');
+    const lowerYear = page.locator('.cuotas-lower-year-filter');
 
     await expect(printAllButton).toBeVisible();
-    await expect(headerExport).toBeVisible();
-    await expect(lowerExport).toBeHidden();
+    // Exportar vive en el pie en la implementación actual; Año es el control
+    // que cambia de ubicación según el ancho disponible.
+    await expect(headerExport).toHaveCount(0);
+    await expect(lowerExport).toBeVisible();
+    await expect(headerYear).toBeVisible();
+    await expect(lowerYear).toBeHidden();
     await expect(page.getByRole('button', { name: 'Registro', exact: true })).toHaveCount(0);
 
     await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(headerExport).toBeHidden();
     await expect(lowerExport).toBeVisible();
+    await expect(headerYear).toBeHidden();
+    await expect(lowerYear).toBeVisible();
     await expect(printAllButton).toBeVisible();
 
     await printAllButton.click();

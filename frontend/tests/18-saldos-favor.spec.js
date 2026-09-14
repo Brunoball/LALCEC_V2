@@ -154,6 +154,43 @@ test.describe('Saldos a favor de socios', () => {
       (item) => Number(item.anio) === currentYear && Number(item.mes) === currentMonth,
     );
 
+    await expectApiError(
+      request,
+      'cuotas_registrar_pago',
+      {
+        method: 'POST',
+        data: {
+          id_socio: saved.id_socio,
+          anio: currentYear,
+          mes: currentMonth,
+          fecha_pago: today,
+          monto: debt.monto_sugerido,
+          id_medio_pago: medium.id_medio_pago,
+          usar_saldo_favor: true,
+        },
+      },
+      { status: 422, code: 'SALDO_FAVOR_APLICACION_ESPERADA_REQUERIDA' },
+    );
+
+    await expectApiError(
+      request,
+      'cuotas_registrar_pago',
+      {
+        method: 'POST',
+        data: {
+          id_socio: saved.id_socio,
+          anio: currentYear,
+          mes: currentMonth,
+          fecha_pago: today,
+          monto: debt.monto_sugerido,
+          id_medio_pago: medium.id_medio_pago,
+          usar_saldo_favor: true,
+          saldo_favor_aplicacion_esperada: moneyNumber(total + 0.01),
+        },
+      },
+      { status: 422, code: 'SALDO_FAVOR_APLICACION_INVALIDA' },
+    );
+
     const payment = await apiCall(request, 'cuotas_registrar_pago', {
       method: 'POST',
       data: {
@@ -579,6 +616,20 @@ test.describe('Saldos a favor de socios', () => {
 
     const context = await contextFor(request, saved.id_socio);
     expect(moneyNumber(context.saldo_favor?.saldo)).toBe(0);
+
+    await expectApiError(
+      request,
+      'cuotas_ajustar_saldo_favor',
+      {
+        method: 'POST',
+        data: {
+          id_socio: saved.id_socio,
+          operacion: 'ELIMINAR',
+          detalle: 'SEGUNDA ELIMINACION E2E',
+        },
+      },
+      { status: 409, code: 'SALDO_FAVOR_NO_EXISTE' },
+    );
   });
 
   test('la eliminación definitiva preserva el saldo y lo mantiene trazable en Saldos a favor', async ({ request }) => {

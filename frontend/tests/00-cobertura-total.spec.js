@@ -80,6 +80,32 @@ function frontendApiActions() {
 }
 
 
+function hasExecutableActionReference(source, action) {
+  const escaped = action.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const patterns = [
+    // Llamadas API directas de los escenarios y helpers de contrato.
+    new RegExp(`(?:apiCall|apiResult|expectApiError)\\s*\\([^\\n]{0,220}["']${escaped}["']`),
+    // Acciones incluidas en matrices/tuplas que luego se recorren y ejecutan.
+    new RegExp(`[\\[, ]\\s*["']${escaped}["']\\s*,`),
+    // Esperas/intercepciones de requests reales desde la UI.
+    new RegExp(`action=${escaped}(?:&|["'\`?/])`),
+    new RegExp(`(?:===|==)\\s*["']${escaped}["']`),
+  ];
+  return patterns.some((pattern) => pattern.test(source));
+}
+
+
+function hasExecutableRouteReference(source, route) {
+  const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const patterns = [
+    new RegExp(`page\\.goto\\(\\s*["']${escaped}["']`),
+    new RegExp(`[\\[,\\n]\\s*["']${escaped}["']\\s*,`),
+    new RegExp(`toHaveURL\\([^\\n]{0,140}${escaped}`),
+  ];
+  return patterns.some((pattern) => pattern.test(source));
+}
+
+
 function botFrontendEndpoints() {
   // El contador verde/rojo del botón del bot vive en Principal, fuera de BotPanel.
   // Escanear todo src evita que panel_unread_total (u otro uso futuro del API del bot)
@@ -352,7 +378,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const source = scenarioSources();
     const missing = backendActions()
       .filter((action) => !E2E_INFRA_ACTIONS.has(action))
-      .filter((action) => !source.includes(action));
+      .filter((action) => !hasExecutableActionReference(source, action));
     expect(missing, `Acciones backend sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
   });
 
@@ -373,7 +399,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     });
 
     expect(disabled, `Specs deshabilitados o exclusivos: ${disabled.join(', ')}`).toEqual([]);
-    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(121);
+    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(135);
   });
 
 
@@ -527,6 +553,20 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const contableUiSpec = read(path.join(__dirname, '12-contabilidad-ui-completa.spec.js'));
     expect(contableUiSpec).toContain('Monto personalizado');
     expect(contableUiSpec).toContain('Desc. familiar 12,5%');
+
+    const complementarySpec = read(path.join(__dirname, '19-cobertura-complementaria.spec.js'));
+    for (const marker of [
+      'ciclo completo de categoría',
+      'DESCUENTO_FAMILIAR_HISTORICO',
+      'RANGO_INTEGRANTES_INVALIDO',
+      'VIGENCIA_DESCUENTO_INVALIDA',
+      'condona una cuota por API',
+      'PAGO_YA_REGISTRADO',
+      'Cuotas mantiene filtros separados con sidebar expandido',
+      'Motivo opcional del ajuste...',
+    ]) {
+      expect(complementarySpec, `La cobertura complementaria dejó de cubrir: ${marker}`).toContain(marker);
+    }
   });
 
   test('los filtros y el semáforo de deuda de Socios/Empresas conservan su contrato frontend-backend', () => {
@@ -585,7 +625,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const frontend = frontendApiActions();
     const source = scenarioSources();
     expect(frontend.filter((action) => !backend.includes(action))).toEqual([]);
-    expect(frontend.filter((action) => !source.includes(action))).toEqual([]);
+    expect(frontend.filter((action) => !hasExecutableActionReference(source, action))).toEqual([]);
   });
 
   test('cada endpoint usado por el Panel Bot tiene cobertura declarada', () => {
@@ -616,7 +656,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
 
   test('todas las rutas de la aplicación, incluido el Panel Bot, están recorridas', () => {
     const source = scenarioSources();
-    const missing = applicationRoutes().filter((route) => !source.includes(route));
+    const missing = applicationRoutes().filter((route) => !hasExecutableRouteReference(source, route));
     expect(missing, `Rutas sin prueba: ${missing.join(', ')}`).toEqual([]);
   });
 

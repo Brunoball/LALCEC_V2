@@ -663,6 +663,20 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
         { status: 422, code: 'MOTIVO_DESVINCULACION_REQUERIDO' },
       );
 
+      await expectApiError(
+        request,
+        'familias_eliminar',
+        {
+          method: 'POST',
+          data: {
+            id: saved.id_familia,
+            fecha_baja: '2000-01-01',
+            motivo_baja: 'BAJA CON FECHA INVÁLIDA E2E',
+          },
+        },
+        { status: 422, code: 'FECHA_INVALIDA' },
+      );
+
       await apiCall(request, 'familias_eliminar', {
         method: 'POST',
         data: { id: saved.id_familia, fecha_baja: todayIso(), motivo_baja: 'BAJA E2E' },
