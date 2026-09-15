@@ -319,6 +319,16 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const comprobantePagoSource = read(
       path.join(SRC_ROOT, 'components', '_shared', 'utils', 'comprobantePago.js'),
     );
+    const comprobantePagoCss = read(
+      path.join(
+        SRC_ROOT,
+        'components',
+        'Global',
+        'Modales',
+        'ModalComprobantePago',
+        'ModalComprobantePago.css',
+      ),
+    );
     const apiHelperSource = read(path.join(__dirname, 'helpers', 'api.helper.js'));
     const authFixtureSource = read(path.join(__dirname, 'fixtures', 'auth.fixture.js'));
 
@@ -362,6 +372,14 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(comprobantePagoSource).toContain('Saldo a favor aplicado:');
     expect(comprobantePagoSource).toContain('Total de cuotas:');
     expect(comprobantePagoSource).toContain('data.periods.join(", ")');
+
+    // El total del modal debe medir sólo lo que necesita su contenido.
+    // Blindamos la regresión que antes lo hacía crecer para rellenar el footer.
+    expect(comprobantePagoCss).toContain('.payment-receipt-total-pill');
+    expect(comprobantePagoCss).toContain('flex: 0 1 auto;');
+    expect(comprobantePagoCss).toContain('width: fit-content;');
+    expect(comprobantePagoCss).toContain('max-width: 100%;');
+    expect(comprobantePagoCss).not.toContain('flex: 1 1 230px;');
 
     expect(cuotasPaymentModal).toContain('unavailable && !paid');
     expect(cuotasModalCss).toContain('border: 1px solid #16a34a !important');

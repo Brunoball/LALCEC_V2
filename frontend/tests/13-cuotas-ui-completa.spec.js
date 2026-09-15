@@ -219,6 +219,36 @@ async function expectSuccessfulPaymentReceipt(page, paymentCount = 1) {
   return receipt;
 }
 
+async function expectReceiptTotalFitsContent(receipt) {
+  const totalPill = receipt.locator('.payment-receipt-total-pill');
+  await expect(totalPill).toBeVisible();
+
+  const metrics = await totalPill.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const main = element.querySelector('.payment-receipt-total-pill__main');
+    const pillRect = element.getBoundingClientRect();
+    const mainRect = main?.getBoundingClientRect();
+
+    return {
+      flexGrow: style.flexGrow,
+      pillWidth: pillRect.width,
+      mainWidth: mainRect?.width ?? 0,
+      horizontalPadding:
+        Number.parseFloat(style.paddingLeft || '0') +
+        Number.parseFloat(style.paddingRight || '0'),
+    };
+  });
+
+  expect(metrics.flexGrow).toBe('0');
+  expect(metrics.mainWidth).toBeGreaterThan(0);
+  expect(
+    Math.abs(
+      metrics.pillWidth -
+        (metrics.mainWidth + metrics.horizontalPadding),
+    ),
+  ).toBeLessThanOrEqual(2);
+}
+
 test.describe.configure({ timeout: 90000 });
 
 test.describe('Cuotas completas desde la interfaz', () => {
@@ -301,6 +331,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await paymentDialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
     const receipt = await expectSuccessfulPaymentReceipt(page);
+    await expectReceiptTotalFitsContent(receipt);
     await expectReceiptPopup(page, () =>
       receipt.getByRole('button', { name: 'Comprobante' }).click(),
     );
