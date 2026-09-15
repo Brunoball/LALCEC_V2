@@ -316,6 +316,9 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const cuotasPaymentModal = read(
       path.join(SRC_ROOT, 'components', 'Cuotas', 'modales', 'ModalPagoCuota.jsx'),
     );
+    const comprobantePagoSource = read(
+      path.join(SRC_ROOT, 'components', '_shared', 'utils', 'comprobantePago.js'),
+    );
     const apiHelperSource = read(path.join(__dirname, 'helpers', 'api.helper.js'));
     const authFixtureSource = read(path.join(__dirname, 'fixtures', 'auth.fixture.js'));
 
@@ -334,9 +337,32 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(cuotasModalCss).toContain('width: min(920px, 100%)');
     expect(cuotasSource).not.toContain('handlePrintRegister');
     expect(cuotasSource).not.toContain('cuotas-register-action');
-    expect(cuotasSource).toContain('LEGACY_RECEIPT_STYLES');
-    expect(cuotasSource).toContain('gcuotas-talon-socio');
-    expect(cuotasSource).toContain('gcuotas-talon-cobrador');
+
+    // Todo camino de impresión/comprobante de Cuotas debe delegar al util compartido.
+    // Así evitamos que vuelva a existir un HTML/CSS alternativo dentro de Cuotas.jsx.
+    expect(cuotasSource).toContain('from "../_shared/utils/comprobantePago"');
+    expect(cuotasSource).toContain('printPaymentReceiptsBatch');
+    expect(cuotasSource).toContain('openPaymentReceipt');
+    expect(cuotasSource).toContain('downloadPaymentReceiptPdf');
+    expect(cuotasSource).not.toContain('LEGACY_RECEIPT_STYLES');
+    expect(cuotasSource).not.toContain('gcuotas-talon-socio');
+    expect(cuotasSource).not.toContain('gcuotas-talon-cobrador');
+
+    // El formato visual y el HTML de ambos talones viven en un único archivo.
+    expect(comprobantePagoSource).toContain('const LEGACY_RECEIPT_STYLES');
+    expect(comprobantePagoSource).toContain('const legacyReceiptBodyHtml');
+    expect(comprobantePagoSource).toContain('const legacyReceiptDocumentHtml');
+    expect(comprobantePagoSource).toContain('gcuotas-talon-socio');
+    expect(comprobantePagoSource).toContain('gcuotas-talon-cobrador');
+    expect(comprobantePagoSource).toContain('export const printPaymentReceiptsBatch');
+    expect(comprobantePagoSource).toContain('export const openPaymentReceipt');
+    expect(comprobantePagoSource).toContain('export const downloadPaymentReceiptPdf');
+    expect(comprobantePagoSource).toContain('legacyReceiptDocumentHtml({');
+    expect(comprobantePagoSource).toContain('Categoría / Monto abonado:');
+    expect(comprobantePagoSource).toContain('Saldo a favor aplicado:');
+    expect(comprobantePagoSource).toContain('Total de cuotas:');
+    expect(comprobantePagoSource).toContain('data.periods.join(", ")');
+
     expect(cuotasPaymentModal).toContain('unavailable && !paid');
     expect(cuotasModalCss).toContain('border: 1px solid #16a34a !important');
     expect(apiHelperSource).toContain('async function ensureAuthSession');

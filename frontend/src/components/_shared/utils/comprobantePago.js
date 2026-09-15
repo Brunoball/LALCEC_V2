@@ -325,6 +325,15 @@ const legacyReceiptDisplayData = (source) => {
   );
   const status = String(receipt.estado || "PENDIENTE").toUpperCase();
   const firstLine = lines[0] || {};
+  const balanceApplied = Number(receipt.saldoFavorAplicado || 0);
+  const hasAppliedBalance = balanceApplied > 0.004;
+  const totalSettled = Number(receipt.monto || total || 0);
+  const amountPaidNow = hasAppliedBalance
+    ? Number(
+        receipt.montoCobradoAhora ??
+          Math.max(0, totalSettled - balanceApplied),
+      )
+    : totalSettled;
 
   return {
     isCompany: receipt.tipoEntidad === "EMPRESA",
@@ -335,6 +344,10 @@ const legacyReceiptDisplayData = (source) => {
     periods: periods.length ? periods : [receipt.modalidad || "—"],
     unitAmount,
     total,
+    hasAppliedBalance,
+    amountPaidNow,
+    balanceApplied,
+    totalSettled,
     status,
   };
 };
@@ -422,14 +435,22 @@ const LEGACY_RECEIPT_STYLES = `
 `;
 
 const legacyReceiptBodyHtml = (data) => {
-  const amountDetail =
-    data.periods.length > 1
+  const amountDetail = data.hasAppliedBalance
+    ? `<span class="gcuotas-monto-unit">$${data.amountPaidNow}</span>`
+    : data.periods.length > 1
       ? `<span class="gcuotas-monto-unit">$${data.unitAmount}</span>
          &nbsp;&nbsp;
          <span class="gcuotas-total-wrap">
            Total <span class="gcuotas-monto-total">$${data.total}</span>
          </span>`
       : `<span class="gcuotas-monto-unit">$${data.unitAmount}</span>`;
+  const amountLabel = data.hasAppliedBalance
+    ? "Categoría / Monto abonado:"
+    : "Categoría / Monto:";
+  const balanceLines = data.hasAppliedBalance
+    ? `<p><strong>Saldo a favor aplicado:</strong> ${htmlEscape(money(data.balanceApplied))}</p>
+       <p><strong>Total de cuotas:</strong> ${htmlEscape(money(data.totalSettled))}</p>`
+    : "";
   const statusLine =
     data.status === "PAGADO" || data.status === "CONDONADO"
       ? `<p><strong>Estado:</strong> ${htmlEscape(data.status)}</p>`
@@ -441,7 +462,8 @@ const legacyReceiptBodyHtml = (data) => {
         <div class="gcuotas-talon-socio">
           <p><strong>${data.isCompany ? "Empresa:" : "Afiliado:"}</strong> ${htmlEscape(data.denomination)}</p>
           <p><strong>Domicilio:</strong> ${htmlEscape(data.address)}</p>
-          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          <p><strong>${amountLabel}</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          ${balanceLines}
           <p><strong>Período:</strong> ${htmlEscape(data.periods.join(", "))}</p>
           <p><strong>Medio de Pago:</strong> ${htmlEscape(data.paymentMethod)}</p>
           ${statusLine}
@@ -451,7 +473,8 @@ const legacyReceiptBodyHtml = (data) => {
 
         <div class="gcuotas-talon-cobrador">
           <p><strong>${data.isCompany ? "Empresa:" : "Nombre y Apellido:"}</strong> ${htmlEscape(data.denomination)}</p>
-          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          <p><strong>${amountLabel}</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          ${balanceLines}
           <p><strong>Período:</strong> ${htmlEscape(data.periods.join(", "))}</p>
           <p><strong>Medio de Pago:</strong> ${htmlEscape(data.paymentMethod)}</p>
           ${statusLine}
@@ -497,12 +520,20 @@ const groupLegacyReceiptRecords = (records) => {
     const amount = printableAmount(
       item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0,
     );
+    const balanceApplied = printableAmount(
+      item.monto_saldo_favor_aplicado ?? item.saldo_favor_aplicado ?? 0,
+    );
+    const amountPaidNow = printableAmount(
+      item.monto_cobrado_ahora ?? Math.max(0, amount - balanceApplied),
+    );
     const period = item.periodo_impresion || item.periodo || "—";
     const current = groups.get(key);
 
     if (current) {
       if (!current.periods.includes(period)) current.periods.push(period);
       current.total += amount;
+      current.balanceApplied += balanceApplied;
+      current.amountPaidNow += amountPaidNow;
       if (!current.unitAmount && amount) current.unitAmount = amount;
       return;
     }
@@ -512,6 +543,8 @@ const groupLegacyReceiptRecords = (records) => {
       periods: [period],
       unitAmount: amount,
       total: amount,
+      balanceApplied,
+      amountPaidNow,
     });
   });
 
@@ -519,7 +552,7 @@ const groupLegacyReceiptRecords = (records) => {
 };
 
 const legacyReceiptDisplayDataFromRecordGroup = (
-  { item, periods, unitAmount, total },
+  { item, periods, unitAmount, total, balanceApplied, amountPaidNow },
   entityType,
 ) => {
   const isCompany = entityType === "EMPRESA";
@@ -539,6 +572,10 @@ const legacyReceiptDisplayDataFromRecordGroup = (
     periods,
     unitAmount,
     total,
+    hasAppliedBalance: Number(balanceApplied || 0) > 0.004,
+    amountPaidNow: Number(amountPaidNow || 0),
+    balanceApplied: Number(balanceApplied || 0),
+    totalSettled: Number(total || 0),
     status: String(item.estado || "PENDIENTE").toUpperCase(),
   };
 };

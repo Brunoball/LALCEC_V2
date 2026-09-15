@@ -607,7 +607,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
       () => receipt.getByRole('button', { name: 'Comprobante' }).click(),
       defaultTestAddress,
       new RegExp(
-        `Período:\\s*[^/]+\\s+${currentYear}\\s*\\/\\s*[^/]+\\s+${currentYear}`,
+        `Período:\\s*[^,]+\\s+${currentYear}\\s*,\\s*[^,]+\\s+${currentYear}`,
         'i',
       ),
     );
@@ -1033,10 +1033,17 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(dialog.getByRole('button', { name: `Año ${addedYear}` })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Registrar pago', exact: true })).toBeDisabled();
 
-    const firstAvailableMonth = dialog.locator('.cuotas-month-grid button:not([disabled])').first();
+    const monthGrid = dialog.locator('.cuotas-month-grid');
+    await expect(monthGrid).toHaveAttribute('aria-busy', 'false');
+    await expect(dialog).not.toHaveClass(/is-size-transitioning/);
+
+    const firstAvailableMonth = monthGrid.locator('button:not([disabled])').first();
     await expect(firstAvailableMonth).toBeVisible();
+    await expect(firstAvailableMonth).toHaveAttribute('aria-pressed', 'false');
     await firstAvailableMonth.click();
+    await expect(firstAvailableMonth).toHaveAttribute('aria-pressed', 'true');
     await selectPreferredMedium(dialog);
+    await expect(dialog.getByRole('button', { name: 'Registrar pago', exact: true })).toBeEnabled();
     await dialog.getByRole('button', { name: 'Registrar pago', exact: true }).click();
 
     const receipt = await expectSuccessfulPaymentReceipt(page);
@@ -1048,7 +1055,7 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(visibleYearFilter.locator(`option[value="${addedYear}"]`)).toHaveCount(1);
   });
 
-  test('imprime todos con el comprobante antiguo, recorre el selector de meses y mantiene las acciones en su ubicación responsiva', async ({ page, request }) => {
+  test('imprime todos con el comprobante unificado, recorre el selector de meses y mantiene las acciones en su ubicación responsiva', async ({ page, request }) => {
     const { category, medium } = await activeCategoryAndMedium(request);
     await createPerson(request, printAllPerson, {
       fecha_alta: `${currentYear}-01-01`,
