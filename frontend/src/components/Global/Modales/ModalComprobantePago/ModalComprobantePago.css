@@ -73,7 +73,9 @@
 }
 
 .payment-receipt-total-pill {
-  flex: 1 1 230px;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
   min-height: 40px;
   display: grid;
@@ -212,6 +214,7 @@ html[data-theme="oscuro"]
   }
 
   .payment-receipt-total-pill {
+    align-self: center;
     justify-items: center;
   }
 
