@@ -204,6 +204,7 @@ final class Cuotas
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio_alternativo ELSE sp.domicilio_alternativo END AS domicilio_alternativo,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 c.monto_cuota AS monto_actual,
@@ -686,6 +687,7 @@ final class Cuotas
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio_alternativo ELSE sp.domicilio_alternativo END AS domicilio_alternativo,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 c.monto_cuota AS monto_actual,
@@ -729,7 +731,8 @@ final class Cuotas
                 : null;
             $partner['domicilio'] = self::fullAddress(
                 $partner['domicilio'] ?? null,
-                $partner['numero_domicilio']
+                $partner['numero_domicilio'],
+                $partner['domicilio_alternativo'] ?? null
             );
             $baseAmount = $partner['id_categoria'] === null
                 ? 0.0
@@ -810,6 +813,7 @@ final class Cuotas
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio_alternativo ELSE sp.domicilio_alternativo END AS domicilio_alternativo,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
@@ -848,6 +852,7 @@ final class Cuotas
                     TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))) AS denominacion,
                     sp.dni AS documento,
                     sp.domicilio AS domicilio,
+                    sp.domicilio_alternativo AS domicilio_alternativo,
                     sp.numero_domicilio AS numero_domicilio,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco
@@ -1000,6 +1005,7 @@ final class Cuotas
                 END AS denominacion,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END AS documento,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio_alternativo ELSE sp.domicilio_alternativo END AS domicilio_alternativo,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria, c.monto_cuota AS monto_actual,
                 f.id_familia, f.nombre AS familia,
@@ -1045,6 +1051,7 @@ final class Cuotas
                     TRIM(CONCAT(COALESCE(sp.apellido, ''), ', ', COALESCE(sp.nombre, ''))) AS denominacion,
                     sp.dni AS documento,
                     sp.domicilio AS domicilio,
+                    sp.domicilio_alternativo AS domicilio_alternativo,
                     sp.numero_domicilio AS numero_domicilio,
                     c.nombre AS categoria, c.monto_cuota AS monto_actual,
                     fs.es_titular, fs.parentesco,
@@ -1892,7 +1899,8 @@ final class Cuotas
             'documento' => $row['documento'] === null ? null : (string)$row['documento'],
             'domicilio' => self::fullAddress(
                 $row['domicilio'] ?? null,
-                $row['numero_domicilio'] ?? null
+                $row['numero_domicilio'] ?? null,
+                $row['domicilio_alternativo'] ?? null
             ),
             'numero_domicilio' => isset($row['numero_domicilio']) && trim((string)$row['numero_domicilio']) !== ''
                 ? trim((string)$row['numero_domicilio'])
@@ -2139,6 +2147,7 @@ final class Cuotas
                 COALESCE(CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.cuit ELSE sp.dni END, sdel.documento) AS documento,
                 CASE WHEN sdel.id_socio IS NULL THEN 0 ELSE 1 END AS socio_eliminado,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio ELSE sp.domicilio END AS domicilio,
+                CASE WHEN s.tipo_socio = 'EMPRESA' THEN se.domicilio_alternativo ELSE sp.domicilio_alternativo END AS domicilio_alternativo,
                 CASE WHEN s.tipo_socio = 'EMPRESA' THEN NULL ELSE sp.numero_domicilio END AS numero_domicilio,
                 c.nombre AS categoria,
                 mp.nombre AS medio_pago
@@ -2170,7 +2179,8 @@ final class Cuotas
             'documento' => $row['documento'] === null ? null : (string)$row['documento'],
             'domicilio' => self::fullAddress(
                 $row['domicilio'] ?? null,
-                $row['numero_domicilio'] ?? null
+                $row['numero_domicilio'] ?? null,
+                $row['domicilio_alternativo'] ?? null
             ),
             'numero_domicilio' => isset($row['numero_domicilio']) && trim((string)$row['numero_domicilio']) !== ''
                 ? trim((string)$row['numero_domicilio'])
@@ -2237,8 +2247,13 @@ final class Cuotas
         ];
     }
 
-    private static function fullAddress(mixed $street, mixed $number): ?string
+    private static function fullAddress(mixed $street, mixed $number, mixed $alternative = null): ?string
     {
+        // El domicilio alternativo es el domicilio de impresión usado por el sistema anterior.
+        // Ya es un texto completo: nunca agregarle el número del domicilio principal.
+        $alternativeText = trim((string)($alternative ?? ''));
+        if ($alternativeText !== '') return $alternativeText;
+
         $streetText = trim((string)($street ?? ''));
         $numberText = trim((string)($number ?? ''));
 

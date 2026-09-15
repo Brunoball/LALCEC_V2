@@ -94,14 +94,17 @@ export const normalizePaymentReceipt = (source = {}) => {
             Number(line.monto_saldo_favor_aplicado ?? line.saldoFavorAplicado ?? 0),
         ),
     ),
-    domicilio: firstValue(
-      line.domicilio_2,
-      line.domicilio,
-      line.direccion,
-      operation.domicilio_2,
-      operation.domicilio,
-      operation.direccion,
-    ),
+    domicilio: Object.prototype.hasOwnProperty.call(line, "domicilio")
+      ? firstValue(line.domicilio_alternativo, line.domicilio_2, line.domicilio)
+      : firstValue(
+          line.domicilio_alternativo,
+          line.domicilio_2,
+          line.direccion,
+          operation.domicilio_alternativo,
+          operation.domicilio_2,
+          operation.domicilio,
+          operation.direccion,
+        ),
     cobrador: firstValue(line.cobrador, operation.cobrador),
     medio: firstValue(line.medio_pago, operation.medio_pago),
   }));
@@ -139,6 +142,7 @@ export const normalizePaymentReceipt = (source = {}) => {
       operation.medio_pago ||
       (operation.estado === "CONDONADO" ? "CONDONACIÓN" : "—"),
     domicilio: firstValue(
+      operation.domicilio_alternativo,
       operation.domicilio_2,
       operation.domicilio,
       operation.direccion,
@@ -227,7 +231,7 @@ export const normalizePaymentReceipts = (source = {}) => {
           : receipt.codigo || firstLine.codigo || "",
       socios: group.socio,
       medio: firstLine.medio || receipt.medio,
-      domicilio: firstLine.domicilio || receipt.domicilio,
+      domicilio: firstLine.domicilio ?? receipt.domicilio,
       cobrador: firstLine.cobrador || receipt.cobrador,
       montoBase: group.lineas.reduce(
         (total, line) => total + Number(line.montoBase || line.monto || 0),
@@ -285,7 +289,7 @@ const receiptDisplayData = (source) => {
         ? "Socios"
         : "Nombre y Apellido",
     people: compact(receipt.socios, 116),
-    address: compact(receipt.domicilio || "-", 94),
+    address: receipt.domicilio ? compact(receipt.domicilio, 94) : "",
     category: compact(categories.join(" · ") || "—", 68),
     periods: compact(periods.join(" / ") || receipt.modalidad, 112),
     amountDetail,

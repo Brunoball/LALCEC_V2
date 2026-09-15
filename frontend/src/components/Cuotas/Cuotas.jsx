@@ -235,7 +235,7 @@ const printReceiptsBatch = ({ printWindow, records, entityType }) => {
           ? item.razon_social
           : `${item.apellido || ""} ${item.nombre || ""}`.trim()) ||
         "—";
-      const address = item.domicilio || item.domicilio_2 || item.direccion || "-";
+      const address = item.domicilio || item.domicilio_2 || item.direccion || "";
       const category = item.categoria || "";
       const paymentMethod =
         item.medio_pago || item.medio_pago_preferido || "No especificado";
@@ -496,12 +496,11 @@ const enrichPaymentReceipt = (source, context = {}) => {
     (line, index) => ({
       ...(fallbackLines[index] || {}),
       ...line,
-      domicilio:
-        line.domicilio ||
-        line.domicilio_2 ||
-        fallbackLines[index]?.domicilio ||
-        context.domicilio ||
-        "",
+      // Una dirección vacía enviada por el backend también es definitiva:
+      // no tomar el domicilio del titular para otro integrante de la familia.
+      domicilio: Object.prototype.hasOwnProperty.call(line, "domicilio")
+        ? (line.domicilio ?? "")
+        : line.domicilio_2 || fallbackLines[index]?.domicilio || context.domicilio || "",
       cobrador:
         line.cobrador ||
         fallbackLines[index]?.cobrador ||
