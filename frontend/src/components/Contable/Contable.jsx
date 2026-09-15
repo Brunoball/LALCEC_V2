@@ -87,29 +87,40 @@ const money = (value) =>
     minimumFractionDigits: 2,
   }).format(Number(value || 0));
 
-const paymentTypeDetail = (item) => {
+const paymentTypeParts = (item) => {
   const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
-  if (type === "SALDO_FAVOR_SOBRANTE") return "Sobrante a saldo a favor";
-  let detail = "";
-  if (type === "MONTO_PERSONALIZADO") detail = "Monto personalizado";
+  const parts = [];
+
+  if (type === "SALDO_FAVOR_SOBRANTE") {
+    parts.push("Sobrante a saldo a favor");
+  }
+
+  if (type === "MONTO_PERSONALIZADO") {
+    parts.push("Monto personalizado");
+  }
+
   if (type === "DESCUENTO_FAMILIAR") {
     const percentage = Number(item?.porcentaje_descuento_familiar);
-    if (!Number.isFinite(percentage) || percentage <= 0) detail = "Desc. familiar";
-    else {
+    if (!Number.isFinite(percentage) || percentage <= 0) {
+      parts.push("Desc. familiar");
+    } else {
       const formatted = new Intl.NumberFormat("es-AR", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }).format(percentage);
-      detail = `Desc. familiar ${formatted}%`;
+      parts.push(`Desc. familiar ${formatted}%`);
     }
   }
+
   const appliedBalance = Number(item?.monto_saldo_favor_aplicado || 0);
   if (appliedBalance > 0) {
-    const balanceDetail = `Saldo aplicado ${money(appliedBalance)}`;
-    return detail ? `${detail} · ${balanceDetail}` : balanceDetail;
+    parts.push(`Saldo aplicado ${money(appliedBalance)}`);
   }
-  return detail;
+
+  return parts;
 };
+
+const paymentTypeDetail = (item) => paymentTypeParts(item).join(" · ");
 
 const paymentTypeTone = (item) => {
   const type = String(item?.tipo_pago || "NORMAL").toUpperCase();
@@ -1401,12 +1412,17 @@ export default function ContableModule({ view = "summary" }) {
                             Importe histórico estimado
                           </small>
                         ) : null}
-                        {paymentTypeDetail(item) ? (
-                          <small
-                            className={`contable-payment-kind ${paymentTypeTone(item)}`}
-                          >
-                            {paymentTypeDetail(item)}
-                          </small>
+                        {paymentTypeParts(item).length ? (
+                          <div className="contable-payment-kindGroup">
+                            {paymentTypeParts(item).map((part) => (
+                              <small
+                                key={part}
+                                className={`contable-payment-kind ${paymentTypeTone(item)}`}
+                              >
+                                {part}
+                              </small>
+                            ))}
+                          </div>
                         ) : null}
                       </div>
                     </div>

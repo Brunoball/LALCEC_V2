@@ -73,26 +73,55 @@
 }
 
 .payment-receipt-total-pill {
+  flex: 1 1 230px;
+  min-width: 0;
   min-height: 40px;
-  display: inline-flex;
+  display: grid;
   align-items: center;
-  gap: 6px;
-  padding: 0 15px;
+  gap: 3px;
+  padding: 7px 15px;
   border-radius: 999px;
   color: #fff;
   background: var(--balto-action);
   box-shadow: 0 7px 18px -13px color-mix(in srgb, var(--balto-action) 78%, transparent);
+}
+
+.payment-receipt-total-pill--with-balance {
+  border-radius: 20px;
+}
+
+.payment-receipt-total-pill__main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   white-space: nowrap;
 }
 
-.payment-receipt-total-pill span {
+.payment-receipt-total-pill__main span {
   font-size: 11px;
   font-weight: 680;
 }
 
-.payment-receipt-total-pill strong {
+.payment-receipt-total-pill__main strong {
   font-size: 13px;
   font-weight: 820;
+}
+
+.payment-receipt-total-pill__detail {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1.25;
+  opacity: 0.92;
+}
+
+.payment-receipt-total-pill__detail span {
+  white-space: nowrap;
 }
 
 .payment-receipt-actions {
@@ -183,6 +212,10 @@ html[data-theme="oscuro"]
   }
 
   .payment-receipt-total-pill {
+    justify-items: center;
+  }
+
+  .payment-receipt-total-pill__detail {
     justify-content: center;
   }
 
@@ -201,18 +234,3 @@ html[data-theme="oscuro"]
   }
 }
 
-.payment-receipt-total-pill small {
-  flex-basis: 100%;
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.2;
-  opacity: 0.9;
-}
-
-.payment-receipt-total-pill:has(small) {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  white-space: normal;
-}

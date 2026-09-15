@@ -125,13 +125,20 @@ export default function ModalComprobantePago({
       </section>
 
       <div className="payment-receipt-footer">
-        <div className="payment-receipt-total-pill">
-          <span>{usedBalance ? "Cobrado ahora:" : "Total:"}</span>
-          <strong>{money(usedBalance ? totalCollectedNow : total)}</strong>
+        <div
+          className={`payment-receipt-total-pill${
+            usedBalance ? " payment-receipt-total-pill--with-balance" : ""
+          }`}
+        >
+          <div className="payment-receipt-total-pill__main">
+            <span>{usedBalance ? "Cobrado ahora:" : "Total:"}</span>
+            <strong>{money(usedBalance ? totalCollectedNow : total)}</strong>
+          </div>
           {usedBalance ? (
-            <small>
-              Saldo aplicado {money(totalBalanceApplied)} · Total cuotas {money(total)}
-            </small>
+            <div className="payment-receipt-total-pill__detail">
+              <span>Saldo aplicado: {money(totalBalanceApplied)}</span>
+              <span>Total cuotas: {money(total)}</span>
+            </div>
           ) : null}
         </div>
 
