@@ -3,4 +3,5 @@ export {
   normalizePaymentReceipt,
   openPaymentReceipt,
   paymentReceiptHtml,
+  printPaymentReceiptsBatch,
 } from "./comprobantePago";

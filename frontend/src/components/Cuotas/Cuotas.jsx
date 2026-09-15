@@ -26,6 +26,7 @@ import { canWrite } from "../_shared/auth/session";
 import {
   downloadPaymentReceiptPdf,
   openPaymentReceipt,
+  printPaymentReceiptsBatch,
 } from "../_shared/utils/comprobantePago";
 import { cuotasApi } from "./api/cuotasApi";
 import { useCuotas } from "./hooks/useCuotas";
@@ -109,190 +110,6 @@ const formatDate = (value) =>
   value ? DATE_FORMATTER.format(new Date(`${value}T00:00:00Z`)) : "—";
 
 const PRINT_MONTHS = DEFAULT_MONTHS.map((month) => month.nombre.toUpperCase());
-
-const escapePrintHtml = (value) =>
-  String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-const LEGACY_RECEIPT_STYLES = `
-  @page {
-    size: A4 portrait;
-    margin: 0;
-  }
-  body {
-    width: 210mm;
-    height: 297mm;
-    margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    position: relative;
-    transform: rotate(90deg);
-    transform-origin: top left;
-    left: 70%;
-    top: 0;
-  }
-  .gcuotas-contenedor {
-    width: 210mm;
-    margin: 10mm 0;
-    page-break-after: always;
-    box-sizing: border-box;
-  }
-  .gcuotas-comprobante {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    box-sizing: border-box;
-  }
-  .gcuotas-talon-socio {
-    width: 60%;
-    padding-left: 12.5mm;
-    padding-top: 13mm;
-  }
-  .gcuotas-talon-cobrador {
-    width: 60mm;
-    padding-left: 5.5mm;
-    padding-top: 16mm;
-  }
-  p {
-    margin-top: 5px;
-    font-size: 13px;
-  }
-  .gcuotas-monto-unit {
-    font-weight: 400 !important;
-  }
-  .gcuotas-total-wrap {
-    font-weight: 700 !important;
-  }
-  .gcuotas-monto-total {
-    font-weight: 400 !important;
-  }
-`;
-
-const printableAmount = (value) => {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? amount : 0;
-};
-
-const groupLegacyReceiptRecords = (records) => {
-  const groups = new Map();
-
-  records.forEach((item, index) => {
-    const key = String(
-      item.id_socio ??
-        item.id_empresa ??
-        item.documento ??
-        item.denominacion ??
-        `registro-${index}`,
-    );
-    const amount = printableAmount(
-      item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0,
-    );
-    const period = item.periodo_impresion || item.periodo || "—";
-    const current = groups.get(key);
-
-    if (current) {
-      if (!current.periods.includes(period)) current.periods.push(period);
-      current.total += amount;
-      if (!current.unitAmount && amount) current.unitAmount = amount;
-      return;
-    }
-
-    groups.set(key, {
-      item,
-      periods: [period],
-      unitAmount: amount,
-      total: amount,
-    });
-  });
-
-  return Array.from(groups.values());
-};
-
-const printReceiptsBatch = ({ printWindow, records, entityType }) => {
-  if (!printWindow || printWindow.closed) {
-    throw new Error("No se pudo abrir la ventana de impresión.");
-  }
-  if (!Array.isArray(records) || records.length === 0) {
-    throw new Error("No hay comprobantes para los meses seleccionados.");
-  }
-
-  const isCompany = entityType === "EMPRESA";
-  const groupedRecords = groupLegacyReceiptRecords(records);
-  const receipts = groupedRecords
-    .map(({ item, periods, unitAmount, total }) => {
-      const denomination =
-        item.denominacion ||
-        (isCompany
-          ? item.razon_social
-          : `${item.apellido || ""} ${item.nombre || ""}`.trim()) ||
-        "—";
-      const address = item.domicilio || item.domicilio_2 || item.direccion || "";
-      const category = item.categoria || "";
-      const paymentMethod =
-        item.medio_pago || item.medio_pago_preferido || "No especificado";
-      const status = String(item.estado || "PENDIENTE").toUpperCase();
-      const amountDetail =
-        periods.length > 1
-          ? `<span class="gcuotas-monto-unit">$${unitAmount}</span>
-             &nbsp;&nbsp;
-             <span class="gcuotas-total-wrap">
-               Total <span class="gcuotas-monto-total">$${total}</span>
-             </span>`
-          : `<span class="gcuotas-monto-unit">$${unitAmount}</span>`;
-      const statusLine =
-        status === "PAGADO" || status === "CONDONADO"
-          ? `<p><strong>Estado:</strong> ${escapePrintHtml(status)}</p>`
-          : "";
-
-      return `
-        <div class="gcuotas-contenedor">
-          <div class="gcuotas-comprobante">
-            <div class="gcuotas-talon-socio">
-              <p><strong>${isCompany ? "Empresa:" : "Afiliado:"}</strong> ${escapePrintHtml(denomination)}</p>
-              <p><strong>Domicilio:</strong> ${escapePrintHtml(address)}</p>
-              <p><strong>Categoría / Monto:</strong> ${escapePrintHtml(category)} / ${amountDetail}</p>
-              <p><strong>Período:</strong> ${escapePrintHtml(periods.join(", "))}</p>
-              <p><strong>Medio de Pago:</strong> ${escapePrintHtml(paymentMethod)}</p>
-              ${statusLine}
-              <p>Por consultas comunicarse al 03564-15205778</p>
-              <p>Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
-            </div>
-
-            <div class="gcuotas-talon-cobrador">
-              <p><strong>${isCompany ? "Empresa:" : "Nombre y Apellido:"}</strong> ${escapePrintHtml(denomination)}</p>
-              <p><strong>Categoría / Monto:</strong> ${escapePrintHtml(category)} / ${amountDetail}</p>
-              <p><strong>Período:</strong> ${escapePrintHtml(periods.join(", "))}</p>
-              <p><strong>Medio de Pago:</strong> ${escapePrintHtml(paymentMethod)}</p>
-              ${statusLine}
-            </div>
-          </div>
-        </div>`;
-    })
-    .join("");
-
-  printWindow.document.open();
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Comprobantes de Pago</title>
-        <style>${LEGACY_RECEIPT_STYLES}</style>
-      </head>
-      <body>${receipts}</body>
-    </html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.setTimeout(() => printWindow.print(), 250);
-  return groupedRecords.length;
-};
 
 const isTruthyFlag = (value) =>
   value === true ||
@@ -1221,7 +1038,7 @@ export default function Cuotas() {
         );
       }
 
-      const receiptCount = printReceiptsBatch({
+      const receiptCount = printPaymentReceiptsBatch({
         printWindow,
         records,
         entityType: tipo,
@@ -1632,7 +1449,7 @@ export default function Cuotas() {
       ) || item;
 
     try {
-      printReceiptsBatch({
+      printPaymentReceiptsBatch({
         printWindow,
         records: [
           {

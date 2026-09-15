@@ -303,149 +303,287 @@ const receiptDisplayData = (source) => {
   };
 };
 
-const receiptBodyHtml = (source) => {
-  const data = receiptDisplayData(source);
-  const { receipt } = data;
+const legacyReceiptDisplayData = (source) => {
+  // `paymentReceiptHtml` ya trabaja con comprobantes normalizados. Evitamos
+  // normalizarlos una segunda vez para conservar datos como `medio`.
+  const receipt =
+    source &&
+    typeof source === "object" &&
+    Array.isArray(source.lineas) &&
+    (Object.prototype.hasOwnProperty.call(source, "medio") ||
+      Object.prototype.hasOwnProperty.call(source, "tipoEntidad") ||
+      Object.prototype.hasOwnProperty.call(source, "socios"))
+      ? source
+      : normalizePaymentReceipt(source);
+  const lines = Array.isArray(receipt.lineas) ? receipt.lineas : [];
+  const periods = uniqueValues(lines.map((line) => line.periodo));
+  const amounts = lines.map((line) => Number(line.monto ?? line.montoBase ?? 0));
+  const unitAmount = amounts.find((amount) => Number.isFinite(amount) && amount !== 0) || 0;
+  const total = amounts.reduce(
+    (sum, amount) => sum + (Number.isFinite(amount) ? amount : 0),
+    0,
+  );
+  const status = String(receipt.estado || "PENDIENTE").toUpperCase();
+  const firstLine = lines[0] || {};
+
+  return {
+    isCompany: receipt.tipoEntidad === "EMPRESA",
+    denomination: receipt.socios || firstLine.socio || "—",
+    address: receipt.domicilio || firstLine.domicilio || "",
+    category: firstLine.categoria || "",
+    paymentMethod: receipt.medio || firstLine.medio || "No especificado",
+    periods: periods.length ? periods : [receipt.modalidad || "—"],
+    unitAmount,
+    total,
+    status,
+  };
+};
+
+const LEGACY_RECEIPT_STYLES = `
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative;
+    transform: rotate(90deg);
+    transform-origin: top left;
+    left: 70%;
+    top: 0;
+  }
+  .gcuotas-contenedor {
+    width: 210mm;
+    margin: 10mm 0;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+  .gcuotas-comprobante {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    box-sizing: border-box;
+  }
+  .gcuotas-talon-socio {
+    width: 60%;
+    padding-left: 12.5mm;
+    padding-top: 13mm;
+  }
+  .gcuotas-talon-cobrador {
+    width: 60mm;
+    padding-left: 5.5mm;
+    padding-top: 16mm;
+  }
+  p {
+    margin-top: 5px;
+    font-size: 13px;
+  }
+  .gcuotas-monto-unit {
+    font-weight: 400 !important;
+  }
+  .gcuotas-total-wrap {
+    font-weight: 700 !important;
+  }
+  .gcuotas-monto-total {
+    font-weight: 400 !important;
+  }
+  .print-actions {
+    position: fixed;
+    top: 8mm;
+    left: 8mm;
+    z-index: 10;
+    transform: rotate(-90deg);
+    transform-origin: top left;
+  }
+  .print-actions button {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    background: #f97316;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  @media print {
+    .print-actions {
+      display: none !important;
+    }
+  }
+`;
+
+const legacyReceiptBodyHtml = (data) => {
+  const amountDetail =
+    data.periods.length > 1
+      ? `<span class="gcuotas-monto-unit">$${data.unitAmount}</span>
+         &nbsp;&nbsp;
+         <span class="gcuotas-total-wrap">
+           Total <span class="gcuotas-monto-total">$${data.total}</span>
+         </span>`
+      : `<span class="gcuotas-monto-unit">$${data.unitAmount}</span>`;
+  const statusLine =
+    data.status === "PAGADO" || data.status === "CONDONADO"
+      ? `<p><strong>Estado:</strong> ${htmlEscape(data.status)}</p>`
+      : "";
 
   return `
     <div class="gcuotas-contenedor">
-      <div class="gcuotas-comprobante" aria-label="${htmlEscape(receipt.titulo)}">
+      <div class="gcuotas-comprobante">
         <div class="gcuotas-talon-socio">
-          <p><strong>${htmlEscape(data.entityLabel)}:</strong> ${htmlEscape(data.people)}</p>
+          <p><strong>${data.isCompany ? "Empresa:" : "Afiliado:"}</strong> ${htmlEscape(data.denomination)}</p>
           <p><strong>Domicilio:</strong> ${htmlEscape(data.address)}</p>
-          <p><strong>${data.hasAppliedBalance ? "Categoría / Monto abonado" : "Categoría / Monto"}:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
-          ${data.hasAppliedBalance ? `<p><strong>Saldo a favor aplicado:</strong> ${htmlEscape(money(data.balanceApplied))}</p><p><strong>Total de cuotas:</strong> ${htmlEscape(money(data.totalSettled))}</p>` : ""}
-          <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
-          <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
-          <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
-          <p><strong>Fecha:</strong> ${htmlEscape(date(receipt.fecha))}</p>
+          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          <p><strong>Período:</strong> ${htmlEscape(data.periods.join(", "))}</p>
+          <p><strong>Medio de Pago:</strong> ${htmlEscape(data.paymentMethod)}</p>
+          ${statusLine}
           <p>Por consultas comunicarse al 03564-15205778</p>
           <p>Las cuotas adeudadas se cobrarán al valor actualizado al momento del pago.</p>
         </div>
 
         <div class="gcuotas-talon-cobrador">
-          <p><strong>${htmlEscape(data.copyEntityLabel)}:</strong> ${htmlEscape(data.people)}</p>
-          <p><strong>${data.hasAppliedBalance ? "Categoría / Monto abonado" : "Categoría / Monto"}:</strong> ${htmlEscape(data.category)} / ${htmlEscape(data.amountDetail)}</p>
-          ${data.hasAppliedBalance ? `<p><strong>Saldo a favor aplicado:</strong> ${htmlEscape(money(data.balanceApplied))}</p><p><strong>Total de cuotas:</strong> ${htmlEscape(money(data.totalSettled))}</p>` : ""}
-          <p><strong>Período:</strong> ${htmlEscape(data.periods)}</p>
-          <p><strong>${htmlEscape(data.paymentLabel)}:</strong> ${htmlEscape(data.paymentValue)}</p>
-          <p><strong>Estado:</strong> ${htmlEscape(data.state)}</p>
-          <p><strong>Fecha:</strong> ${htmlEscape(date(receipt.fecha))}</p>
+          <p><strong>${data.isCompany ? "Empresa:" : "Nombre y Apellido:"}</strong> ${htmlEscape(data.denomination)}</p>
+          <p><strong>Categoría / Monto:</strong> ${htmlEscape(data.category)} / ${amountDetail}</p>
+          <p><strong>Período:</strong> ${htmlEscape(data.periods.join(", "))}</p>
+          <p><strong>Medio de Pago:</strong> ${htmlEscape(data.paymentMethod)}</p>
+          ${statusLine}
         </div>
       </div>
     </div>`;
 };
 
+const legacyReceiptDocumentHtml = ({ title, receipts, actionLabel = "" }) => `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${htmlEscape(title || "Comprobantes de Pago")}</title>
+    <style>${LEGACY_RECEIPT_STYLES}</style>
+  </head>
+  <body>
+    ${
+      actionLabel
+        ? `<div class="print-actions"><button type="button" onclick="window.print()">${htmlEscape(actionLabel)}</button></div>`
+        : ""
+    }
+    ${receipts.map((data) => legacyReceiptBodyHtml(data)).join("")}
+  </body>
+</html>`;
+
+const printableAmount = (value) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const groupLegacyReceiptRecords = (records) => {
+  const groups = new Map();
+
+  records.forEach((item, index) => {
+    const key = String(
+      item.id_socio ??
+        item.id_empresa ??
+        item.documento ??
+        item.denominacion ??
+        `registro-${index}`,
+    );
+    const amount = printableAmount(
+      item.monto ?? item.monto_sugerido ?? item.monto_base ?? 0,
+    );
+    const period = item.periodo_impresion || item.periodo || "—";
+    const current = groups.get(key);
+
+    if (current) {
+      if (!current.periods.includes(period)) current.periods.push(period);
+      current.total += amount;
+      if (!current.unitAmount && amount) current.unitAmount = amount;
+      return;
+    }
+
+    groups.set(key, {
+      item,
+      periods: [period],
+      unitAmount: amount,
+      total: amount,
+    });
+  });
+
+  return Array.from(groups.values());
+};
+
+const legacyReceiptDisplayDataFromRecordGroup = (
+  { item, periods, unitAmount, total },
+  entityType,
+) => {
+  const isCompany = entityType === "EMPRESA";
+  const denomination =
+    item.denominacion ||
+    (isCompany
+      ? item.razon_social
+      : `${item.apellido || ""} ${item.nombre || ""}`.trim()) ||
+    "—";
+
+  return {
+    isCompany,
+    denomination,
+    address: item.domicilio || item.domicilio_2 || item.direccion || "",
+    category: item.categoria || "",
+    paymentMethod: item.medio_pago || item.medio_pago_preferido || "No especificado",
+    periods,
+    unitAmount,
+    total,
+    status: String(item.estado || "PENDIENTE").toUpperCase(),
+  };
+};
+
+export const printPaymentReceiptsBatch = ({ printWindow, records, entityType }) => {
+  if (!printWindow || printWindow.closed) {
+    throw new Error("No se pudo abrir la ventana de impresión.");
+  }
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error("No hay comprobantes para los meses seleccionados.");
+  }
+
+  const groupedRecords = groupLegacyReceiptRecords(records);
+  const receipts = groupedRecords.map((group) =>
+    legacyReceiptDisplayDataFromRecordGroup(group, entityType),
+  );
+
+  printWindow.document.open();
+  printWindow.document.write(
+    legacyReceiptDocumentHtml({
+      title: "Comprobantes de Pago",
+      receipts,
+    }),
+  );
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.setTimeout(() => printWindow.print(), 250);
+  return groupedRecords.length;
+};
+
 export const paymentReceiptHtml = (source, options = {}) => {
-  const receipts = normalizePaymentReceipts(source);
-  const receipt = receipts[0] || normalizePaymentReceipt(source);
+  const normalizedReceipts = normalizePaymentReceipts(source);
+  const receipt = normalizedReceipts[0] || normalizePaymentReceipt(source);
   const outputLabel = options.pdf
     ? "Guardar como PDF"
-    : receipts.length > 1
+    : normalizedReceipts.length > 1
       ? "Imprimir comprobantes"
       : "Imprimir comprobante";
+  const receipts = normalizedReceipts.map((item) => legacyReceiptDisplayData(item));
 
-  return `<!doctype html>
-  <html lang="es">
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>${htmlEscape(receipt.titulo)}</title>
-      <style>
-        @page {
-          size: A4 portrait;
-          margin: 0;
-        }
-        * {
-          box-sizing: border-box;
-        }
-        html {
-          margin: 0;
-          padding: 0;
-        }
-        body {
-          width: 210mm;
-          min-height: 297mm;
-          margin: 0;
-          padding: 0;
-          font-family: Arial, sans-serif;
-          font-size: 12px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          align-items: center;
-          position: relative;
-          transform: rotate(90deg);
-          transform-origin: top left;
-          left: 70%;
-          top: 0;
-          color: #000;
-          background: #fff;
-        }
-        .gcuotas-contenedor {
-          width: 210mm;
-          margin: 10mm 0;
-          break-after: page;
-          page-break-after: always;
-          box-sizing: border-box;
-        }
-        .gcuotas-contenedor:last-child {
-          break-after: auto;
-          page-break-after: auto;
-        }
-        .gcuotas-comprobante {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          box-sizing: border-box;
-        }
-        .gcuotas-talon-socio {
-          width: 60%;
-          padding-left: 12.5mm;
-          padding-top: 13mm;
-        }
-        .gcuotas-talon-cobrador {
-          width: 60mm;
-          padding-left: 5.5mm;
-          padding-top: 16mm;
-        }
-        p {
-          margin-top: 5px;
-          margin-bottom: 1em;
-          font-size: 13px;
-        }
-        .print-actions {
-          position: fixed;
-          top: 8mm;
-          left: 8mm;
-          z-index: 10;
-          transform: rotate(-90deg);
-          transform-origin: top left;
-        }
-        .print-actions button {
-          min-height: 40px;
-          padding: 0 16px;
-          border: 0;
-          border-radius: 8px;
-          color: #fff;
-          background: #f97316;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        @media print {
-          .print-actions {
-            display: none !important;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="print-actions">
-        <button type="button" onclick="window.print()">${outputLabel}</button>
-      </div>
-      ${receipts.map((item) => receiptBodyHtml(item)).join("")}
-    </body>
-  </html>`;
+  return legacyReceiptDocumentHtml({
+    title: receipt.titulo,
+    receipts,
+    actionLabel: outputLabel,
+  });
 };
 
 export const openPaymentReceipt = (source, options = {}) => {
