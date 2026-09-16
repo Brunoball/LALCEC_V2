@@ -22,6 +22,7 @@ import {
 import { apiPost } from "../_shared/api/apiClient";
 import { BOT_PANEL_ROUTE } from "../../config/config";
 import { botPanelGet } from "../BotPanel/api/botApi";
+import { subscribeBotUpdates } from "../BotPanel/api/botUpdates";
 import notificationSound from "../BotPanel/notificacion/notificacion.mp3";
 import logoLalcec from "../../imagenes/logo_lalcec_sf.png";
 import ModalPerfil from "../Perfil/ModalPerfil";
@@ -90,7 +91,6 @@ const NAV_ITEMS = [
 ];
 
 const GROUP_CLICK_DELAY = 0;
-const BOT_NOTIFICATION_POLL_MS = 2000;
 
 const toBotNumber = (value) => {
   const number = Number(value);
@@ -133,56 +133,7 @@ const getBotChatSummary = (chat) => {
   };
 };
 
-// BotPanel considera "Consulta pendiente" solamente cuando el mensaje trae
-// es_consulta=1 y todavía no fue atendido. No usamos modo manual, prioridad,
-// tipo de notificación ni el texto del mensaje para evitar falsos positivos.
-const isPendingPersonalAttentionMessage = (message) =>
-  Number(message?.es_consulta || 0) === 1 &&
-  Number(message?.consulta_atendida || 0) !== 1;
-
-const getBotAttentionMessageToken = (message) =>
-  String(
-    message?.id ||
-      message?.consulta_fecha ||
-      message?.fecha ||
-      `${message?.wa_id || ""}:${message?.mensaje || "consulta"}`,
-  );
-
-const getBotChatChangeSignature = (chat, summary) =>
-  [
-    summary.id,
-    summary.unread,
-    summary.pendingQueries,
-    toBotNumber(chat?.total || 0),
-    toBotNumber(chat?.ultima_ts || chat?.updated_at || 0),
-    String(chat?.ultima_fecha || ""),
-    String(chat?.ultimo_mensaje || ""),
-  ].join("|");
-
-const inspectPendingPersonalAttention = async (summary) => {
-  if (!summary.id || summary.unread <= 0) {
-    return { pendingQueries: 0, attentionToken: "" };
-  }
-
-  try {
-    const data = await botPanelGet("panel_mensajes", {
-      wa_id: summary.id,
-      limit: Math.max(60, Math.min(220, summary.unread + 80)),
-    });
-    const messages = Array.isArray(data?.mensajes) ? data.mensajes : [];
-    const pending = messages.filter(isPendingPersonalAttentionMessage);
-
-    return {
-      pendingQueries: pending.length,
-      attentionToken: pending.map(getBotAttentionMessageToken).join("|"),
-    };
-  } catch {
-    // Si el detalle falla, panel_chats sigue funcionando como fallback.
-    return { pendingQueries: 0, attentionToken: "" };
-  }
-};
-
-const calculateBotNotificationsFromChats = (rows, detailsByChat = new Map()) => {
+const calculateBotNotificationsFromChats = (rows) => {
   const chats = Array.isArray(rows) ? rows : [];
   let normal = 0;
   let urgent = 0;
@@ -191,14 +142,9 @@ const calculateBotNotificationsFromChats = (rows, detailsByChat = new Map()) => 
 
   for (const chat of chats) {
     const summary = getBotChatSummary(chat);
-    const detail = detailsByChat.get(summary.id) || {};
-
-    // panel_chats es la fuente rápida. panel_mensajes completa el dato cuando
-    // ese endpoint todavía no expone consultas_pendientes.
-    const pendingQueries = Math.max(
-      summary.pendingQueries,
-      Math.max(0, toBotNumber(detail.pendingQueries || 0)),
-    );
+    // El backend calcula es_consulta=1 y consulta_atendida=0 en la misma
+    // consulta de chats. No hace falta abrir una petición por conversación.
+    const pendingQueries = summary.pendingQueries;
 
     const isReceiptAlert =
       summary.priority === "aprobacion_comprobante" ||
@@ -212,10 +158,6 @@ const calculateBotNotificationsFromChats = (rows, detailsByChat = new Map()) => 
           ? Math.max(1, Math.min(summary.unread, 1))
           : 0;
 
-    // Igual que Cooperadora en cantidad: una consulta pendiente consume uno de
-    // los unread verdes y lo transforma en rojo. La diferencia es que acá el
-    // fallback lee es_consulta directamente del mensaje para no depender de un
-    // contador que en este backend puede llegar tarde o quedar en cero.
     const urgentForChat = Math.min(summary.unread, pendingQueries);
     const classifiedForChat = Math.min(
       summary.unread,
@@ -231,7 +173,7 @@ const calculateBotNotificationsFromChats = (rows, detailsByChat = new Map()) => 
       unread: summary.unread,
       urgentCount: urgentForChat,
       pendingQueries,
-      attentionToken: String(detail.attentionToken || ""),
+      attentionToken: String(chat?.ultima_consulta_id || "0"),
     });
   }
 
@@ -319,8 +261,6 @@ export default function Principal() {
   const botNotificationAudioContextRef = useRef(null);
   const previousBotChatsRef = useRef([]);
   const firstBotChatsLoadRef = useRef(true);
-  const botNotificationRequestRef = useRef(false);
-  const botAttentionDetailsCacheRef = useRef(new Map());
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -467,63 +407,12 @@ export default function Principal() {
     };
 
     const refreshBotNotifications = async () => {
-      if (botNotificationRequestRef.current) return;
-      botNotificationRequestRef.current = true;
-
       try {
         const data = await botPanelGet("panel_chats");
         if (!mounted || !Array.isArray(data?.chats)) return;
 
-        // panel_chats sirve para unread/comprobantes. Para atención personalizada
-        // verificamos también el mismo flag de mensaje que usa BotPanel:
-        // es_consulta=1 && consulta_atendida=0. Esto evita los dos errores que
-        // tuvimos antes: "todo rojo" por modo/prioridad y "todo verde" porque
-        // consultas_pendientes no estaba llegando en este backend.
-        const detailsByChat = new Map();
-        const now = Date.now();
-        const activeIds = new Set();
-
-        await Promise.all(
-          data.chats.map(async (chat) => {
-            const summary = getBotChatSummary(chat);
-            if (!summary.id || summary.unread <= 0) return;
-
-            activeIds.add(summary.id);
-            const signature = getBotChatChangeSignature(chat, summary);
-            const cached = botAttentionDetailsCacheRef.current.get(summary.id);
-            const cacheStillFresh =
-              cached &&
-              cached.signature === signature &&
-              now - Number(cached.checkedAt || 0) < 3000;
-
-            if (cacheStillFresh) {
-              detailsByChat.set(summary.id, cached.detail);
-              return;
-            }
-
-            const detail = await inspectPendingPersonalAttention(summary);
-            botAttentionDetailsCacheRef.current.set(summary.id, {
-              signature,
-              checkedAt: now,
-              detail,
-            });
-            detailsByChat.set(summary.id, detail);
-          }),
-        );
-
-        // Limpiamos chats ya leídos/eliminados para que una solicitud vieja no
-        // pueda volver a disparar sonido más adelante.
-        for (const id of botAttentionDetailsCacheRef.current.keys()) {
-          if (!activeIds.has(id)) {
-            botAttentionDetailsCacheRef.current.delete(id);
-          }
-        }
-
-        if (!mounted) return;
-
         const { badges, snapshot } = calculateBotNotificationsFromChats(
           data.chats,
-          detailsByChat,
         );
 
         if (firstBotChatsLoadRef.current) {
@@ -544,8 +433,8 @@ export default function Principal() {
             const becameUrgent =
               nextChat.urgentCount > 0 && previousUrgentCount === 0;
             const tokenChanged =
-              !!nextChat.attentionToken &&
-              nextChat.attentionToken !== previousChat?.attentionToken;
+              nextChat.urgentCount > 0 &&
+              Number(nextChat.attentionToken) > Number(previousChat?.attentionToken || 0);
 
             return pendingIncreased || becameUrgent || tokenChanged;
           });
@@ -561,31 +450,16 @@ export default function Principal() {
           urgent: Math.max(0, toBotNumber(badges.urgent)),
           approval: Math.max(0, toBotNumber(badges.approval)),
         });
-      } catch {
-        // Si el bot está temporalmente inaccesible, el sistema principal sigue funcionando.
-      } finally {
-        botNotificationRequestRef.current = false;
+      } catch (error) {
+        // El monitor reintenta con espera creciente y mantiene los contadores.
+        throw error;
       }
     };
 
-    refreshBotNotifications();
-    const timer = window.setInterval(
-      refreshBotNotifications,
-      BOT_NOTIFICATION_POLL_MS,
-    );
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshBotNotifications();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
+    const unsubscribe = subscribeBotUpdates(refreshBotNotifications);
     return () => {
       mounted = false;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribe();
     };
   }, []);
 

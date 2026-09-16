@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadTestEnv } = require('./env.helper');
+const { waitForHostingerRequestSlot } = require('./hostinger-throttle.helper');
 
 loadTestEnv();
 
@@ -106,6 +107,7 @@ async function apiResult(requestContext, action, options = {}) {
   };
   if (options.data !== undefined) requestOptions.data = options.data;
 
+  await waitForHostingerRequestSlot();
   const response = await requestContext.fetch(
     actionUrl(action, options.params),
     { ...requestOptions, method },

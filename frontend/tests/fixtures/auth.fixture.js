@@ -1,14 +1,13 @@
-const path = require('path');
 const base = require('@playwright/test');
 const { ensureAuthSession, normalizedApiBase } = require('../helpers/api.helper');
 const { SESSION_KEY } = require('../helpers/auth.helper');
-const { normalizedBotApiBase } = require('../helpers/bot.helper');
+const { installHostingerPageThrottle } = require('../helpers/hostinger-throttle.helper');
 
 const test = base.test.extend({
   page: async ({ page, request }, use, testInfo) => {
+    await installHostingerPageThrottle(page);
     const session = await ensureAuthSession(request);
     const appOrigin = new URL(process.env.PW_BASE_URL || 'http://localhost:3000').origin;
-    const isBotSpec = path.basename(testInfo.file || '') === '14-panel-bot.spec.js';
     await page.addInitScript(
       ({ origin, key, value }) => {
         try {
@@ -34,17 +33,11 @@ const test = base.test.extend({
       } catch (_error) {
         // Una URL no válida seguirá tratándose como cualquier otra respuesta.
       }
-      const directBotApi = url.startsWith(normalizedBotApiBase());
-      const monitoredApi =
-        url.startsWith(normalizedApiBase()) || directBotApi;
-
-      // Principal consulta el Panel Bot en segundo plano para mostrar su badge.
-      // En local esa lectura puede pasar por bot_panel_proxy; apuntando a Hostinger
-      // puede ir directo a /api/bot_whatsapp. En ambos casos es una función opcional
-      // para Dashboard, Socios, Cuotas, etc., y no debe convertir esos specs en rojo.
-      // El spec del Panel Bot conserva el monitoreo estricto de sus propias llamadas.
-      const optionalBotFailure = !isBotSpec && (isLocalBotProxy || directBotApi);
-      if (monitoredApi && response.status() >= 500 && !optionalBotFailure) {
+      // El Panel Bot queda fuera de esta suite. Si Principal consulta su badge
+      // mediante el proxy local, esa respuesta no forma parte de las verificaciones
+      // técnicas de los módulos administrativos.
+      const monitoredApi = url.startsWith(normalizedApiBase()) && !isLocalBotProxy;
+      if (monitoredApi && response.status() >= 500) {
         technicalFailures.push(`HTTP ${response.status()} en ${url}`);
       }
     });

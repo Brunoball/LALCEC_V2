@@ -646,6 +646,7 @@ export default function Cuotas() {
   const [selectedPrintMonths, setSelectedPrintMonths] = useState([]);
   const [printingAll, setPrintingAll] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const totalsController = useRef(null);
   const [estadoTotales, setEstadoTotales] = useState({
     DEUDORES: null,
     PAGADOS: null,
@@ -657,7 +658,7 @@ export default function Cuotas() {
     const timeout = window.setTimeout(() => {
       setDebouncedBuscar(buscar.trim());
       setPagina(1);
-    }, 250);
+    }, 400);
     return () => window.clearTimeout(timeout);
   }, [buscar]);
 
@@ -699,67 +700,32 @@ export default function Cuotas() {
 
   const cargarTotalesEstado = useCallback(async () => {
     const currentRequest = ++totalsRequestId.current;
-
-    setEstadoTotales({
-      DEUDORES: null,
-      PAGADOS: null,
-      CONDONADOS: null,
-      SALDOS_FAVOR: null,
-    });
-
+    totalsController.current?.abort();
+    const controller = new AbortController();
+    totalsController.current = controller;
+    setEstadoTotales({ DEUDORES: null, PAGADOS: null, CONDONADOS: null, SALDOS_FAVOR: null });
     try {
-      const [deudoresResult, pagadosResult, condonadosResult, saldosResult] = await Promise.allSettled([
-        cuotasApi.listar({
-          ...filtrosTotales,
-          estado: "DEUDORES",
-          ...(medioPago ? { id_medio_pago: medioPago } : {}),
-        }),
-        cuotasApi.listar({
-          ...filtrosTotales,
-          estado: "PAGADOS",
-          ...(medioPago ? { id_medio_pago: medioPago } : {}),
-        }),
-        cuotasApi.listar({
-          ...filtrosTotales,
-          estado: "CONDONADOS",
-          ...(medioPago ? { id_medio_pago: medioPago } : {}),
-        }),
-        cuotasApi.saldosFavor({
-          tipo,
-          buscar: debouncedBuscar,
-          pagina: 1,
-          por_pagina: 1,
-        }),
-      ]);
-
+      const result = await cuotasApi.totalesEstado({
+        ...filtrosTotales,
+        ...(medioPago ? { id_medio_pago: medioPago } : {}),
+      }, { signal: controller.signal });
       if (currentRequest !== totalsRequestId.current) return;
-
-      const totalFromResponse = (response) =>
-        Number(
-          response?.paginacion?.total ??
-            response?.resumen?.total ??
-            response?.items?.length ??
-            0,
-        );
-
-      const totalFromResult = (result) =>
-        result.status === "fulfilled" ? totalFromResponse(result.value) : null;
-
-      setEstadoTotales((current) => ({
-        DEUDORES: totalFromResult(deudoresResult) ?? current.DEUDORES,
-        PAGADOS: totalFromResult(pagadosResult) ?? current.PAGADOS,
-        CONDONADOS: totalFromResult(condonadosResult) ?? current.CONDONADOS,
-        SALDOS_FAVOR: totalFromResult(saldosResult) ?? current.SALDOS_FAVOR,
-      }));
+      setEstadoTotales({
+        DEUDORES: Number(result.totales.DEUDORES),
+        PAGADOS: Number(result.totales.PAGADOS),
+        CONDONADOS: Number(result.totales.CONDONADOS),
+        SALDOS_FAVOR: Number(result.totales.SALDOS_FAVOR),
+      });
     } catch {
-      // El contador es informativo: una falla no debe bloquear la tabla principal.
+      // Contadores informativos: una falla no bloquea la tabla principal.
     }
-  }, [filtrosTotales, medioPago, tipo, debouncedBuscar]);
+  }, [filtrosTotales, medioPago]);
 
   useEffect(() => {
     void cargarTotalesEstado();
     return () => {
       totalsRequestId.current += 1;
+      totalsController.current?.abort();
     };
   }, [cargarTotalesEstado]);
 

@@ -44,10 +44,12 @@ function pdo_connection(string $host, int $port, string $database, string $user,
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_PERSISTENT => true,
             ]);
         } catch (PDOException $error) {
             $lastError = $error;
-            if (!pdo_connection_error_is_transient($error) || $attempt >= count($retryDelaysUs)) {
+            if (str_contains(strtolower($error->getMessage()), 'operation not permitted')
+                || !pdo_connection_error_is_transient($error) || $attempt >= count($retryDelaysUs)) {
                 throw $error;
             }
             usleep($retryDelaysUs[$attempt]);

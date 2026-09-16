@@ -14,6 +14,7 @@ import {
   botPanelGet,
   botPanelPost,
 } from "./api/botApi";
+import { requestBotRefresh, subscribeBotUpdates } from "./api/botUpdates";
 import BotSidebar from "./components/BotSidebar";
 import BotConversationHeader from "./components/BotConversationHeader";
 import BotMessageList from "./components/BotMessageList";
@@ -62,7 +63,6 @@ const BotPanel = () => {
 
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [refreshingChats, setRefreshingChats] = useState(false);
 
   const [errorChats, setErrorChats] = useState("");
   const [errorMsgs, setErrorMsgs] = useState("");
@@ -105,8 +105,11 @@ const BotPanel = () => {
   const msgEndRef = useRef(null);
   const messagesRef = useRef(null);
 
-  const lastHashRef = useRef("");
-  const globalHashRef = useRef("");
+  const updatesRef = useRef(null);
+  const messageVersionRef = useRef({ id: null, hash: null });
+  const chatsRequestRef = useRef(null);
+  const messagesRequestsRef = useRef(new Map());
+  const etiquetasVersionRef = useRef(null);
   const pendingScrollRef = useRef(null);
 
   const selectedIdRef = useRef(null);
@@ -196,11 +199,10 @@ const BotPanel = () => {
     };
   }, [mensajes, selectedId, scrollToBottom]);
 
-  const markSeen = useCallback(async (waId) => {
+  const markSeen = useCallback(async (waId, lastSeenId) => {
     if (!waId) return;
-    try {
-      await botPanelGet("panel_mark_seen", { wa_id: waId });
-    } catch {}
+    await botPanelGet("panel_mark_seen", { wa_id: waId, last_seen_id: lastSeenId });
+    requestBotRefresh();
   }, []);
 
   const markUnread = useCallback(async (waId) => {
@@ -238,9 +240,10 @@ const BotPanel = () => {
     try {
       const data = await botManagementGet("etiquetas_list");
       setEtiquetas(Array.isArray(data.etiquetas) ? data.etiquetas : []);
+      return data;
     } catch (e) {
       setErrorEtiquetas(e?.message || "No se pudieron cargar etiquetas");
-      setEtiquetas([]);
+      return null;
     } finally {
       setLoadingEtiquetas(false);
     }
@@ -271,94 +274,100 @@ const BotPanel = () => {
 
   const fetchChats = useCallback(
     async (silent = false) => {
-      if (silent) setRefreshingChats(true);
-      else setLoadingChats(true);
+      if (chatsRequestRef.current) return chatsRequestRef.current;
+      const pending = (async () => {
+        if (!silent) setLoadingChats(true);
 
-      setErrorChats("");
+        setErrorChats("");
 
-      try {
-        const data = await botPanelGet("panel_chats");
+        try {
+          const data = await botPanelGet("panel_chats");
 
-        const rows = Array.isArray(data.chats) ? data.chats : [];
-        const mapped = rows.map((c) => {
-          const modo = pickModo(c);
-          const unread = Number(c.unread || 0);
-          const prioridad = normStr(c.prioridad || "normal");
-          const consultasPendientes = Number(
-            c.consultas_pendientes || c.pending_consultas || 0
-          );
-          const chatTone =
-            consultasPendientes > 0
-              ? "consulta"
-              : prioridad === "alta"
-                ? "danger"
-                : "normal";
+          const rows = Array.isArray(data.chats) ? data.chats : [];
+          const mapped = rows.map((c) => {
+            const modo = pickModo(c);
+            const unread = Number(c.unread || 0);
+            const prioridad = normStr(c.prioridad || "normal");
+            const consultasPendientes = Number(
+              c.consultas_pendientes || c.pending_consultas || 0
+            );
+            const chatTone =
+              consultasPendientes > 0
+                ? "consulta"
+                : prioridad === "alta"
+                  ? "danger"
+                  : "normal";
 
-          const urgente =
-            consultasPendientes > 0 ||
-            (modo === "manual" && unread > 0) ||
-            prioridad === "alta";
+            const urgente =
+              consultasPendientes > 0 ||
+              (modo === "manual" && unread > 0) ||
+              prioridad === "alta";
 
-          return {
-            id: normStr(c.wa_id),
-            nombre: pickNombre(c),
+            return {
+              id: normStr(c.wa_id),
+              nombre: pickNombre(c),
 
-            etiqueta: normStr(c.etiqueta || ""),
-            etiqueta_id: c?.etiqueta_id ?? c?.etiquetaId ?? null,
+              etiqueta: normStr(c.etiqueta || ""),
+              etiqueta_id: c?.etiqueta_id ?? c?.etiquetaId ?? null,
 
-            ventana24hTs: toTs(c?.ventana_24h),
+              ventana24hTs: toTs(c?.ventana_24h),
 
-            online: !!c.online,
-            ultimo: normStr(c.ultimo_mensaje || ""),
-            updatedAt: Number(c.ultima_ts || 0) > 0 ? Number(c.ultima_ts) : (toTs(c.ultima_fecha) ?? Date.now()),
-            total: Number(c.total || 0),
-            prioridad,
-            unread,
-            modo,
-            urgente,
-            consultasPendientes,
-            chatTone,
-          };
-        });
+              online: !!c.online,
+              ultimo: normStr(c.ultimo_mensaje || ""),
+              updatedAt: Number(c.ultima_ts || 0) > 0 ? Number(c.ultima_ts) : (toTs(c.ultima_fecha) ?? Date.now()),
+              total: Number(c.total || 0),
+              prioridad,
+              unread,
+              modo,
+              urgente,
+              consultasPendientes,
+              chatTone,
+            };
+          });
 
-        setChats((prevCurrent) => {
-          const prevList = prevChatsRef.current?.length
-            ? prevChatsRef.current
-            : prevCurrent;
+          setChats((prevCurrent) => {
+            const prevList = prevChatsRef.current?.length
+              ? prevChatsRef.current
+              : prevCurrent;
 
-          if (firstChatsLoadRef.current) {
-            firstChatsLoadRef.current = false;
-          } else {
-            let mustPlayUrgent = false;
+            if (firstChatsLoadRef.current) {
+              firstChatsLoadRef.current = false;
+            } else {
+              let mustPlayUrgent = false;
 
-            for (const nextChat of mapped) {
-              const prevChat = prevList.find((x) => x.id === nextChat.id);
-              const prevUnread = Number(prevChat?.unread || 0);
-              const nextUnread = Number(nextChat?.unread || 0);
+              for (const nextChat of mapped) {
+                const prevChat = prevList.find((x) => x.id === nextChat.id);
+                const prevUnread = Number(prevChat?.unread || 0);
+                const nextUnread = Number(nextChat?.unread || 0);
 
-              const unreadIncreased = nextUnread > prevUnread;
-              const isUrgentNow = !!nextChat.urgente;
+                const unreadIncreased = nextUnread > prevUnread;
+                const isUrgentNow = !!nextChat.urgente;
 
-              if (unreadIncreased && isUrgentNow) {
-                mustPlayUrgent = true;
-                break;
+                if (unreadIncreased && isUrgentNow) {
+                  mustPlayUrgent = true;
+                  break;
+                }
+              }
+
+              if (mustPlayUrgent) {
+                playUrgentSound();
               }
             }
 
-            if (mustPlayUrgent) {
-              playUrgentSound();
-            }
-          }
-
-          prevChatsRef.current = mapped;
-          return mapped;
-        });
-      } catch (err) {
-        setErrorChats(err?.message || "Error cargando chats");
-      } finally {
-        if (silent) setRefreshingChats(false);
-        else setLoadingChats(false);
-      }
+            prevChatsRef.current = mapped;
+            return mapped;
+          });
+          return rows;
+        } catch (err) {
+          setErrorChats(err?.message || "Error cargando chats");
+          return null;
+        } finally {
+          if (!silent) setLoadingChats(false);
+        }
+      })();
+      chatsRequestRef.current = pending;
+      try { return await pending; }
+      finally { if (chatsRequestRef.current === pending) chatsRequestRef.current = null; }
     },
     [playUrgentSound]
   );
@@ -382,131 +391,95 @@ const BotPanel = () => {
 
   const fetchMensajes = useCallback(
     async (waId, { silent = false } = {}) => {
-      if (!waId) return;
+      if (!waId) return null;
+      const current = messagesRequestsRef.current.get(waId);
+      if (current) return current;
+      // Capturar ANTES de leer. Un mensaje que llega durante la petición debe
+      // seguir siendo una novedad en el próximo ciclo.
+      const requestedHash = updatesRef.current?.chat_hashes?.[waId] ?? null;
+      const pending = (async () => {
+        if (!silent) setLoadingMsgs(true);
+        setErrorMsgs("");
 
-      if (!silent) setLoadingMsgs(true);
-      setErrorMsgs("");
+        try {
+          const data = await botPanelGet("panel_mensajes", {
+            wa_id: waId,
+            limit: 600,
+          });
 
-      try {
-        const data = await botPanelGet("panel_mensajes", {
-          wa_id: waId,
-          limit: 600,
-        });
+          const rows = Array.isArray(data.mensajes) ? data.mensajes : [];
 
-        const rows = Array.isArray(data.mensajes) ? data.mensajes : [];
+          const mapped = rows.map((m) => {
+            const url = normStr(m.archivo_url || m.media_url || "");
+            const mime =
+              normStr(m.media_mime || "") || (url ? inferMimeFromUrl(url) : "");
+            const name =
+              normStr(m.media_name || "") || (url ? inferNameFromUrl(url) : "");
+            const size = Number(m.media_size || 0);
 
-        const mapped = rows.map((m) => {
-          const url = normStr(m.archivo_url || m.media_url || "");
-          const mime =
-            normStr(m.media_mime || "") || (url ? inferMimeFromUrl(url) : "");
-          const name =
-            normStr(m.media_name || "") || (url ? inferNameFromUrl(url) : "");
-          const size = Number(m.media_size || 0);
+            const tipo =
+              normStr(m.tipo || "") ||
+              (url
+                ? isPdfMime(mime)
+                  ? "document"
+                  : isImageMime(mime)
+                  ? "image"
+                  : isAudioMime(mime)
+                  ? "audio"
+                  : "file"
+                : "text");
 
-          const tipo =
-            normStr(m.tipo || "") ||
-            (url
-              ? isPdfMime(mime)
-                ? "document"
-                : isImageMime(mime)
-                ? "image"
-                : isAudioMime(mime)
-                ? "audio"
-                : "file"
-              : "text");
+            return {
+              id: Number(m.id) || m.id || `${m.fecha}-${Math.random()}`,
+              wa_id: normStr(m.wa_id),
+              text: normStr(m.mensaje),
+              emisor: normStr(m.emisor),
+              prioridad: normStr(m.prioridad || "normal"),
+              notificacion_tipo: normStr(m.notificacion_tipo || m.tipo_notificacion || "normal"),
+              ts: toTs(m.fecha) ?? Date.now(),
 
-          return {
-            id: Number(m.id) || m.id || `${m.fecha}-${Math.random()}`,
-            wa_id: normStr(m.wa_id),
-            text: normStr(m.mensaje),
-            emisor: normStr(m.emisor),
-            prioridad: normStr(m.prioridad || "normal"),
-            notificacion_tipo: normStr(m.notificacion_tipo || m.tipo_notificacion || "normal"),
-            ts: toTs(m.fecha) ?? Date.now(),
+              es_consulta: Number(m.es_consulta || 0) === 1,
+              consulta_atendida: Number(m.consulta_atendida || 0) === 1,
+              consulta_fecha: toTs(m.consulta_fecha),
 
-            es_consulta: Number(m.es_consulta || 0) === 1,
-            consulta_atendida: Number(m.consulta_atendida || 0) === 1,
-            consulta_fecha: toTs(m.consulta_fecha),
+              tipo,
+              media_url: url,
+              media_mime: mime,
+              media_name: name,
+              media_size: size,
+            };
+          });
 
-            tipo,
-            media_url: url,
-            media_mime: mime,
-            media_name: name,
-            media_size: size,
-          };
-        });
+          if (selectedIdRef.current !== waId) return;
 
-        if (selectedIdRef.current !== waId) return;
+          // Mantener el chat siempre pegado al último mensaje, incluso en refrescos silenciosos.
+          pendingScrollRef.current = "auto";
 
-        // Mantener el chat siempre pegado al último mensaje, incluso en refrescos silenciosos.
-        pendingScrollRef.current = "auto";
+          setMensajes(mapped);
 
-        setMensajes(mapped);
-
-        await markSeen(waId);
-        await fetchChats(true);
-      } catch (err) {
-        setErrorMsgs(err?.message || "Error cargando mensajes");
-        setMensajes([]);
-      } finally {
-        if (!silent) setLoadingMsgs(false);
-      }
+          const lastIncomingId = rows.reduce((last, message) =>
+            ["usuario", "user"].includes(String(message.emisor || "").trim().toLowerCase())
+              ? Math.max(last, Number(message.id) || 0) : last, 0);
+          // Una pestaña oculta no debe marcar mensajes nuevos como leídos.
+          if (document.visibilityState !== "hidden") await markSeen(waId, lastIncomingId);
+          messageVersionRef.current = { id: waId, hash: requestedHash };
+          return data;
+        } catch (err) {
+          if (selectedIdRef.current === waId) {
+            setErrorMsgs(err?.message || "Error cargando mensajes");
+            if (!silent) setMensajes([]);
+          }
+          return null;
+        } finally {
+          if (!silent && selectedIdRef.current === waId) setLoadingMsgs(false);
+        }
+      })();
+      messagesRequestsRef.current.set(waId, pending);
+      try { return await pending; }
+      finally { if (messagesRequestsRef.current.get(waId) === pending) messagesRequestsRef.current.delete(waId); }
     },
-    [markSeen, fetchChats]
+    [markSeen]
   );
-
-  const getHash = useCallback(async (waId) => {
-    try {
-      const data = await botPanelGet("panel_hash", { wa_id: waId });
-      return String(data.hash ?? "");
-    } catch {
-      return "";
-    }
-  }, []);
-
-  const getGlobalHash = useCallback(async () => {
-    try {
-      const data = await botPanelGet("panel_global_hash");
-      return String(data.hash ?? "");
-    } catch {
-      return "";
-    }
-  }, []);
-
-  const pollSelectedChat = useCallback(async () => {
-    const waId = selectedIdRef.current;
-    if (!waId) return;
-
-    try {
-      const newHash = await getHash(waId);
-
-      if (!lastHashRef.current) {
-        lastHashRef.current = newHash;
-        return;
-      }
-
-      if (newHash && newHash !== lastHashRef.current) {
-        lastHashRef.current = newHash;
-        await fetchMensajes(waId, { silent: true });
-      }
-    } catch {}
-  }, [fetchMensajes, getHash]);
-
-  const pollGlobal = useCallback(async () => {
-    try {
-      const newHash = await getGlobalHash();
-
-      if (!globalHashRef.current) {
-        globalHashRef.current = newHash;
-        return;
-      }
-
-      if (newHash && newHash !== globalHashRef.current) {
-        globalHashRef.current = newHash;
-        if (!refreshingChats && !loadingChats) fetchChats(true);
-      }
-    } catch {}
-  }, [fetchChats, getGlobalHash, refreshingChats, loadingChats]);
 
   const setModeDB = useCallback(
     async (nextMode) => {
@@ -546,43 +519,53 @@ const BotPanel = () => {
   );
 
   useEffect(() => {
-    fetchChats(false);
-    fetchEtiquetas();
-
-    (async () => {
-      const h = await getGlobalHash();
-      globalHashRef.current = h || "";
-    })();
-  }, [fetchChats, fetchEtiquetas, getGlobalHash]);
+    let mounted = true;
+    const unsubscribe = subscribeBotUpdates(async (snapshot) => {
+      if (!mounted) return;
+      updatesRef.current = snapshot;
+      // Si una acción ya estaba leyendo antes de esta señal, dejarla terminar
+      // y leer la versión nueva; no dar por entregada una respuesta anterior.
+      if (chatsRequestRef.current) await chatsRequestRef.current;
+      const rows = await fetchChats(!firstChatsLoadRef.current);
+      if (!rows) throw new Error("No se pudieron actualizar los chats.");
+      if (!mounted) return;
+      if (etiquetasVersionRef.current !== snapshot.etiquetas_hash) {
+        const loaded = await fetchEtiquetas();
+        if (!loaded) throw new Error("No se pudieron actualizar las etiquetas.");
+        etiquetasVersionRef.current = snapshot.etiquetas_hash;
+      }
+      if (!mounted) return;
+      const waId = selectedIdRef.current;
+      if (!waId || document.visibilityState === "hidden") return;
+      const pendingMessages = messagesRequestsRef.current.get(waId);
+      if (pendingMessages) await pendingMessages;
+      if (selectedIdRef.current !== waId) return;
+      const version = messageVersionRef.current;
+      const nextHash = snapshot.chat_hashes?.[waId] ?? null;
+      if (version.id !== waId || version.hash !== nextHash) {
+        const loaded = await fetchMensajes(waId, { silent: true });
+        if (!loaded) throw new Error("No se pudo actualizar la conversación.");
+      }
+    }, (error) => {
+      if (mounted) setErrorChats(error?.message || "No se pudieron consultar las novedades del bot.");
+    });
+    return () => { mounted = false; unsubscribe(); };
+  }, [fetchChats, fetchEtiquetas, fetchMensajes]);
 
   useEffect(() => {
-    if (!selectedId) return;
-
-    lastHashRef.current = "";
-
-    (async () => {
-      await fetchMensajes(selectedId, { silent: false });
-      const h = await getHash(selectedId);
-      lastHashRef.current = h || "";
-    })();
-  }, [selectedId, fetchMensajes, getHash]);
+    if (selectedId) void fetchMensajes(selectedId, { silent: false });
+  }, [selectedId, fetchMensajes]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    const t = setInterval(() => pollSelectedChat(), 900);
-    return () => clearInterval(t);
-  }, [selectedId, pollSelectedChat]);
-
-  useEffect(() => {
-    const t = setInterval(() => pollGlobal(), 900);
-    return () => clearInterval(t);
-  }, [pollGlobal]);
-
-  useEffect(() => {
-    const t = setInterval(() => fetchChats(true), 30000);
-    return () => clearInterval(t);
-  }, [fetchChats]);
-
+    const onVisible = () => {
+      const waId = selectedIdRef.current;
+      if (document.visibilityState === "visible" && waId) {
+        void fetchMensajes(waId, { silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchMensajes]);
 
   const tagCounts = useMemo(() => {
     const counts = { all: chats.length, sin: 0, byId: {}, byName: {} };
@@ -935,11 +918,7 @@ const BotPanel = () => {
 
         clearAttached();
 
-        lastHashRef.current = "";
         await fetchMensajes(waId, { silent: true });
-
-        const h = await getHash(waId);
-        lastHashRef.current = h || "";
 
         await fetchChats(true);
       } catch (err) {
@@ -995,11 +974,7 @@ const BotPanel = () => {
         usar_plantilla_si_ventana_expirada: CONSULTA_MANUAL_TEMPLATE_ENABLED,
       });
 
-      lastHashRef.current = "";
       await fetchMensajes(waId, { silent: true });
-
-      const h = await getHash(waId);
-      lastHashRef.current = h || "";
 
       await fetchChats(true);
     } catch (err) {

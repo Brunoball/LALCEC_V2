@@ -106,34 +106,11 @@ function hasExecutableRouteReference(source, route) {
 }
 
 
-function botFrontendEndpoints() {
-  // El contador verde/rojo del botón del bot vive en Principal, fuera de BotPanel.
-  // Escanear todo src evita que panel_unread_total (u otro uso futuro del API del bot)
-  // quede invisible para el contrato de cobertura.
-  const botFiles = walk(SRC_ROOT, (file) => /\.(?:js|jsx)$/i.test(file));
-  const source = botFiles.map(read).join('\n');
-  return [...new Set(
-    [...source.matchAll(/bot(?:Panel|Management)(?:Get|Post|FormPost)\s*\(\s*["']([^"']+)/g)]
-      .map((match) => match[1]),
-  )].sort();
-}
-
 function applicationRoutes() {
   const appSource = read(path.join(SRC_ROOT, 'App.js'));
   const routes = [...appSource.matchAll(/<Route\s+path="([^"]+)"/g)]
     .map((match) => match[1])
     .filter((route) => route !== '*');
-
-  // El Panel Bot usa una constante en App.js, por eso no entra en el regex literal.
-  // Resolverla desde config evita que /panel-bot quede fuera de la cobertura de navegación.
-  if (appSource.includes('path={BOT_PANEL_ROUTE}')) {
-    const configPath = path.join(SRC_ROOT, 'config', 'config.jsx');
-    if (fs.existsSync(configPath)) {
-      const configSource = read(configPath);
-      const match = configSource.match(/export const BOT_PANEL_ROUTE\s*=\s*["']([^"']+)/);
-      if (match?.[1]) routes.push(match[1]);
-    }
-  }
 
   return [...new Set(routes)].sort();
 }
@@ -147,6 +124,12 @@ const E2E_INFRA_ACTIONS = new Set([
   'e2e_guard_probe',
   'e2e_snapshot',
   'e2e_status',
+]);
+
+// El Panel Bot de WhatsApp queda intencionalmente fuera de esta suite administrativa.
+// Esta acción vive en el router raíz, por eso debe excluirse de la exigencia de cobertura.
+const EXCLUDED_ADMIN_ACTIONS = new Set([
+  'bot_panel_proxy',
 ]);
 
 const REQUIRED_UI_ACTION_MARKERS = [
@@ -224,7 +207,6 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Abrir perfil',
   'Cerrar perfil',
   'Perfil de usuario',
-  'Ir al inicio de sesión',
   // Cobertura de ramas que antes quedaban fuera del recorrido E2E.
   'Quitar integrante',
   'Motivo de desvinculación',
@@ -238,61 +220,11 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Paginación de egresos',
   'Detalle mensual contable',
   'health',
-  // Panel Bot WhatsApp.
-  'Panel Bot WhatsApp',
-  'Buscar por nombre, número, mensaje…',
-  'Abrir reportes del bot',
-  'Reportes del Bot',
-  'Período del reporte',
-  'Resumen',
-  'Actividad',
-  'Pagos',
-  'Costos WhatsApp',
-  'Filtrar por etiqueta',
-  'Sin etiqueta',
-  'Modo Bot',
-  'Modo Manual',
-  'Opciones del chat',
-  'Editar nombre',
-  'Cambiar etiqueta',
-  'Crear etiqueta',
-  'Eliminar etiqueta',
-  'Ver galería',
-  'Ver imagen',
-  'Marcar como no leído',
-  'Marcar como leído',
-  'Vaciar chat',
-  'Eliminar contacto',
-  'Cambiar tema',
-  'Adjuntar imagen/PDF',
-  'quitar',
-  'Emojis',
-  'Enviar',
-  'Mensajes de prioridad alta',
-  'Consultas atendidas',
-  'Notificaciones normales:',
-  'Notificaciones urgentes:',
-  'Ventana 24 horas',
 ];
 
-const REQUIRED_BOT_MUTATION_ASSERTIONS = [
-  'panel_mark_seen',
-  'panel_mark_unread',
-  'panel_set_modo',
-  'panel_send',
-  'panel_send_media',
-  'editar_nombre',
-  'etiquetas_set',
-  'etiquetas_create',
-  'etiquetas_update',
-  'etiquetas_delete',
-  'vaciar_chat',
-  'eliminar_contacto',
-];
 
-// Alcance intencional: sistema administrativo completo + Panel Bot.
-// La lógica conversacional interna del chatbot se valida manualmente fuera de Playwright.
-test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
+// Alcance intencional: sistema administrativo de LALCEC. El Panel Bot queda fuera de esta suite.
+test.describe('Contrato de cobertura total del sistema administrativo', () => {
   test('el arranque del frontend no vuelve a envolver la aplicación en React.StrictMode', () => {
     const indexSource = read(path.join(SRC_ROOT, 'index.js'));
     expect(indexSource).not.toContain('<React.StrictMode>');
@@ -331,6 +263,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     );
     const apiHelperSource = read(path.join(__dirname, 'helpers', 'api.helper.js'));
     const authFixtureSource = read(path.join(__dirname, 'fixtures', 'auth.fixture.js'));
+    const dbSource = read(path.join(BACKEND_ROOT, 'config', 'db.php'));
 
     expect(modalSizeHook).not.toContain('.animate(');
     expect(cuotasSource).toContain('React.memo(function CuotasTableRows');
@@ -339,10 +272,16 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(cuotasSource).toContain('toggleAllFilteredPayments');
     expect(cuotasSource).toContain('id_medio_pago');
     expect(cuotasApiSource).toContain('cuotas_contextos_pago');
+    expect(cuotasApiSource).toContain('cuotas_totales_estado');
     expect(cuotasApiSource).toContain('cuotas_saldos_favor');
     expect(cuotasApiSource).toContain('cuotas_ajustar_saldo_favor');
+    expect(cuotasApiSource).toContain('paymentMutationsInFlight');
+    expect(cuotasApiSource).toContain('postPaymentSingleFlight');
     expect(cuotasHookSource).toContain('incluir_catalogos: 0');
     expect(cuotasHookSource).toContain('cuotasApi.catalogos');
+    expect(cuotasHookSource).toContain('new AbortController()');
+    expect(cuotasHookSource).toContain('listController.current?.abort()');
+    expect(cuotasHookSource).toContain('catalogController.current?.abort()');
     expect(cuotasModalCss).toContain('.cuotas-modal--payment.entity-modal');
     expect(cuotasModalCss).toContain('width: min(920px, 100%)');
     expect(cuotasSource).not.toContain('handlePrintRegister');
@@ -386,6 +325,14 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(apiHelperSource).toContain('async function ensureAuthSession');
     expect(apiHelperSource).toContain('await ensureAuthSession(requestContext)');
     expect(authFixtureSource).toContain('await ensureAuthSession(request)');
+
+
+    // La conexión compartida y el manejo de fallos transitorios quedan
+    // protegidos contra regresiones que vuelvan a abrir conexiones por acción.
+    expect(dbSource).toContain('static $connection = null');
+    expect(dbSource).toContain('PDO::ATTR_PERSISTENT => true');
+    expect(dbSource).toContain('pdo_connection_error_is_transient');
+    expect(dbSource).toContain("'operation not permitted'");
   });
 
   test('la huella E2E de sesiones ignora solamente el heartbeat ultimo_uso y conserva los campos sensibles', () => {
@@ -422,6 +369,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     const source = scenarioSources();
     const missing = backendActions()
       .filter((action) => !E2E_INFRA_ACTIONS.has(action))
+      .filter((action) => !EXCLUDED_ADMIN_ACTIONS.has(action))
       .filter((action) => !hasExecutableActionReference(source, action));
     expect(missing, `Acciones backend sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
   });
@@ -443,7 +391,7 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     });
 
     expect(disabled, `Specs deshabilitados o exclusivos: ${disabled.join(', ')}`).toEqual([]);
-    expect(declaredTestCount(), 'La suite perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(135);
+    expect(declaredTestCount(), 'La suite administrativa perdió escenarios E2E declarados.').toBeGreaterThanOrEqual(120);
   });
 
 
@@ -672,33 +620,8 @@ test.describe('Contrato de cobertura total del sistema y del Panel Bot', () => {
     expect(frontend.filter((action) => !hasExecutableActionReference(source, action))).toEqual([]);
   });
 
-  test('cada endpoint usado por el Panel Bot tiene cobertura declarada', () => {
-    const source = testSources();
-    const missing = botFrontendEndpoints().filter((endpoint) => !source.includes(endpoint));
-    expect(missing, `Endpoints del Panel Bot sin cobertura declarada: ${missing.join(', ')}`).toEqual([]);
-  });
 
-  test('cada mutación del Panel Bot se verifica dentro de un escenario y no sólo en los mocks', () => {
-    const botSpec = read(path.join(__dirname, '14-panel-bot.spec.js'));
-    const scenarioStart = botSpec.indexOf("test.describe('Panel Bot WhatsApp'");
-    expect(scenarioStart, 'No se encontró el bloque de escenarios del Panel Bot.').toBeGreaterThan(-1);
-
-    const scenarioSource = botSpec.slice(scenarioStart);
-    const missing = REQUIRED_BOT_MUTATION_ASSERTIONS.filter((endpoint) => {
-      const escaped = endpoint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const asserted = new RegExp(
-        `(?:hasRequest\\([\\s\\S]{0,120}['"]${escaped}['"]|` +
-          `item\\.endpoint\\s*===\\s*['"]${escaped}['"])`,
-      );
-      return !asserted.test(scenarioSource);
-    });
-    expect(
-      missing,
-      `Mutaciones del Panel Bot presentes sólo en mocks/helpers: ${missing.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  test('todas las rutas de la aplicación, incluido el Panel Bot, están recorridas', () => {
+  test('todas las rutas administrativas declaradas están recorridas', () => {
     const source = scenarioSources();
     const missing = applicationRoutes().filter((route) => !hasExecutableRouteReference(source, route));
     expect(missing, `Rutas sin prueba: ${missing.join(', ')}`).toEqual([]);

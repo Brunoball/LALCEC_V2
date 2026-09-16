@@ -100,15 +100,31 @@ const request = async (
   return data;
 };
 
-const get = (section, endpoint, params, options = {}) =>
-  request(section, endpoint, {
+const readsInFlight = new Map();
+const READ_ENDPOINTS = new Set(["panel_chats", "panel_mensajes", "panel_global_hash", "etiquetas_list"]);
+
+const get = (section, endpoint, params, options = {}) => {
+  const readOnly = READ_ENDPOINTS.has(String(endpoint).replace(/\.php$/i, ""));
+  // Sólo agrupar lecturas. Los GET que marcan leído/no leído son mutaciones.
+  const key = readOnly && !options.signal ? JSON.stringify([
+    getSession()?.token || "", section, endpoint,
+    Object.entries(params || {}).sort(([a], [b]) => a.localeCompare(b)),
+  ]) : null;
+  if (key && readsInFlight.has(key)) return readsInFlight.get(key);
+  const controller = !options.signal ? new AbortController() : null;
+  const timeout = controller ? window.setTimeout(() => controller.abort(), 15000) : null;
+  const pending = request(section, endpoint, {
     method: "GET",
-    params: {
-      ...(params || {}),
-      _: Date.now(),
-    },
+    params: { ...(params || {}), _: Date.now() },
+    ...(controller ? { signal: controller.signal } : {}),
     ...options,
+  }).finally(() => {
+    if (timeout !== null) window.clearTimeout(timeout);
+    if (key && readsInFlight.get(key) === pending) readsInFlight.delete(key);
   });
+  if (key) readsInFlight.set(key, pending);
+  return pending;
+};
 
 const post = (section, endpoint, body, options = {}) =>
   request(section, endpoint, {

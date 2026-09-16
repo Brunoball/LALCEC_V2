@@ -136,7 +136,7 @@ final class Dashboard
                 $db,
                 "SELECT COALESCE(SUM(importe), 0)
                  FROM contable_ingresos
-                 WHERE estado = 'ACTIVO' AND fecha >= ? AND fecha < ?",
+                 WHERE fecha >= ? AND fecha < ?",
                 [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
             )
             : 0.0;
@@ -145,7 +145,7 @@ final class Dashboard
                 $db,
                 "SELECT COALESCE(SUM(importe), 0)
                  FROM contable_egresos
-                 WHERE estado = 'ACTIVO' AND fecha >= ? AND fecha < ?",
+                 WHERE fecha >= ? AND fecha < ?",
                 [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d')]
             )
             : 0.0;

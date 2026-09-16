@@ -30,6 +30,8 @@ export function useCuotas(filtros = {}) {
       }),
     [filtros.anio, filtros.mes],
   );
+  const listController = useRef(null);
+  const catalogController = useRef(null);
   const requestId = useRef(0);
   const catalogRequestId = useRef(0);
   const [response, setResponse] = useState(initialResponse);
@@ -39,13 +41,16 @@ export function useCuotas(filtros = {}) {
 
   const cargar = useCallback(async () => {
     const currentRequest = ++requestId.current;
+    listController.current?.abort();
+    const controller = new AbortController();
+    listController.current = controller;
     setLoading(true);
     setError("");
     try {
       const query = JSON.parse(listQuery);
       const result = query.estado === "SALDOS_FAVOR"
-        ? await cuotasApi.saldosFavor(query)
-        : await cuotasApi.listar(query);
+        ? await cuotasApi.saldosFavor(query, { signal: controller.signal })
+        : await cuotasApi.listar(query, { signal: controller.signal });
       if (currentRequest === requestId.current) {
         setResponse({
           items: result.items || [],
@@ -56,7 +61,7 @@ export function useCuotas(filtros = {}) {
       }
       return result;
     } catch (err) {
-      if (currentRequest === requestId.current) {
+      if (err.name !== "AbortError" && currentRequest === requestId.current) {
         setError(err.message || "No se pudo cargar el módulo de cuotas.");
       }
       return null;
@@ -67,14 +72,17 @@ export function useCuotas(filtros = {}) {
 
   const cargarCatalogos = useCallback(async () => {
     const currentRequest = ++catalogRequestId.current;
+    catalogController.current?.abort();
+    const controller = new AbortController();
+    catalogController.current = controller;
     try {
-      const result = await cuotasApi.catalogos(JSON.parse(catalogQuery));
+      const result = await cuotasApi.catalogos(JSON.parse(catalogQuery), { signal: controller.signal });
       if (currentRequest === catalogRequestId.current) {
         setCatalogos(result.catalogos || emptyCatalogs);
       }
       return result;
     } catch (err) {
-      if (currentRequest === catalogRequestId.current) {
+      if (err.name !== "AbortError" && currentRequest === catalogRequestId.current) {
         setError(err.message || "No se pudieron cargar los catálogos de cuotas.");
       }
       return null;
@@ -85,6 +93,7 @@ export function useCuotas(filtros = {}) {
     cargar();
     return () => {
       requestId.current += 1;
+      listController.current?.abort();
     };
   }, [cargar]);
 
@@ -92,6 +101,7 @@ export function useCuotas(filtros = {}) {
     cargarCatalogos();
     return () => {
       catalogRequestId.current += 1;
+      catalogController.current?.abort();
     };
   }, [cargarCatalogos]);
 

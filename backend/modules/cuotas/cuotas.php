@@ -15,6 +15,22 @@ final class Cuotas
         api_success(self::listarDatos($auth['db'], $_GET));
     }
 
+    // Una sola petición/conexión para los cuatro contadores. Se usan los
+    // mismos filtros que las listas, sin calcular importes ni hidratar filas.
+    public static function totalesEstado(): never
+    {
+        $auth = auth_context();
+        $filters = array_merge($_GET, ['incluir_catalogos' => false]);
+        $totals = [];
+        foreach (self::ESTADOS as $estado) {
+            $result = self::listarDatos($auth['db'], array_merge($filters, ['estado' => $estado]), true);
+            $totals[$estado] = $result['paginacion']['total'];
+        }
+        $result = self::saldosFavorDatos($auth['db'], $filters, true);
+        $totals['SALDOS_FAVOR'] = $result['paginacion']['total'];
+        api_success(['totales' => $totals]);
+    }
+
     public static function saldosFavor(): never
     {
         $auth = auth_context();
@@ -119,7 +135,7 @@ final class Cuotas
         self::eliminarPago();
     }
 
-    private static function listarDatos(PDO $db, array $filters): array
+    private static function listarDatos(PDO $db, array $filters, bool $countOnly = false): array
     {
         $tipo = strtoupper(trim((string)($filters['tipo'] ?? 'PERSONA')));
         $estado = strtoupper(trim((string)($filters['estado'] ?? 'DEUDORES')));
@@ -245,6 +261,7 @@ final class Cuotas
         );
         $statement->execute($params);
         $rows = $statement->fetchAll();
+        if ($countOnly) return ['paginacion' => ['total' => count($rows)]];
 
         $categoryIds = [];
         foreach ($rows as $row) {
@@ -339,7 +356,7 @@ final class Cuotas
         return $result;
     }
 
-    private static function saldosFavorDatos(PDO $db, array $filters): array
+    private static function saldosFavorDatos(PDO $db, array $filters, bool $countOnly = false): array
     {
         ensure_socios_eliminados_schema($db);
         $tipo = strtoupper(trim((string)($filters['tipo'] ?? 'PERSONA')));
@@ -423,9 +440,12 @@ final class Cuotas
         );
         $statement->execute($params);
 
+        $rows = $statement->fetchAll();
+        if ($countOnly) return ['paginacion' => ['total' => count($rows)]];
+
         $items = [];
         $totalAmount = 0.0;
-        foreach ($statement->fetchAll() as $row) {
+        foreach ($rows as $row) {
             $balance = max(0.0, round((float)$row['saldo_favor'], 2));
             $totalAmount += $balance;
             $items[] = [

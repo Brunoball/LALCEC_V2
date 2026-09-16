@@ -17,7 +17,7 @@ async function disableExternalLogoLookup(page) {
   await page.route(/\/routes\/api\.php\?/, async (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('action') !== 'perfil_logo_institucional') {
-      await route.continue();
+      await route.fallback();
       return;
     }
     await route.fulfill({

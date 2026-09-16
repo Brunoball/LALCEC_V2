@@ -1336,7 +1336,22 @@ test.describe('Cuotas completas desde la interfaz', () => {
     expect(template).toBeTruthy();
 
     const listRequests = [];
-    const totalsByState = { DEUDORES: 101, PAGADOS: 7, CONDONADOS: 3 };
+    const totalsRequests = [];
+    const totalsByState = { DEUDORES: 101, PAGADOS: 7, CONDONADOS: 3, SALDOS_FAVOR: 5 };
+
+    await page.route(/api\.php\?action=cuotas_totales_estado(?:&|$)/, async (route) => {
+      const url = new URL(route.request().url());
+      totalsRequests.push(Object.fromEntries(url.searchParams));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          exito: true,
+          totales: totalsByState,
+        }),
+      });
+    });
+
     await page.route(/api\.php\?action=cuotas_listar(?:&|$)/, async (route) => {
       const url = new URL(route.request().url());
       listRequests.push(Object.fromEntries(url.searchParams));
@@ -1382,6 +1397,9 @@ test.describe('Cuotas completas desde la interfaz', () => {
     await expect(page.getByLabel('101 deudores')).toBeVisible();
     await expect(page.getByLabel('7 pagados')).toBeVisible();
     await expect(page.getByLabel('3 condonados')).toBeVisible();
+    await expect(page.getByLabel('5 saldos a favor')).toBeVisible();
+    await expect.poll(() => totalsRequests.length).toBeGreaterThanOrEqual(1);
+    expect(totalsRequests.at(-1)?.incluir_catalogos).toBe('0');
 
     await page.getByRole('button', { name: 'Selección múltiple' }).first().click();
     await page.getByRole('button', { name: 'Seleccionar todos', exact: true }).click();

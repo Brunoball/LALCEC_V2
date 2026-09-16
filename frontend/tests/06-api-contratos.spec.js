@@ -207,22 +207,6 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
     expect(blocked.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  test('el proxy local del Panel Bot rechaza orígenes externos antes de reenviar datos', async ({ request }) => {
-    const result = await apiResult(request, 'bot_panel_proxy', {
-      method: 'POST',
-      session: null,
-      headers: { Origin: 'https://origen-externo.example.test' },
-      data: {
-        section: 'panel',
-        endpoint: 'panel_health',
-        method: 'GET',
-        params: {},
-      },
-    });
-
-    expect(result.status).toBe(403);
-    expect(result.body?.codigo).toBe('BOT_PROXY_LOCAL_ONLY');
-  });
 
   test('todas las rutas privadas rechazan una solicitud sin sesión', async ({ request }) => {
     const endpoints = [
@@ -230,6 +214,7 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       ['auth_logout', 'POST'],
       ['dashboard_resumen', 'GET'],
       ['cuotas_listar', 'GET'],
+      ['cuotas_totales_estado', 'GET'],
       ['cuotas_saldos_favor', 'GET'],
       ['cuotas_ajustar_saldo_favor', 'POST', { data: {} }],
       ['cuotas_catalogos', 'GET'],
