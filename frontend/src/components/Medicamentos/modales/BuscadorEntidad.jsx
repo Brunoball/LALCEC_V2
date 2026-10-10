@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 
 /** Buscador en un solo campo: buscar, desplegar y seleccionar sin un segundo <select>. */
 export default function BuscadorEntidad({
-  label, value, selectedLabel = '', onSelect, buscar, placeholder,
+  label, value, selectedLabel = '', onSelect, buscar,
   manual = false, required = false, disabled = false, wide = false,
 }) {
   const listId = useId();
@@ -78,12 +78,12 @@ export default function BuscadorEntidad({
       // Una búsqueda escrita pero no elegida no reemplaza la selección previa.
       setTexto(selectedLabel || '');
     }}>
-    <span>{label}{required ? ' *' : ''}</span>
-    <div className="med-buscador__wrapper">
+    <div className={`med-buscador__wrapper entity-floating-field ${texto ? 'is-active' : ''}`}>
+      <span>{label}{required ? ' *' : ''}</span>
       <input ref={inputRef} type="text" role="combobox" aria-autocomplete="list"
         aria-expanded={abierto} aria-controls={listId}
         aria-activedescendant={activo >= 0 && abierto ? `${listId}-option-${activo}` : undefined}
-        placeholder={placeholder} autoComplete="off" maxLength={180} value={texto} disabled={disabled} required={required}
+        placeholder=" " aria-label={label} autoComplete="off" maxLength={180} value={texto} disabled={disabled} required={required}
         onFocus={() => setAbierto(true)}
         onClick={() => setAbierto(true)}
         onKeyDown={onKeyDown}

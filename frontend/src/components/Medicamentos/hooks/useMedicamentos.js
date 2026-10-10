@@ -24,6 +24,7 @@ export function useMedicamentos(loader) {
     } catch (error) {
       if (seq === serial.current) {
         setState(v => ({
+          ...v,
           loading: false,
           error: error.message || 'Error cargando medicamentos.',
           // Una falla temporal al actualizar no borra datos ya visibles.

@@ -1,7 +1,11 @@
-.med-grid--stock { grid-template-columns: minmax(0,1.5fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,.72fr) minmax(0,.9fr) minmax(0,.75fr) minmax(0,1.6fr); }
-.med-grid--loans { grid-template-columns: minmax(0,.45fr) minmax(0,1.5fr) minmax(0,.75fr) minmax(0,.7fr) minmax(0,.95fr) minmax(200px,1.6fr); }
+/* Columnas de Medicamentos: proporciones flexibles, sin anchos mínimos o fijos. */
+.med-grid--stock {
+  grid-template-columns: 1.15fr .85fr 1.5fr .9fr 1fr .8fr 1.75fr;
+}
+.med-grid--loans {
+  grid-template-columns: .5fr 1.5fr .8fr .7fr .9fr 1.3fr;
+}
 .med-table { min-width: 0; display:flex; flex-direction:column; flex:1; }
-.med-table .mov-gridCell { font-size:12px; }
 .med-actions { display:flex;flex-wrap:wrap;gap:5px; }
 .med-mini { border:1px solid var(--mov-border,#ddd);background:#fff;border-radius:7px;padding:6px 8px;cursor:pointer;color:#374151;font-weight:650;font-size:12px; }
 .med-mini:hover { background:#fff3e9;color:#ba580b; }
@@ -9,7 +13,11 @@
 .med-mini--danger { color:#ad2830; }
 .med-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;flex-wrap:wrap; }
 .med-toolbar input,.med-toolbar select { padding:9px 11px;border:1px solid #cbd5e1;border-radius:9px;min-width:190px; }
-.med-empty { padding:28px;text-align:center;color:#64748b; }
+/* Avisos vacíos de modales: mismo icono global, formato compacto. */
+.med-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:28px; text-align:center; color:var(--mov-muted,#64748b); font-size:13px; }
+.med-empty svg { font-size:24px; color:color-mix(in srgb, var(--balto-action,#e87912) 65%, #fff); }
+.med-empty--compact { padding:18px 12px; }
+.med-empty--compact svg { font-size:20px; }
 .med-inline-note { padding:12px;border-radius:9px;background:#fff8ed;color:#82500d;line-height:1.5;font-size:12px; }
 .med-inline-danger { margin:10px 18px;color:#ab2222;font-size:13px; }
 .med-box { border:1px solid #e2e8f0;border-radius:11px;padding:14px;margin:12px 0;background:#fff; }
@@ -17,12 +25,60 @@
 .med-detail-row { padding:9px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;gap:10px;align-items:center; }
 .med-detail-row:last-child { border-bottom:0; }
 .med-list { max-height:270px;overflow:auto; }
-.med-bottom { display:flex;align-items:center;justify-content:space-between;padding:10px 18px;gap:10px;font-size:12px; }
-.med-bottom button { padding:6px 14px;border:1px solid #cbd5e1;border-radius:7px;background:white;cursor:pointer; }
-@media(max-width:900px){.med-table { overflow-x:auto; }.med-grid--stock,.med-grid--loans { min-width:1050px; } .med-toolbar input { width:100%; } }
+@media(max-width:900px){ .med-toolbar input { width:100%; } }
 
 /* Stock simplificado: cada medicamento concentra sus ingresos, lotes e historial. */
 .med-cell-secondary { display:block;margin-top:3px;color:#64748b;font-size:11px; }
+/* Disponible: cantidad protagonista y unidad en su propia línea.
+   El detalle es secundario y puede ajustarse sin forzar la grilla. */
+.med-table .med-stock-availability {
+  white-space: normal;
+  gap: 2px;
+}
+.med-stock-amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 5px;
+  row-gap: 0;
+  max-width: 100%;
+}
+.med-stock-amount strong {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.med-stock-unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--balto-ink, #334155);
+  overflow-wrap: anywhere;
+}
+.med-stock-caption {
+  display: block;
+  font-size: 11px;
+  color: var(--balto-text, #64748b);
+}
+.med-stock-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--balto-text, #64748b);
+}
+.med-stock-details span {
+  overflow-wrap: anywhere;
+}
+.med-stock-details b {
+  font-weight: 600;
+  color: var(--balto-ink, #334155);
+}
+/* Presentación destacada y dosis en una segunda línea, sin alargar la celda. */
+.med-stock-presentation { font-weight:550; }
 .med-icon-action { display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:30px;min-height:30px;padding:5px 7px; }
 .med-icon-action .med-action-label { display:none; }
 .med-icon-action:focus-visible { outline:2px solid #e87912;outline-offset:2px; }
@@ -97,3 +153,46 @@
 .med-anular-link:hover {background:#fee2e2;}
 .med-anular-confirmacion {display:flex;align-items:flex-start;gap:9px;margin-top:14px;font-size:12px;line-height:1.5;color:#334155;}
 .med-anular-confirmacion input {margin-top:2px;flex-shrink:0;}
+
+/* Ajustes de las tablas y filtros de Medicamentos. */
+.med-table .mov-gridCell.med-actions {
+  justify-content: center;
+}
+.module-filter--select.med-filter--estado {
+  flex: 0 1 120px;
+  width: 120px;
+  min-width: 0;
+  max-width: 120px;
+}
+
+/* Filtros de préstamos agrupados al extremo derecho. */
+.module-headFilters.med-loans-filters {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  min-width: 0;
+  margin-left: auto;
+}
+.med-loans-filters .module-filter--search {
+  flex: 0 1 250px;
+  min-width: 0;
+  margin-left: 0;
+}
+.med-loans-filters .med-filter--estado {
+  flex: 0 0 120px;
+}
+
+/* Secciones de los modales: tipografía liviana e iconos discretos. */
+.med-section-title { display:flex; align-items:center; gap:8px; margin:0 0 16px; font-size:13px; font-weight:500; color:var(--text-primary); }
+.med-section-title svg { color:var(--primary-color); font-size:13px; }
+.med-tab-panel { padding-top:18px; }
+.med-tab-panel[hidden] { display:none; }
+.med-tabbed-form .entity-form-tabs { position:sticky; top:0; z-index:5; background:var(--surface-color,#fff); }
+.med-buscador__wrapper.entity-floating-field { display:block; }
+.med-buscador__wrapper.entity-floating-field > input { width:100%; box-sizing:border-box; }
+
+/* Campos de anulación dentro del modal global de confirmación. */
+.med-global-confirm-fields .entity-form { margin: 0; }
+.med-global-confirm-fields .entity-form__grid { display: flex; flex-direction: column; gap: 12px; }
+.med-global-confirm-fields .entity-field { width: 100%; max-width: 100%; min-width: 0; }
+.med-global-confirm-fields .med-anular-confirmacion { margin-top: 12px; }
