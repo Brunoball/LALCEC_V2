@@ -20,6 +20,7 @@ require_once __DIR__ . '/../modules/categorias/routes.php';
 require_once __DIR__ . '/../modules/configuracion/routes.php';
 require_once __DIR__ . '/../modules/usuarios/routes.php';
 require_once __DIR__ . '/../modules/contable/routes.php';
+require_once __DIR__ . '/../modules/medicamentos/routes.php';
 require_once __DIR__ . '/../modules/bot_panel_proxy/routes.php';
 require_once __DIR__ . '/../modules/testing_cleanup/routes.php';
 
@@ -44,6 +45,7 @@ register_categorias_routes($router);
 register_configuracion_routes($router);
 register_usuarios_routes($router);
 register_contable_routes($router);
+register_medicamentos_routes($router);
 register_bot_panel_proxy_routes($router);
 register_testing_cleanup_routes($router);
 

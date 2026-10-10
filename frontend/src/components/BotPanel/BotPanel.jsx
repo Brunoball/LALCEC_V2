@@ -167,8 +167,11 @@ const BotPanel = () => {
   const scrollToBottom = useCallback((behavior = "auto") => {
     const el = messagesRef.current;
     if (el) {
+      // Un valor muy alto es clamp-eado por el navegador al final real del
+      // contenedor. Así evitamos leer scrollHeight justo después del render,
+      // que puede disparar un forced reflow costoso.
       el.scrollTo({
-        top: el.scrollHeight,
+        top: Number.MAX_SAFE_INTEGER,
         behavior,
       });
       return;
@@ -396,7 +399,9 @@ const BotPanel = () => {
       if (current) return current;
       // Capturar ANTES de leer. Un mensaje que llega durante la petición debe
       // seguir siendo una novedad en el próximo ciclo.
-      const requestedHash = updatesRef.current?.chat_hashes?.[waId] ?? null;
+      const requestedHash = updatesRef.current?.messages_revision
+        ?? updatesRef.current?.chat_hashes?.[waId]
+        ?? null;
       const pending = (async () => {
         if (!silent) setLoadingMsgs(true);
         setErrorMsgs("");
@@ -541,7 +546,9 @@ const BotPanel = () => {
       if (pendingMessages) await pendingMessages;
       if (selectedIdRef.current !== waId) return;
       const version = messageVersionRef.current;
-      const nextHash = snapshot.chat_hashes?.[waId] ?? null;
+      const nextHash = snapshot.messages_revision
+        ?? snapshot.chat_hashes?.[waId]
+        ?? null;
       if (version.id !== waId || version.hash !== nextHash) {
         const loaded = await fetchMensajes(waId, { silent: true });
         if (!loaded) throw new Error("No se pudo actualizar la conversación.");

@@ -6,6 +6,7 @@ import {
   faBars,
   faChartLine,
   faGear,
+  faPills,
   faReceipt,
   faRightFromBracket,
   faRobot,
@@ -50,6 +51,10 @@ const NAV_ITEMS = [
     ],
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
+  { key: "medicamentos", label: "Medicamentos", path: "/medicamentos", defaultPath: "/medicamentos/stock", icon: faPills, children: [
+    { key: "med-stock", label: "Stock", path: "/medicamentos/stock" },
+    { key: "med-prestamos", label: "Préstamos", path: "/medicamentos/prestamos" },
+  ] },
   {
     key: "categorias",
     label: "Categorías",

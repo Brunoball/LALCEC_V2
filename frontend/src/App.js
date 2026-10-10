@@ -11,6 +11,7 @@ import DescuentosFamiliares from "./components/Categorias/secciones/DescuentosFa
 import Ingresos from "./components/Contable/secciones/Ingresos";
 import Egresos from "./components/Contable/secciones/Egresos";
 import Resumen from "./components/Contable/secciones/Resumen";
+import Medicamentos from "./components/Medicamentos/Medicamentos";
 import Configuracion from "./components/Configuracion/Configuracion";
 import Usuarios from "./components/Configuracion/secciones/Usuarios";
 import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
@@ -130,6 +131,9 @@ export default function App() {
             element={<Navigate to="/contable/ingresos" replace />}
           />
           <Route path="/contable/ingresos" element={<Ingresos />} />
+          <Route path="/medicamentos" element={<Navigate to="/medicamentos/stock" replace />} />
+          <Route path="/medicamentos/stock" element={<Medicamentos view="stock" />} />
+          <Route path="/medicamentos/prestamos" element={<Medicamentos view="prestamos" />} />
           <Route path="/contable/egresos" element={<Egresos />} />
           <Route path="/contable/resumen" element={<Resumen />} />
 

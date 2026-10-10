@@ -21,6 +21,7 @@ const {
 } = require('./helpers/entities.helper');
 const { SESSION_KEY } = require('./helpers/auth.helper');
 const { loadTestEnv } = require('./helpers/env.helper');
+const { createMedicine, entryFixture, medFixture } = require('./helpers/medicamentos.helper');
 
 loadTestEnv();
 
@@ -46,11 +47,13 @@ test.describe('Permisos de usuario de solo lectura', () => {
     let catalogItem;
     let categoryItem;
     let userItem;
+    let medItem;
     let viewSession;
     let context;
 
     try {
       catalogItem = await createCatalog(request, 'medios_pago', catalogName);
+      medItem = await createMedicine(request);
       personItem = await createPerson(request, person, {
         id_medio_pago: catalogItem.id_medio_pago,
       });
@@ -117,6 +120,13 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['categorias_historial', { params: { id: categoryItem.id_categoria } }],
         ['descuentos_familiares_listar'],
         ['configuracion_obtener'],
+        ['medicamentos_catalogo'],
+        ['medicamentos_lotes', { params: { id_medicamento: medItem.id } }],
+        ['medicamentos_historial', { params: { id_medicamento: medItem.id } }],
+        ['medicamentos_medios'],
+        ['medicamentos_procedencias', { params: { buscar: 'PW E2E' } }],
+        ['medicamentos_socios', { params: { buscar: person.dni } }],
+        ['medicamentos_prestamos'],
       ]) {
         const body = await apiCall(request, action, { ...options, session: viewSession });
         expect(body).toBeTruthy();
@@ -169,6 +179,16 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['usuarios_guardar', { usuario: 'pw_e2e_no_permitido' }],
         ['usuarios_cambiar_estado', { id: userItem.id, activo: false }],
         ['usuarios_eliminar', { id: userItem.id }],
+        ['medicamentos_guardar', { ...medFixture(), ingreso_inicial: entryFixture() }],
+        ['medicamentos_cambiar_estado', { id_medicamento: medItem.id, activo: 0 }],
+        ['medicamentos_ingresar', { id_medicamento: medItem.id, ...entryFixture() }],
+        ['medicamentos_salida', { id_lote: medItem.lotId, tipo: 'ENTREGA_DONACION', cantidad: 1 }],
+        ['medicamentos_revisar_lote', { id_lote: medItem.lotId, estado: 'BLOQUEADO' }],
+        ['medicamentos_prestar', { id_socio: personItem.id_socio, items: [{id_lote: medItem.lotId, cantidad: 1}], sena: 0 }],
+        ['medicamentos_devolver', { id_detalle_prestamo: 2147483647, cantidad: 1 }],
+        ['medicamentos_sena', { id_prestamo: 2147483647, tipo: 'SENA_DONADA', monto: 1 }],
+        ['medicamentos_cerrar', { id_prestamo: 2147483647 }],
+        ['medicamentos_anular', { id_movimiento: 2147483647, motivo: 'PW E2E ANULACION NO PERMITIDA', id_medio_pago: 1 }],
       ];
       for (const [action, data] of mutationCases) {
         await expectApiError(
@@ -192,6 +212,18 @@ test.describe('Permisos de usuario de solo lectura', () => {
         { origin: appOrigin, key: SESSION_KEY, session: viewSession },
       );
       const page = await context.newPage();
+
+      await page.goto('/medicamentos/stock');
+      await expect(page.getByRole('table', {name:'Stock de medicamentos'})).toBeVisible();
+      await expect(page.getByRole('button', {name:'Nuevo medicamento'})).toHaveCount(0);
+      const medRow = page.getByRole('table', {name:'Stock de medicamentos'})
+        .getByRole('row').filter({hasText: medItem.medicine.nombre_comercial}).last();
+      await expect(medRow).toBeVisible();
+      await expect(medRow.getByRole('button', {name:'Editar'})).toHaveCount(0);
+      await expect(medRow.getByRole('button', {name:'Egresar stock'})).toHaveCount(0);
+      await page.goto('/medicamentos/prestamos');
+      await expect(page.getByRole('table', {name:'Préstamos de medicamentos'})).toBeVisible();
+      await expect(page.getByRole('button', {name:'Nuevo préstamo'})).toHaveCount(0);
 
       await page.goto('/cuotas');
       await expect(

@@ -1444,6 +1444,7 @@ export default function ContableModule({ view = "summary" }) {
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.proveedor || "—"}</strong>
                         <small>Categoría: {item.categoria || "—"}</small>
+                        {item.es_medicamentos ? <small>Registrado desde Medicamentos · movimiento protegido</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
@@ -1458,7 +1459,7 @@ export default function ContableModule({ view = "summary" }) {
                       </div>
                       {writable ? (
                         <div className="mov-gridCell mov-gridCell--actions">
-                          <div className="mov-actionsInline">
+                          {!item.es_medicamentos ? <div className="mov-actionsInline">
                             <button
                               className="mov-iconBtn"
                               type="button"
@@ -1477,7 +1478,7 @@ export default function ContableModule({ view = "summary" }) {
                             >
                               <FontAwesomeIcon icon={faTrashCan} />
                             </button>
-                          </div>
+                          </div> : <span title="Registrado desde Medicamentos: no editable en Contabilidad">Protegido</span>}
                         </div>
                       ) : null}
                     </div>
@@ -1499,6 +1500,7 @@ export default function ContableModule({ view = "summary" }) {
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.proveedor || "—"}</strong>
                         <small>Categoría: {item.categoria || "—"}</small>
+                        {item.es_medicamentos ? <small>Registrado desde Medicamentos · movimiento protegido</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
@@ -1529,7 +1531,7 @@ export default function ContableModule({ view = "summary" }) {
                           >
                             <FontAwesomeIcon icon={faEye} />
                           </button>
-                          {writable ? (
+                          {writable && !item.es_medicamentos ? (
                             <>
                               <button
                                 className="mov-iconBtn"

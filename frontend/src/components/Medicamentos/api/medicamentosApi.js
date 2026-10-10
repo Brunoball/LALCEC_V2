@@ -1,0 +1,21 @@
+import { apiGet, apiPost } from '../../_shared/api/apiClient';
+export const medicamentosApi = {
+  catalogo: () => apiGet('medicamentos_catalogo'),
+  lotes: (params) => apiGet('medicamentos_lotes', params),
+  historial: (params) => apiGet('medicamentos_historial', params),
+  prestamos: (params) => apiGet('medicamentos_prestamos', params),
+  prestamoDetalle: (id) => apiGet('medicamentos_prestamo_detalle', { id }),
+  socios: (buscar) => apiGet('medicamentos_socios', { buscar }),
+  procedencias: (buscar) => apiGet('medicamentos_procedencias', { buscar }),
+  medios: () => apiGet('medicamentos_medios'),
+  guardar: (data) => apiPost('medicamentos_guardar', data),
+  cambiarEstado: (data) => apiPost('medicamentos_cambiar_estado', data),
+  ingresar: (data) => apiPost('medicamentos_ingresar', data),
+  salida: (data) => apiPost('medicamentos_salida', data),
+  anular: (data) => apiPost('medicamentos_anular', data),
+  revisarLote: (data) => apiPost('medicamentos_revisar_lote', data),
+  prestar: (data) => apiPost('medicamentos_prestar', data),
+  devolver: (data) => apiPost('medicamentos_devolver', data),
+  cerrar: (data) => apiPost('medicamentos_cerrar', data),
+  sena: (data) => apiPost('medicamentos_sena', data),
+};

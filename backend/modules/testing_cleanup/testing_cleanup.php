@@ -1,13 +1,36 @@
 <?php
 declare(strict_types=1);
 
+// Dependencias compartidas del escudo Playwright usadas por este modulo.
+// require_once evita declarar las funciones dos veces cuando el Router ya cargo el guard.
+require_once __DIR__ . '/../../core/e2e_guard.php';
+
 final class TestingCleanup
 {
     private const CONFIRMATION = 'LIMPIAR_PLAYWRIGHT';
 
+    /**
+     * Los validadores E2E son funciones globales provistas por e2e_guard.php.
+     * Se invocan por nombre para evitar falsos avisos de 'undefined function'
+     * del analizador de VS Code, sin duplicar las reglas del escudo.
+     * Si falta alguna funcion, la operacion queda bloqueada (fail closed).
+     */
+    private static function verificarEscudoE2E(string $funcion, mixed ...$argumentos): bool
+    {
+        if (!function_exists($funcion)) {
+            api_error(
+                'El escudo de seguridad de Playwright no esta disponible.',
+                'E2E_GUARD_UNAVAILABLE',
+                503
+            );
+        }
+
+        return (bool) call_user_func($funcion, ...$argumentos);
+    }
+
     private static function requireE2EAdmin(): array
     {
-        if (!e2e_request_enabled()) {
+        if (!self::verificarEscudoE2E('e2e_request_enabled')) {
             api_error(
                 'Las herramientas de Playwright requieren X-LALCEC-E2E=PLAYWRIGHT.',
                 'E2E_HEADER_REQUIRED',
@@ -70,7 +93,7 @@ final class TestingCleanup
             api_error('El socio E2E indicado no es válido.', 'E2E_SALDO_SOCIO_INVALIDO', 422);
         }
         $partnerId = (int)$partnerId;
-        if (!e2e_socio($auth['db'], $partnerId)) {
+        if (!self::verificarEscudoE2E('e2e_socio', $auth['db'], $partnerId)) {
             api_error(
                 'El fixture de saldo sólo puede aplicarse a socios creados por Playwright.',
                 'E2E_SCOPE_BLOCKED',
@@ -163,8 +186,8 @@ final class TestingCleanup
         }
 
         $allowed = $table === 'categorias'
-            ? e2e_category($auth['db'], (int)$id)
-            : e2e_discount($auth['db'], (int)$id);
+            ? self::verificarEscudoE2E('e2e_category', $auth['db'], (int)$id)
+            : self::verificarEscudoE2E('e2e_discount', $auth['db'], (int)$id);
         if (!$allowed) {
             api_error('La auditoría solicitada no pertenece a un registro E2E.', 'E2E_SCOPE_BLOCKED', 409);
         }
@@ -218,6 +241,14 @@ final class TestingCleanup
             'contable_ingresos' => 0,
             'contable_egresos' => 0,
             'contable_opciones' => 0,
+            'medicamentos' => 0,
+            'medicamentos_lotes' => 0,
+            'medicamentos_movimientos' => 0,
+            'medicamentos_prestamos' => 0,
+            'medicamentos_prestamos_detalle' => 0,
+            'medicamentos_prestamos_devoluciones' => 0,
+            'medicamentos_prestamos_senas_movimientos' => 0,
+            'medicamentos_solicitudes' => 0,
             'familias' => 0,
             'socios' => 0,
             'socios_eliminados' => 0,
@@ -285,6 +316,81 @@ final class TestingCleanup
 
             if ($testExpenseIds !== []) {
                 $filesToDelete = self::columnForIds($db, 'contable_egresos', 'id_egreso', 'archivo_path', $testExpenseIds);
+            }
+
+            // Playwright sólo puede crear/modificar medicamentos con nombre E2E
+            // y préstamos cuyos socios y lotes son E2E (ver e2e_guard.php).
+            // Suprimir primero las referencias a caja para mantener las FK,
+            // y después eliminar los asientos compensatorios de prueba.
+            $testMedicamentos = [];
+            $testLotes = [];
+            $testMovimientosMedicamentos = [];
+            $testPrestamosMedicamentos = [];
+            $testDetallesMedicamentos = [];
+            $testDevolucionesMedicamentos = [];
+            $testSenasMedicamentos = [];
+            if (self::tableExists($db, 'medicamentos')) {
+                $testMedicamentos = self::ids($db,
+                    "SELECT id_medicamento FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'");
+            }
+            if ($testMedicamentos !== []) {
+                $in = self::placeholders(count($testMedicamentos));
+                $testLotes = self::ids($db,"SELECT id_lote FROM medicamentos_lotes WHERE id_medicamento IN ({$in})",$testMedicamentos);
+            }
+            if ($testLotes !== []) {
+                $in = self::placeholders(count($testLotes));
+                $testPrestamosMedicamentos = self::ids($db,
+                    "SELECT DISTINCT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_lote IN ({$in})",$testLotes);
+                $testMovimientosMedicamentos = self::ids($db,
+                    "SELECT id_movimiento FROM medicamentos_movimientos WHERE id_lote IN ({$in})",$testLotes);
+                $linkedIncome = self::ids($db,
+                    "SELECT DISTINCT id_ingreso_contable FROM medicamentos_movimientos WHERE id_lote IN ({$in}) AND id_ingreso_contable IS NOT NULL",$testLotes);
+                $linkedExpense = self::ids($db,
+                    "SELECT DISTINCT id_egreso_contable FROM medicamentos_movimientos WHERE id_lote IN ({$in}) AND id_egreso_contable IS NOT NULL",$testLotes);
+                $testIncomeIds = array_values(array_unique(array_merge($testIncomeIds,$linkedIncome)));
+                $testExpenseIds = array_values(array_unique(array_merge($testExpenseIds,$linkedExpense)));
+            }
+            if ($testPrestamosMedicamentos !== []) {
+                $in=self::placeholders(count($testPrestamosMedicamentos));
+                // Fail closed si un préstamo enlazó accidentalmente un socio o
+                // un lote real: no borrar una relación no perteneciente a E2E.
+                $realSocios=self::ids($db,
+                    "SELECT DISTINCT id_socio FROM medicamentos_prestamos WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
+                if (array_diff($realSocios,$testSocios)!==[]) {
+                    api_error('Hay préstamos de medicamentos E2E asociados a socios reales. Se requiere revisar los datos antes de limpiar.', 'E2E_CLEANUP_INTEGRIDAD', 409);
+                }
+                $otherLots=self::ids($db,
+                    "SELECT DISTINCT id_lote FROM medicamentos_prestamos_detalle WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
+                if (array_diff($otherLots,$testLotes)!==[]) {
+                    api_error('Un préstamo E2E incluye lotes fuera de pruebas. Limpieza cancelada.', 'E2E_CLEANUP_INTEGRIDAD', 409);
+                }
+                $testDetallesMedicamentos=self::ids($db,
+                    "SELECT id_detalle_prestamo FROM medicamentos_prestamos_detalle WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
+                $testSenasMedicamentos=self::ids($db,
+                    "SELECT id_movimiento_sena FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
+                $senasIngreso=self::ids($db,
+                    "SELECT DISTINCT id_ingreso_contable FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo IN ({$in}) AND id_ingreso_contable IS NOT NULL",$testPrestamosMedicamentos);
+                $senasEgreso=self::ids($db,
+                    "SELECT DISTINCT id_egreso_contable FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo IN ({$in}) AND id_egreso_contable IS NOT NULL",$testPrestamosMedicamentos);
+                $testIncomeIds=array_values(array_unique(array_merge($testIncomeIds,$senasIngreso)));
+                $testExpenseIds=array_values(array_unique(array_merge($testExpenseIds,$senasEgreso)));
+            }
+            if ($testDetallesMedicamentos !== []) {
+                $in=self::placeholders(count($testDetallesMedicamentos));
+                $testDevolucionesMedicamentos=self::ids($db,
+                    "SELECT id_devolucion FROM medicamentos_prestamos_devoluciones WHERE id_detalle_prestamo IN ({$in})",$testDetallesMedicamentos);
+            }
+            $counts['medicamentos_movimientos'] += self::deleteByIds($db,'medicamentos_movimientos','id_movimiento',$testMovimientosMedicamentos);
+            $counts['medicamentos_prestamos_senas_movimientos'] += self::deleteByIds($db,'medicamentos_prestamos_senas_movimientos','id_movimiento_sena',$testSenasMedicamentos);
+            $counts['medicamentos_prestamos_devoluciones'] += self::deleteByIds($db,'medicamentos_prestamos_devoluciones','id_devolucion',$testDevolucionesMedicamentos);
+            $counts['medicamentos_prestamos_detalle'] += self::deleteByIds($db,'medicamentos_prestamos_detalle','id_detalle_prestamo',$testDetallesMedicamentos);
+            $counts['medicamentos_prestamos'] += self::deleteByIds($db,'medicamentos_prestamos','id_prestamo',$testPrestamosMedicamentos);
+            $counts['medicamentos_lotes'] += self::deleteByIds($db,'medicamentos_lotes','id_lote',$testLotes);
+            $counts['medicamentos'] += self::deleteByIds($db,'medicamentos','id_medicamento',$testMedicamentos);
+            if (self::tableExists($db,'medicamentos_solicitudes')) {
+                $q=$db->prepare("DELETE FROM medicamentos_solicitudes WHERE clave LIKE 'e2e-%'");
+                $q->execute();
+                $counts['medicamentos_solicitudes'] += $q->rowCount();
             }
 
             $testPaymentIds = $testSocios === []
@@ -405,6 +511,13 @@ final class TestingCleanup
                 'contable_ingresos' => $testIncomeIds,
                 'contable_egresos' => $testExpenseIds,
                 'contable_opciones' => $testOptions,
+                'medicamentos' => $testMedicamentos,
+                'medicamentos_lotes' => $testLotes,
+                'medicamentos_movimientos' => $testMovimientosMedicamentos,
+                'medicamentos_prestamos' => $testPrestamosMedicamentos,
+                'medicamentos_prestamos_detalle' => $testDetallesMedicamentos,
+                'medicamentos_prestamos_devoluciones' => $testDevolucionesMedicamentos,
+                'medicamentos_prestamos_senas_movimientos' => $testSenasMedicamentos,
                 'medios_pago' => $testMeans,
                 'condiciones_iva' => $testIva,
                 'sis_usuarios' => $testUsers,
@@ -499,6 +612,10 @@ final class TestingCleanup
                     api_error('El socio indicado no pertenece al conjunto E2E.', 'E2E_SCOPE_BLOQUEADO', 403);
                 }
 
+                if (self::tableExists($db,'medicamentos_prestamos') &&
+                    self::scalar($db,'SELECT COUNT(*) FROM medicamentos_prestamos WHERE id_socio=?',[$id])>0) {
+                    api_error('El socio tiene préstamos de Medicamentos. Usá la limpieza E2E global para retirarlos con sus registros asociados.', 'E2E_CLEANUP_INTEGRIDAD', 409);
+                }
                 // Limpieza física exclusiva del harness. La operación real de
                 // negocio archiva y conserva todos estos registros.
                 if (self::tableExists($db, 'saldos_favor_movimientos')) {
@@ -605,6 +722,8 @@ final class TestingCleanup
             'condiciones_iva' => self::scalar($db, "SELECT COUNT(*) FROM condiciones_iva WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
             'usuarios' => self::scalar($db, "SELECT COUNT(*) FROM sis_usuarios WHERE usuario LIKE 'pw_e2e_%' OR email LIKE '%@example.test'"),
             'contable_opciones' => self::scalar($db, "SELECT COUNT(*) FROM contable_opciones WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
+            'medicamentos' => self::tableExists($db,'medicamentos') ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'") : 0,
+            'medicamentos_solicitudes' => self::tableExists($db,'medicamentos_solicitudes') ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_solicitudes WHERE clave LIKE 'e2e-%'") : 0,
             'contable_ingresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_ingresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %'"),
             'contable_egresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_egresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %' OR numero_comprobante LIKE 'E2E-%'"),
             'sesiones' => self::scalar($db, "SELECT COUNT(*) FROM sis_sesiones WHERE idSesion <> ? AND user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%'", [$currentSessionId]),
@@ -674,6 +793,23 @@ final class TestingCleanup
             'sis_login_auditoria' => "SELECT l.* FROM sis_login_auditoria l WHERE l.usuario NOT LIKE 'pw_e2e_%' AND COALESCE(l.user_agent,'') NOT LIKE 'LALCEC-PLAYWRIGHT-E2E%' ORDER BY l.idLog",
             'auditoria' => "SELECT a.* FROM auditoria a WHERE COALESCE(a.user_agent,'') NOT LIKE 'LALCEC-PLAYWRIGHT-E2E%' AND COALESCE(a.descripcion,'') NOT LIKE '%PW E2E%' AND COALESCE(a.descripcion,'') NOT LIKE '%PW EE%' AND COALESCE(a.datos_anteriores,'') NOT LIKE '%PW E2E%' AND COALESCE(a.datos_anteriores,'') NOT LIKE '%PW EE%' AND COALESCE(a.datos_anteriores,'') NOT LIKE '%pw_e2e_%' AND COALESCE(a.datos_nuevos,'') NOT LIKE '%PW E2E%' AND COALESCE(a.datos_nuevos,'') NOT LIKE '%PW EE%' AND COALESCE(a.datos_nuevos,'') NOT LIKE '%pw_e2e_%' AND COALESCE(a.datos_anteriores,'') NOT LIKE '%@example.test%' AND COALESCE(a.datos_nuevos,'') NOT LIKE '%@example.test%' ORDER BY a.id_auditoria",
         ];
+        if (self::tableExists($db,'medicamentos')) {
+            $isTestMed="(m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')";
+            $queries['medicamentos']="SELECT m.* FROM medicamentos m WHERE NOT {$isTestMed} ORDER BY m.id_medicamento";
+            $queries['medicamentos_lotes']="SELECT l.* FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY l.id_lote";
+            $queries['medicamentos_movimientos']="SELECT x.* FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY x.id_movimiento";
+            $queries['medicamentos_prestamos']="SELECT p.* FROM medicamentos_prestamos p WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=p.id_prestamo AND {$isTestMed}) ORDER BY p.id_prestamo";
+            $queries['medicamentos_prestamos_detalle']="SELECT d.* FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY d.id_detalle_prestamo";
+            $queries['medicamentos_prestamos_devoluciones']="SELECT r.* FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY r.id_devolucion";
+            $queries['medicamentos_prestamos_senas_movimientos']="SELECT sm.* FROM medicamentos_prestamos_senas_movimientos sm WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=sm.id_prestamo AND {$isTestMed}) ORDER BY sm.id_movimiento_sena";
+            $queries['medicamentos_solicitudes']="SELECT s.* FROM medicamentos_solicitudes s WHERE s.clave NOT LIKE 'e2e-%' ORDER BY s.clave";
+            // Los asientos de medicamentos E2E no llevan necesariamente una
+            // etiqueta en el texto: se identifican por sus FK de stock/señas.
+            $testIncome = "(EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE x.id_ingreso_contable=i.id_ingreso AND {$isTestMed}) OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm JOIN medicamentos_prestamos_detalle d ON d.id_prestamo=sm.id_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE sm.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";
+            $testExpense = str_replace(['i.id_ingreso','id_ingreso_contable'],['e.id_egreso','id_egreso_contable'],$testIncome);
+            $queries['contable_ingresos']=preg_replace('/ ORDER BY i\\.id_ingreso$/'," AND NOT {$testIncome} ORDER BY i.id_ingreso",$queries['contable_ingresos']);
+            $queries['contable_egresos']=preg_replace('/ ORDER BY e\\.id_egreso$/'," AND NOT {$testExpense} ORDER BY e.id_egreso",$queries['contable_egresos']);
+        }
         if (self::tableExists($db, 'pagos_inscripciones')) {
             $queries['pagos_inscripciones'] = "SELECT p.* FROM pagos_inscripciones p WHERE NOT EXISTS (" . self::e2eSocioExistsSql('p.id_socio') . ") ORDER BY p.id_pago_inscripcion";
         }

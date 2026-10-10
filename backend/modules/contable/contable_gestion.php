@@ -3,6 +3,34 @@ declare(strict_types=1);
 
 trait ContableGestion
 {
+    // Contrato de los métodos aportados por ContableSoporte al combinar los traits
+    // en la clase Contable. Evita falsos errores de métodos inexistentes en IDEs.
+    abstract protected static function idOpcional(mixed $value, string $label): ?int;
+    abstract protected static function tipoOpcion(mixed $value): string;
+    abstract protected static function medioPago(PDO $db, int $id): array;
+    abstract protected static function opcion(PDO $db, int $id, string $expectedType): array;
+    abstract protected static function opcionConfiguracion(PDO $db, int $id, bool $lock = false): ?array;
+    abstract protected static function cantidadUsosOpcion(PDO $db, string $type, string $name): int;
+    abstract protected static function guardarArchivoEgreso(array $auth): ?array;
+    abstract protected static function borrarArchivoFisico(array $auth, ?string $relativePath): void;
+
+    /** Impide editar/borrar caja generada desde Medicamentos (debe corregirse desde origen). */
+    protected static function protegerMovimientoMedicamentos(PDO $db, string $tipo, int $id): void
+    {
+        $columna = $tipo === 'ingreso' ? 'id_ingreso_contable' : 'id_egreso_contable';
+        foreach (['medicamentos_movimientos', 'medicamentos_prestamos_senas_movimientos'] as $tabla) {
+            // Permite mantener Contabilidad en una instalación aún sin el módulo.
+            $st = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+            $st->execute([$tabla]);
+            if (!(int)$st->fetchColumn()) continue;
+            $st = $db->prepare("SELECT 1 FROM {$tabla} WHERE {$columna} = ? LIMIT 1");
+            $st->execute([$id]);
+            if ($st->fetchColumn()) {
+                api_error('Este movimiento pertenece a Medicamentos y no se puede editar ni eliminar desde Contabilidad.', 'MOVIMIENTO_MEDICAMENTOS_PROTEGIDO', 409);
+            }
+        }
+    }
+
     protected static function guardarOpcionDatos(array $auth, array $body): array
     {
         $db = $auth['db'];
@@ -39,6 +67,13 @@ trait ContableGestion
                     api_error('La opción no pertenece a la lista seleccionada.', 'TIPO_OPCION_INVALIDO', 409);
                 }
 
+                // Las operaciones de Medicamentos guardan la denominación de
+                // categorías, conceptos y proveedores como texto histórico.
+                // Renombrar una opción utilizada cambiaría su identidad en
+                // filtros sin actualizar los asientos originales.
+                if ((string)$before['nombre'] !== $name) {
+                    self::protegerOpcionMedicamentos($db, $type, (string)$before['nombre']);
+                }
                 $statement = $db->prepare(
                     'UPDATE contable_opciones
                      SET nombre = ?
@@ -124,6 +159,9 @@ trait ContableGestion
             $before = self::opcionConfiguracion($db, $id, true);
             if (!$before) api_error('La opción que intentás eliminar no existe.', 'OPCION_CONTABLE_NO_ENCONTRADA', 404);
 
+            // Las categorías y conceptos de movimientos generados por
+            // Medicamentos forman parte de su historial: no se pueden borrar.
+            self::protegerOpcionMedicamentos($db, (string)$before['tipo'], (string)$before['nombre']);
             $usageCount = self::cantidadUsosOpcion($db, (string)$before['tipo'], (string)$before['nombre']);
             $unlinkedCount = self::desvincularOpcionContable(
                 $db,
@@ -151,6 +189,41 @@ trait ContableGestion
                 'registros_desvinculados' => $unlinkedCount,
             ];
         });
+    }
+
+    /**
+     * Los campos proveedor/categoría/concepto se almacenan como texto y deben
+     * permanecer intactos mientras existan asientos ligados a Medicamentos.
+     * Aplica tanto a eliminación definitiva como a renombrado de opciones.
+     * Una baja lógica no altera el historial y sigue permitida.
+     */
+    private static function protegerOpcionMedicamentos(PDO $db, string $type, string $name): void
+    {
+        $targets = match ($type) {
+            'PROVEEDOR' => [
+                ['contable_ingresos', 'id_ingreso', 'id_ingreso_contable', 'proveedor'],
+                ['contable_egresos', 'id_egreso', 'id_egreso_contable', 'proveedor'],
+            ],
+            'CATEGORIA_INGRESO' => [['contable_ingresos', 'id_ingreso', 'id_ingreso_contable', 'categoria']],
+            'CONCEPTO_INGRESO' => [['contable_ingresos', 'id_ingreso', 'id_ingreso_contable', 'concepto']],
+            'CATEGORIA_EGRESO' => [['contable_egresos', 'id_egreso', 'id_egreso_contable', 'categoria']],
+            'CONCEPTO_EGRESO' => [['contable_egresos', 'id_egreso', 'id_egreso_contable', 'concepto']],
+            default => [],
+        };
+        if ($targets === []) return;
+        foreach (['medicamentos_movimientos', 'medicamentos_prestamos_senas_movimientos'] as $related) {
+            $hasTable = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+            $hasTable->execute([$related]);
+            if (!(int)$hasTable->fetchColumn()) continue;
+            foreach ($targets as [$table, $pk, $fk, $field]) {
+                $q = $db->prepare("SELECT 1 FROM {$table} c WHERE c.{$field}=? AND EXISTS
+                    (SELECT 1 FROM {$related} m WHERE m.{$fk}=c.{$pk}) LIMIT 1");
+                $q->execute([$name]);
+                if ($q->fetchColumn()) {
+                    api_error('Esta opción se usa en movimientos históricos de Medicamentos. Podés darla de baja, pero no renombrarla ni eliminarla.', 'OPCION_MEDICAMENTOS_PROTEGIDA', 409);
+                }
+            }
+        }
     }
 
     protected static function desvincularOpcionContable(PDO $db, string $type, string $name): int
@@ -208,6 +281,7 @@ trait ContableGestion
                 $statement->execute([$id]);
                 $before = $statement->fetch();
                 if (!$before) api_error('El ingreso que intentás editar no existe.', 'INGRESO_NO_ENCONTRADO', 404);
+                self::protegerMovimientoMedicamentos($db, 'ingreso', $id);
 
                 $db->prepare(
                     'UPDATE contable_ingresos SET
@@ -274,6 +348,7 @@ trait ContableGestion
             $statement->execute([$id]);
             $before = $statement->fetch();
             if (!$before) api_error('El ingreso no existe.', 'INGRESO_NO_ENCONTRADO', 404);
+            self::protegerMovimientoMedicamentos($db, 'ingreso', $id);
 
             $db->prepare('DELETE FROM contable_ingresos WHERE id_ingreso = ?')->execute([$id]);
             audit_change(
@@ -334,6 +409,7 @@ trait ContableGestion
                     $statement->execute([$id]);
                     $before = $statement->fetch();
                     if (!$before) api_error('El egreso que intentás editar no existe.', 'EGRESO_NO_ENCONTRADO', 404);
+                    self::protegerMovimientoMedicamentos($db, 'egreso', $id);
 
                     $filePath = $before['archivo_path'] ?? null;
                     if ($newFile !== null) {
@@ -425,6 +501,7 @@ trait ContableGestion
             $statement->execute([$id]);
             $before = $statement->fetch();
             if (!$before) api_error('El egreso no existe.', 'EGRESO_NO_ENCONTRADO', 404);
+            self::protegerMovimientoMedicamentos($db, 'egreso', $id);
             $filePath = $before['archivo_path'] ?? null;
 
             $db->prepare('DELETE FROM contable_egresos WHERE id_egreso = ?')->execute([$id]);

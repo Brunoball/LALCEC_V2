@@ -6,6 +6,19 @@ const BOT_SECTIONS = Object.freeze({
   management: "puntos",
 });
 
+const READ_ENDPOINTS = new Set([
+  "panel_chats",
+  "panel_mensajes",
+  "panel_global_hash",
+  "etiquetas_list",
+]);
+
+const RETRYABLE_HTTP_STATUSES = new Set([502, 503, 504]);
+const READ_RETRY_DELAYS = [350, 900];
+
+const endpointKey = (endpoint) =>
+  String(endpoint || "").trim().replace(/\.php$/i, "");
+
 const normalizeEndpoint = (endpoint) => {
   const clean = String(endpoint || "")
     .trim()
@@ -50,6 +63,8 @@ const parseResponse = async (response) => {
   }
 };
 
+const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 const requestDirectly = async (
   section,
   endpoint,
@@ -75,36 +90,76 @@ const request = async (
   endpoint,
   { method = "GET", params, body, formData, signal } = {},
 ) => {
-  // El Panel Bot ya habilita CORS para localhost y valida el mismo Bearer
-  // de la sesión de LALCEC. Local y producción llaman directamente al bot
-  // de Hostinger, sin depender de una clave privada en el backend remoto.
-  const response = await requestDirectly(section, endpoint, {
-    method,
-    params,
-    body,
-    formData,
-    signal,
-  });
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const canRetry =
+    normalizedMethod === "GET" && READ_ENDPOINTS.has(endpointKey(endpoint));
 
-  const data = await parseResponse(response);
+  let attempt = 0;
 
-  if (!response.ok || !data?.success) {
-    const error = new Error(
-      data?.error || data?.mensaje || `Error HTTP ${response.status}`,
-    );
-    error.status = response.status;
-    error.data = data;
-    throw error;
+  while (true) {
+    let response;
+
+    try {
+      response = await requestDirectly(section, endpoint, {
+        method: normalizedMethod,
+        params,
+        body,
+        formData,
+        signal,
+      });
+    } catch (error) {
+      const aborted = signal?.aborted || error?.name === "AbortError";
+      const offline = navigator.onLine === false;
+      if (
+        !canRetry ||
+        aborted ||
+        offline ||
+        attempt >= READ_RETRY_DELAYS.length
+      ) {
+        throw error;
+      }
+
+      await wait(READ_RETRY_DELAYS[attempt]);
+      attempt += 1;
+      continue;
+    }
+
+    if (
+      canRetry &&
+      RETRYABLE_HTTP_STATUSES.has(response.status) &&
+      attempt < READ_RETRY_DELAYS.length &&
+      !signal?.aborted
+    ) {
+      // Consumir/cerrar el body antes de repetir para no dejar recursos de la
+      // respuesta anterior pendientes en navegadores/proxies.
+      try {
+        await response.text();
+      } catch {}
+
+      await wait(READ_RETRY_DELAYS[attempt]);
+      attempt += 1;
+      continue;
+    }
+
+    const data = await parseResponse(response);
+
+    if (!response.ok || !data?.success) {
+      const error = new Error(
+        data?.error || data?.mensaje || `Error HTTP ${response.status}`,
+      );
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+
+    return data;
   }
-
-  return data;
 };
 
 const readsInFlight = new Map();
-const READ_ENDPOINTS = new Set(["panel_chats", "panel_mensajes", "panel_global_hash", "etiquetas_list"]);
 
 const get = (section, endpoint, params, options = {}) => {
-  const readOnly = READ_ENDPOINTS.has(String(endpoint).replace(/\.php$/i, ""));
+  const readOnly = READ_ENDPOINTS.has(endpointKey(endpoint));
   // Sólo agrupar lecturas. Los GET que marcan leído/no leído son mutaciones.
   const key = readOnly && !options.signal ? JSON.stringify([
     getSession()?.token || "", section, endpoint,

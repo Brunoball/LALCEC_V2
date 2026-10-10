@@ -258,6 +258,63 @@ function e2e_registration_payment(PDO $db, int $id): bool
     );
 }
 
+/**
+ * Las acciones de Medicamentos sólo pueden modificar fixtures identificados por
+ * el nombre del medicamento y, en préstamos, por un socio E2E. Nunca alcanza
+ * para autorizar una modificación que el body contenga un texto PW E2E.
+ */
+function e2e_medicamento(PDO $db, int $id): bool
+{
+    return e2e_exists($db,
+        "SELECT 1 FROM medicamentos WHERE id_medicamento=?
+         AND (nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %') LIMIT 1", [$id]);
+}
+
+function e2e_lote(PDO $db, int $id): bool
+{
+    return e2e_exists($db,
+        "SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento
+         WHERE l.id_lote=? AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %') LIMIT 1", [$id]);
+}
+
+function e2e_prestamo(PDO $db, int $id): bool
+{
+    $s=$db->prepare('SELECT id_socio FROM medicamentos_prestamos WHERE id_prestamo=?');
+    $s->execute([$id]); $socio=$s->fetchColumn();
+    if ($socio===false || !e2e_socio($db,(int)$socio)) return false;
+    return !e2e_exists($db,
+        "SELECT 1 FROM medicamentos_prestamos_detalle d
+         JOIN medicamentos_lotes l ON l.id_lote=d.id_lote
+         JOIN medicamentos m ON m.id_medicamento=l.id_medicamento
+         WHERE d.id_prestamo=?
+         AND m.nombre_comercial NOT LIKE 'PW E2E %'
+         AND m.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1", [$id]);
+}
+
+function e2e_detalle_medicamento(PDO $db,int $id): bool
+{
+    $s=$db->prepare('SELECT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_detalle_prestamo=?');
+    $s->execute([$id]);$loan=$s->fetchColumn();
+    return $loan!==false && e2e_prestamo($db,(int)$loan);
+}
+
+function e2e_movimiento_medicamento(PDO $db, int $id): bool
+{
+    $s=$db->prepare('SELECT m.id_lote,m.tipo,m.id_ingreso_contable FROM medicamentos_movimientos m WHERE m.id_movimiento=?');
+    $s->execute([$id]);$mov=$s->fetch();
+    if (!$mov || !e2e_lote($db,(int)$mov['id_lote'])) return false;
+    if ($mov['tipo']==='SALIDA_VENTA' && $mov['id_ingreso_contable']!==null) {
+        // Una venta puede contener diversos medicamentos en un único asiento.
+        return !e2e_exists($db,
+            "SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote
+             JOIN medicamentos md ON md.id_medicamento=l.id_medicamento
+             WHERE x.id_ingreso_contable=? AND x.tipo='SALIDA_VENTA'
+             AND md.nombre_comercial NOT LIKE 'PW E2E %'
+             AND md.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1", [$mov['id_ingreso_contable']]);
+    }
+    return true;
+}
+
 function e2e_positive_int(mixed $value): ?int
 {
     $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -326,6 +383,65 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
     if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture'], true)) return;
 
     switch ($action) {
+        case 'medicamentos_guardar': {
+            $id=e2e_positive_int($body['id_medicamento'] ?? null);
+            if ($id!==null) {
+                e2e_require_target_or_missing($db,$action,$id,'e2e_medicamento','medicamentos','id_medicamento');
+            }
+            if (($id===null || array_key_exists('nombre_comercial',$body))
+                && !e2e_marker_text($body['nombre_comercial']??'')) {
+                e2e_scope_error($action,'El medicamento de prueba debe conservar el nombre PW E2E/PW EE.');
+            }
+            return;
+        }
+        case 'medicamentos_cambiar_estado':
+            e2e_require_target_or_missing($db,$action,$body['id_medicamento']??null,
+                'e2e_medicamento','medicamentos','id_medicamento');
+            return;
+        case 'medicamentos_ingresar':
+            e2e_require_target_or_missing($db,$action,$body['id_medicamento']??null,
+                'e2e_medicamento','medicamentos','id_medicamento');
+            return;
+        case 'medicamentos_salida': {
+            $med=e2e_positive_int($body['id_medicamento']??null);
+            $lot=e2e_positive_int($body['id_lote']??null);
+            if ($med!==null) e2e_require_target_or_missing($db,$action,$med,'e2e_medicamento','medicamentos','id_medicamento');
+            if ($lot!==null) e2e_require_target_or_missing($db,$action,$lot,'e2e_lote','medicamentos_lotes','id_lote');
+            if ($med===null && $lot===null) e2e_scope_error($action,'Elegí un lote o medicamento exclusivo de E2E.');
+            return;
+        }
+        case 'medicamentos_revisar_lote':
+            e2e_require_target_or_missing($db,$action,$body['id_lote']??null,
+                'e2e_lote','medicamentos_lotes','id_lote');
+            return;
+        case 'medicamentos_prestar': {
+            $socio=e2e_positive_int($body['id_socio']??null);
+            if ($socio===null || !e2e_socio($db,$socio))
+                e2e_scope_error($action,'El préstamo requiere un socio E2E.');
+            if (!is_array($body['items']??null) || $body['items']===[])
+                e2e_scope_error($action,'El préstamo requiere lotes E2E.');
+            foreach ($body['items'] as $item) {
+                if (!is_array($item)) e2e_scope_error($action,'Detalle de préstamo inválido.');
+                $lot=e2e_positive_int($item['id_lote']??null);
+                if ($lot===null || !e2e_lote($db,$lot))
+                    e2e_scope_error($action,'El préstamo incluye un lote que no es E2E.');
+            }
+            return;
+        }
+        case 'medicamentos_devolver':
+            e2e_require_target_or_missing($db,$action,$body['id_detalle_prestamo']??null,
+                'e2e_detalle_medicamento','medicamentos_prestamos_detalle','id_detalle_prestamo');
+            return;
+        case 'medicamentos_sena':
+        case 'medicamentos_cerrar':
+            e2e_require_target_or_missing($db,$action,$body['id_prestamo']??null,
+                'e2e_prestamo','medicamentos_prestamos','id_prestamo');
+            return;
+        case 'medicamentos_anular':
+            e2e_require_target_or_missing($db,$action,$body['id_movimiento']??null,
+                'e2e_movimiento_medicamento','medicamentos_movimientos','id_movimiento');
+            return;
+
         case 'socios_guardar': {
             $id = e2e_positive_int($body['id'] ?? $body['id_socio'] ?? null);
             if ($id !== null) {

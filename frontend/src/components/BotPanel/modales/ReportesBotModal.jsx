@@ -170,13 +170,15 @@ const ReportesBotModal = ({ open, onClose }) => {
       }
     };
 
+    const passiveTouchOptions = { passive: true };
+
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown, passiveTouchOptions);
     document.addEventListener("keydown", handleEscape);
 
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown, passiveTouchOptions);
       document.removeEventListener("keydown", handleEscape);
     };
   }, [periodMenuOpen]);

@@ -12,8 +12,8 @@ let refreshRequested = false;
 let generation = 0;
 
 const interval = () => Math.max(
-  document.visibilityState === "hidden" ? 30000 : 4000,
-  failures ? Math.min(60000, 4000 * (2 ** failures)) : 0,
+  document.visibilityState === "hidden" ? 30000 : 5000,
+  failures ? Math.min(60000, 5000 * (2 ** failures)) : 0,
 );
 
 function schedule(delay) {
@@ -37,7 +37,7 @@ async function checkUpdates() {
       ...(latest?.hash ? { hash: latest.hash } : {}),
     }, { signal: currentController.signal });
     if (generation !== currentGeneration) return;
-    if (!data.hash || (!data.unchanged && !data.chat_hashes)) {
+    if (!data.hash || (!data.messages_revision && !data.chat_hashes)) {
       throw new Error("Actualizá los archivos del backend del bot para consultar novedades.");
     }
     if (!data.unchanged) latest = data;
@@ -58,23 +58,28 @@ async function checkUpdates() {
   } catch (error) {
     if (generation === currentGeneration) {
       failures += 1;
-      for (const subscriber of subscribers) {
-        subscriber.hash = null;
-        subscriber.onError?.(error);
+      // No borrar subscriber.hash ante un corte transitorio. Antes eso hacía
+      // que la siguiente conexión exitosa descargara chats/mensajes completos
+      // aunque no hubiera ninguna novedad, realimentando la carga del servidor.
+      // El primer fallo queda silencioso: las lecturas ya tienen reintento corto.
+      if (failures >= 2) {
+        for (const subscriber of subscribers) {
+          subscriber.onError?.(error);
+        }
       }
     }
   } finally {
     window.clearTimeout(timeout);
     if (controller === currentController) controller = null;
     running = false;
-    schedule(refreshRequested && failures === 0 ? 250 : interval());
+    schedule(refreshRequested && failures === 0 ? 350 : interval());
   }
 }
 
 // Una acción del usuario pide comprobar la señal; no se repiten mutaciones.
 export function requestBotRefresh() {
   refreshRequested = true;
-  if (!running) schedule(failures ? interval() : 250);
+  if (!running) schedule(failures ? interval() : 350);
 }
 
 function onVisibilityChange() {

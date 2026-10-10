@@ -56,9 +56,21 @@ function backendActions() {
     modulesRoot,
     (file) => file.endsWith(`${path.sep}routes.php`) && !file.includes(`${path.sep}whatsapp${path.sep}`),
   );
-  const moduleActions = routeFiles.flatMap((file) =>
-    [...read(file).matchAll(/register\('([^']+)'/g)].map((match) => match[1]),
-  );
+  const moduleActions = routeFiles.flatMap((file) => {
+    const source = read(file);
+    const literal = [...source.matchAll(/register\('([^']+)'/g)].map((match) => match[1]);
+    // Medicamentos registra rutas desde dos mapas en foreach. Un grep de
+    // register('literal') las ignoraba y daba falsos 100 % de cobertura.
+    if (file.includes(`${path.sep}medicamentos${path.sep}`)) {
+      const maps = [...source.matchAll(/foreach\s*\(\s*\[([\s\S]*?)\]\s*as\s*\$accion\s*=>\s*\$metodo\)/g)];
+      for (const match of maps) {
+        for (const entry of match[1].matchAll(/'([^']+)'\s*=>\s*'[^']+'/g)) {
+          literal.push(`medicamentos_${entry[1]}`);
+        }
+      }
+    }
+    return literal;
+  });
   const rootApiFile = path.join(BACKEND_ROOT, 'routes', 'api.php');
   const rootActions = fs.existsSync(rootApiFile)
     ? [...read(rootApiFile).matchAll(/register\('([^']+)'/g)].map((match) => match[1])
@@ -220,6 +232,17 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Paginación de egresos',
   'Detalle mensual contable',
   'health',
+  // Acciones visibles incorporadas con Medicamentos.
+  'Nuevo medicamento',
+  'Lotes y vencimientos',
+  'Ingresar stock',
+  'Egresar stock',
+  'Anular operación',
+  'Nuevo préstamo',
+  'Registrar devolución de medicamentos',
+  'Reintegrar seña',
+  'Donar seña a LALCEC',
+  'Cerrar préstamo',
 ];
 
 

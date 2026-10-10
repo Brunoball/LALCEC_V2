@@ -62,6 +62,7 @@ function configuracion_relaciones(array $definition): array
             ['tabla' => 'socios', 'columna' => 'id_medio_pago'],
             ['tabla' => 'contable_ingresos', 'columna' => 'id_medio_pago'],
             ['tabla' => 'contable_egresos', 'columna' => 'id_medio_pago'],
+            ['tabla' => 'medicamentos_prestamos_senas_movimientos', 'columna' => 'id_medio_pago'],
         ],
         'condiciones_iva' => [
             ['tabla' => 'socios_empresas', 'columna' => 'id_condicion_iva'],
@@ -174,4 +175,36 @@ function configuracion_desvincular_referencias(PDO $db, array $definition, int $
         $updated += $statement->rowCount();
     }
     return $updated;
+}
+
+/**
+ * Los cobros, devoluciones, ventas y compras de Medicamentos conservan su medio
+ * de pago original. La baja lógica sí está permitida; la eliminación definitiva
+ * nunca debe desvincular el histórico. Se ejecuta también dentro del bloqueo del
+ * registro padre durante la eliminación para evitar escrituras concurrentes.
+ */
+function configuracion_medio_utilizado_en_medicamentos(PDO $db, array $definition, int $id): bool
+{
+    if ($definition['lista'] !== 'medios_pago') return false;
+    $checks = [
+        ['medicamentos_prestamos_senas_movimientos', 'id_medio_pago', null, null],
+        ['medicamentos_movimientos', 'id_ingreso_contable', 'contable_ingresos', 'id_ingreso'],
+        ['medicamentos_movimientos', 'id_egreso_contable', 'contable_egresos', 'id_egreso'],
+        ['medicamentos_prestamos_senas_movimientos', 'id_ingreso_contable', 'contable_ingresos', 'id_ingreso'],
+        ['medicamentos_prestamos_senas_movimientos', 'id_egreso_contable', 'contable_egresos', 'id_egreso'],
+    ];
+    foreach ($checks as [$source, $ref, $dest, $destId]) {
+        if (!configuracion_tabla_columna_existe($db, $source, $ref)) continue;
+        if ($dest === null) {
+            $stmt = $db->prepare("SELECT 1 FROM `{$source}` WHERE `{$ref}` = ? LIMIT 1");
+        } else {
+            if (!configuracion_tabla_columna_existe($db, $dest, 'id_medio_pago')) continue;
+            $stmt = $db->prepare("SELECT 1 FROM `{$source}` med
+                INNER JOIN `{$dest}` caja ON caja.`{$destId}` = med.`{$ref}`
+                WHERE caja.id_medio_pago = ? LIMIT 1");
+        }
+        $stmt->execute([$id]);
+        if ($stmt->fetchColumn() !== false) return true;
+    }
+    return false;
 }

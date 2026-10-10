@@ -39,6 +39,13 @@ trait ConfiguracionGestion
                         api_error('La opción que intentás editar no existe.', 'OPCION_NO_ENCONTRADA', 404);
                     }
 
+                    // La FK conserva el ID, pero el historial muestra el
+                    // nombre actual. No reinterpretar cobros antiguos por un
+                    // cambio de denominación del medio utilizado.
+                    if ((string)$before['nombre'] !== $name
+                        && configuracion_medio_utilizado_en_medicamentos($db, $definition, $id)) {
+                        api_error('Este medio de pago ya se utilizó en Medicamentos. Podés darlo de baja, pero no cambiar su nombre histórico.', 'MEDIO_MEDICAMENTOS_PROTEGIDO', 409);
+                    }
                     $db->prepare(
                         "UPDATE {$table}
                          SET nombre = ?, actualizado_en = NOW()
@@ -131,6 +138,11 @@ trait ConfiguracionGestion
         $definition = configuracion_lista_definicion($body['lista'] ?? null);
         $id = positive_id($body['id'] ?? null, $definition['etiqueta']);
 
+        // Evitar modificaciones DDL inútiles cuando ya es una opción protegida.
+        if (configuracion_medio_utilizado_en_medicamentos($db, $definition, $id)) {
+            api_error('Este medio de pago tiene operaciones de Medicamentos. Podés darlo de baja, pero no eliminarlo definitivamente.', 'MEDIO_MEDICAMENTOS_PROTEGIDO', 409);
+        }
+
         // ALTER TABLE hace commit implícito en MySQL/MariaDB, por eso la
         // preparación de columnas nullable se realiza antes de la transacción.
         configuracion_preparar_referencias_nullable($db, $definition);
@@ -143,6 +155,9 @@ trait ConfiguracionGestion
                 api_error('La opción solicitada no existe.', 'OPCION_NO_ENCONTRADA', 404);
             }
 
+            if (configuracion_medio_utilizado_en_medicamentos($db, $definition, $id)) {
+                api_error('Este medio de pago tiene operaciones de Medicamentos. Podés darlo de baja, pero no eliminarlo definitivamente.', 'MEDIO_MEDICAMENTOS_PROTEGIDO', 409);
+            }
             $usageCount = configuracion_cantidad_usos($db, $definition, $id);
             // Desvinculamos primero los hijos. Las FK pueden conservar RESTRICT:
             // al momento del DELETE ya no existe ninguna referencia al catálogo.
@@ -199,7 +214,9 @@ trait ConfiguracionGestion
                 $deleted = false;
             } else {
                 $usageCount = configuracion_cantidad_usos($db, $definition, $id);
-                if ($usageCount === 0) {
+                // Los pagos de medicamentos mantienen toda su cadena de referencias.
+                $proteccionMedicamentos = configuracion_medio_utilizado_en_medicamentos($db, $definition, $id);
+                if ($usageCount === 0 && !$proteccionMedicamentos) {
                     $db->prepare("DELETE FROM {$table} WHERE {$idField} = ?")->execute([$id]);
                     $after = null;
                     $action = 'ELIMINAR_' . $definition['entidad'];

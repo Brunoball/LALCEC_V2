@@ -584,6 +584,7 @@ trait ContableConsultas
             array_push($params, ...$searchFilter['params']);
         }
 
+        $medicamentosLink = $isIncome ? 'id_ingreso_contable' : 'id_egreso_contable';
         $extra = $isIncome
             ? "'' AS numero_comprobante, NULL AS archivo_path"
             : 'm.numero_comprobante, m.archivo_path';
@@ -592,6 +593,9 @@ trait ContableConsultas
                 m.{$idColumn}, m.fecha, m.id_medio_pago, m.proveedor, m.categoria,
                 m.concepto, m.importe, m.detalle, m.creado_en, m.actualizado_en,
                 COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio,
+                CASE WHEN EXISTS (SELECT 1 FROM medicamentos_movimientos mm WHERE mm.{$medicamentosLink} = m.{$idColumn})
+                      OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm WHERE sm.{$medicamentosLink} = m.{$idColumn})
+                     THEN 1 ELSE 0 END AS es_medicamentos,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = 'PROVEEDOR' AND o.nombre = m.proveedor LIMIT 1) AS id_proveedor,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = '{$categoryType}' AND o.nombre = m.categoria LIMIT 1) AS id_categoria,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = '{$conceptType}' AND o.nombre = m.concepto LIMIT 1) AS id_concepto,
@@ -616,6 +620,7 @@ trait ContableConsultas
                 'id_proveedor' => $row['id_proveedor'] === null ? null : (int)$row['id_proveedor'],
                 'id_categoria' => $row['id_categoria'] === null ? null : (int)$row['id_categoria'],
                 'id_concepto' => $row['id_concepto'] === null ? null : (int)$row['id_concepto'],
+                'es_medicamentos' => (int)($row['es_medicamentos'] ?? 0) === 1,
                 'medio' => (string)$row['medio'],
                 'proveedor' => $row['proveedor'] === null ? null : (string)$row['proveedor'],
                 'categoria' => $categoryName,

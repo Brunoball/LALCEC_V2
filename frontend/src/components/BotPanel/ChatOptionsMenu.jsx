@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBroom, faEllipsisVertical, faEnvelope, faEnvelopeOpen, faImages, faPen, faTag, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import "./ChatOptionsMenu.css";
@@ -23,9 +23,10 @@ const ChatOptionsMenu = ({
 }) => {
   const wrapRef = useRef(null);
   const btnRef = useRef(null);
+  const recalcFrameRef = useRef(0);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
-  const calcPos = () => {
+  const calcPos = useCallback(() => {
     const b = btnRef.current;
     if (!b) return;
 
@@ -41,8 +42,19 @@ const ChatOptionsMenu = ({
     const maxTop = window.innerHeight - menuH - 8;
     if (top > maxTop) top = Math.max(8, r.top - menuH - GAP);
 
-    setPos({ top, left });
-  };
+    setPos((current) =>
+      current.top === top && current.left === left ? current : { top, left }
+    );
+  }, []);
+
+  const scheduleCalcPos = useCallback(() => {
+    if (recalcFrameRef.current) return;
+
+    recalcFrameRef.current = window.requestAnimationFrame(() => {
+      recalcFrameRef.current = 0;
+      calcPos();
+    });
+  }, [calcPos]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,20 +70,25 @@ const ChatOptionsMenu = ({
       if (e.key === "Escape") onClose?.();
     };
 
-    const onRecalc = () => calcPos();
+    const passiveScrollOptions = { capture: true, passive: true };
 
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onEsc);
-    window.addEventListener("resize", onRecalc);
-    window.addEventListener("scroll", onRecalc, true);
+    window.addEventListener("resize", scheduleCalcPos, { passive: true });
+    window.addEventListener("scroll", scheduleCalcPos, passiveScrollOptions);
 
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onEsc);
-      window.removeEventListener("resize", onRecalc);
-      window.removeEventListener("scroll", onRecalc, true);
+      window.removeEventListener("resize", scheduleCalcPos);
+      window.removeEventListener("scroll", scheduleCalcPos, passiveScrollOptions);
+
+      if (recalcFrameRef.current) {
+        window.cancelAnimationFrame(recalcFrameRef.current);
+        recalcFrameRef.current = 0;
+      }
     };
-  }, [open, onClose]);
+  }, [open, onClose, calcPos, scheduleCalcPos]);
 
   const toggle = (e) => {
     e.preventDefault();
