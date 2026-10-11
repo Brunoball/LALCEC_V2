@@ -10,7 +10,9 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
   test('alta UI completa, listado, lotes, historial, edición y baja/reactivación', async ({page,request}) => {
     const medicine=medFixture();
     const first=entryFixture({cantidad:4});
-    await page.goto('/medicamentos/stock');
+    // Comprobar también la ruta alias protegida, que redirige a Stock.
+    await page.goto('/medicamentos');
+    await expect(page).toHaveURL(/\/medicamentos\/stock$/);
     await expect(page.getByRole('heading',{name:'Medicamentos · Stock'})).toBeVisible();
     await expect(page.getByRole('table',{name:'Stock de medicamentos'})).toBeVisible();
     await page.getByRole('button',{name:'Nuevo medicamento'}).click();
@@ -20,22 +22,35 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
     await dialog.getByLabel('Droga').fill(medicine.droga);
     await dialog.getByLabel('Laboratorio').fill(medicine.laboratorio);
     await dialog.getByLabel('Dosis').fill(medicine.dosis);
+    // Cantidad y fechas están dentro de la segunda pestaña del alta.
+    await dialog.getByRole('tab',{name:'Primer ingreso'}).click();
     await dialog.getByLabel('Cantidad').fill('4');
     await dialog.getByLabel('Fecha de ingreso').fill(first.fecha_ingreso);
     await dialog.getByLabel('Fecha de vencimiento').fill(first.fecha_vencimiento);
     await dialog.getByLabel('Número de lote (opcional)').fill(first.numero_lote);
     await dialog.getByRole('button',{name:'Guardar'}).click();
     await expect(dialog).toHaveCount(0);
-    const search=page.getByRole('textbox',{name:'Buscar'});
+    const search=page.getByRole('textbox',{name:'Búsqueda'});
     await search.fill(medicine.nombre_comercial);
     const row=rowFor(page,medicine.nombre_comercial);
     await expect(row).toBeVisible();
-    await expect(row).toContainText('4 UNIDAD disponibles');
+    await expect(row.getByRole('cell',{name:/4\s*UNIDAD\s*Disponibles/i})).toBeVisible();
     await row.getByRole('button',{name:'Lotes y vencimientos'}).click();
     const lots=page.getByRole('dialog',{name:new RegExp('Lotes y vencimientos')});
     await expect(lots).toContainText(first.numero_lote);
     await expect(lots).toContainText('Disponible');
     await lots.getByRole('button',{name:'Cerrar'}).click();
+    // Recorrer la acción visible 'Ingresar stock' y verificar la escritura real.
+    await row.getByRole('button',{name:'Ingresar stock'}).click();
+    const ingreso=page.getByRole('dialog',{name:/Ingresar stock/});
+    await expect(ingreso).toBeVisible();
+    await ingreso.getByRole('spinbutton',{name:/^Cantidad\s*\*?$/}).fill('2');
+    await ingreso.getByLabel('Fecha de vencimiento').fill(futureIso(250));
+    const otroLote=entryFixture({cantidad:2,fecha_vencimiento:futureIso(250)}).numero_lote;
+    await ingreso.getByLabel('Número de lote (opcional)').fill(otroLote);
+    await ingreso.getByRole('button',{name:'Guardar'}).click();
+    await expect(ingreso).toHaveCount(0);
+    await expect(row.getByRole('cell',{name:/6\s*UNIDAD\s*Disponibles/i})).toBeVisible();
     await row.getByRole('button',{name:'Historial'}).click();
     const history=page.getByRole('dialog',{name:/Historial/});
     await expect(history).toContainText(first.numero_lote);
@@ -71,17 +86,21 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
       id_medicamento:fx.id,...entryFixture({cantidad:4,fecha_vencimiento:futureIso(200)}),
     }});
     await page.goto('/medicamentos/stock');
-    await page.getByRole('textbox',{name:'Buscar'}).fill(fx.medicine.nombre_comercial);
+    await page.getByRole('textbox',{name:'Búsqueda'}).fill(fx.medicine.nombre_comercial);
     const row=rowFor(page,fx.medicine.nombre_comercial);
     await expect(row).toBeVisible();
     await row.getByRole('button',{name:'Egresar stock'}).click();
     const modal=page.getByRole('dialog',{name:/Egresar stock/});
     await expect(modal).toBeVisible();
     await modal.getByLabel('Cantidad').fill('7');
-    await expect(modal).toContainText('No hay stock suficiente');
+    await modal.getByRole('tab',{name:'Lotes asignados'}).click();
+    await expect(modal.getByText(/No hay stock suficiente/)).toBeVisible();
+    await modal.getByRole('tab',{name:'Datos del egreso'}).click();
     await expect(modal.getByRole('button',{name:'Guardar'})).toBeDisabled();
     await modal.getByLabel('Cantidad').fill('5');
-    await expect(modal).toContainText('Asignación automática por vencimiento (2 lotes)');
+    await modal.getByRole('tab',{name:'Lotes asignados'}).click();
+    await expect(modal.getByText(/Asignación automática por vencimiento \(2 lotes\)/)).toBeVisible();
+    await modal.getByRole('tab',{name:'Datos del egreso'}).click();
     await expect(modal.getByRole('button',{name:'Guardar'})).toBeEnabled();
     await modal.getByLabel('Detalle / motivo').fill('PW E2E ENTREGA DESDE UI');
     await modal.getByRole('button',{name:'Guardar'}).click();
@@ -99,10 +118,11 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
     await page.goto('/medicamentos/prestamos');
     await expect(page.getByRole('heading',{name:'Medicamentos · Préstamos'})).toBeVisible();
     await expect(page.getByRole('button',{name:'Nuevo préstamo'})).toBeVisible();
-    const search=page.getByRole('textbox',{name:'Buscar socio'});
+    const search=page.getByRole('textbox',{name:'Búsqueda'});
     await search.fill(borrower.person.dni);
     const table=page.getByRole('table',{name:'Préstamos de medicamentos'});
-    const row=table.getByRole('row').filter({hasText:`#${loanId}`}).last();
+    // Buscar la celda exacta dentro de cada fila, sin reanclar el filtro a la tabla.
+    const row=table.getByRole('row').filter({has:page.getByRole('cell',{name:`#${loanId}`,exact:true})});
     await expect(row).toContainText(borrower.person.dni);
     await row.getByRole('button',{name:`Ver detalle del préstamo #${loanId}`}).click();
     const detail=page.getByRole('dialog',{name:new RegExp(`Préstamo #${loanId}`)});
@@ -121,7 +141,10 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(4);
     await row.getByRole('button',{name:'Cerrar préstamo'}).click();
     const closing=page.getByRole('dialog',{name:/Cerrar préstamo definitivamente/});
-    await expect(closing).toContainText('Unidades que no se devolvieron');
+    // Verificar la etiqueta real del modal y el saldo pendiente después de devolver 1 de 2 unidades.
+    const pendingUnits = closing.locator('.gdel-row').filter({hasText:'Unidades sin devolver'});
+    await expect(pendingUnits.locator('.gdel-label')).toHaveText('Unidades sin devolver');
+    await expect(pendingUnits.locator('.gdel-value')).toHaveText('1');
     await closing.getByRole('button',{name:'Confirmar cierre'}).click();
     await expect(closing).toHaveCount(0);
     const details=await apiCall(request,'medicamentos_prestamo_detalle',{params:{id:loanId}});

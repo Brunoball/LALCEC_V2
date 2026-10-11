@@ -58,7 +58,7 @@ function backendActions() {
   );
   const moduleActions = routeFiles.flatMap((file) => {
     const source = read(file);
-    const literal = [...source.matchAll(/register\('([^']+)'/g)].map((match) => match[1]);
+    const literal = [...source.matchAll(/register\(\s*'([^']+)'\s*,/g)].map((match) => match[1]);
     // Medicamentos registra rutas desde dos mapas en foreach. Un grep de
     // register('literal') las ignoraba y daba falsos 100 % de cobertura.
     if (file.includes(`${path.sep}medicamentos${path.sep}`)) {
@@ -73,7 +73,7 @@ function backendActions() {
   });
   const rootApiFile = path.join(BACKEND_ROOT, 'routes', 'api.php');
   const rootActions = fs.existsSync(rootApiFile)
-    ? [...read(rootApiFile).matchAll(/register\('([^']+)'/g)].map((match) => match[1])
+    ? [...read(rootApiFile).matchAll(/register\(\s*'([^']+)'\s*,/g)].map((match) => match[1])
     : [];
   return [...new Set([...moduleActions, ...rootActions])].sort();
 }

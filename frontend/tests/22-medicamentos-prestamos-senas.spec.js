@@ -11,7 +11,7 @@ async function loanDetail(request, id) {
 }
 
 test.describe('Medicamentos: préstamos, devoluciones y señas contables', () => {
-  test('préstamo con seña, devolución parcial, reintegro y cierre que dona saldo restante sin duplicar caja', async ({ request }) => {
+  test('préstamo con seña, devolución parcial, reintegro y cierre que dona saldo restante sin duplicar caja', async ({ request, page }) => {
     await requireAccountingOptions(request,{
       CATEGORIA_INGRESO:['SEÑAS DE MEDICAMENTOS'], CONCEPTO_INGRESO:['COBRO DE SEÑA'],
       CATEGORIA_EGRESO:['DEVOLUCIONES DE SEÑAS'], CONCEPTO_EGRESO:['DEVOLUCIÓN DE SEÑA'],
@@ -52,12 +52,32 @@ test.describe('Medicamentos: préstamos, devoluciones y señas contables', () =>
       id_detalle_prestamo:detailId,cantidad:3,fecha_vencimiento:futureIso(200),
     },/supera|pendiente/i);
 
-    await apiCall(request,'medicamentos_sena',{method:'POST',data:{
-      id_prestamo:id,tipo:'DEVOLUCION_SENA',monto:'25.00',id_medio_pago:medio,
-    }});
-    await apiCall(request,'medicamentos_sena',{method:'POST',data:{
-      id_prestamo:id,tipo:'SENA_DONADA',monto:'15.00',observaciones:'PW E2E DONACION PARCIAL',
-    }});
+    // Además del contrato API, recorrer de punta a punta las dos acciones
+    // económicas de la UI y comprobar su persistencia en el detalle.
+    await page.goto('/medicamentos/prestamos');
+    await page.getByRole('textbox',{name:'Búsqueda'}).fill(person.person.dni);
+    const loansTable=page.getByRole('table',{name:'Préstamos de medicamentos'});
+    // El locator `has` es relativo a cada fila; no debe empezar otra vez en la tabla.
+    const loanRow=loansTable.getByRole('row').filter({has:page.getByRole('cell',{name:`#${id}`,exact:true})});
+    await expect(loanRow).toBeVisible();
+    await loanRow.getByRole('button',{name:'Reintegrar seña'}).click();
+    const refundModal=page.getByRole('dialog',{name:'Reintegrar seña'});
+    await expect(refundModal).toBeVisible();
+    await refundModal.getByLabel('Monto a reintegrar ($)').fill('25.00');
+    await refundModal.getByLabel('Medio de pago del reintegro').selectOption(String(medio));
+    await refundModal.getByRole('button',{name:'Confirmar reintegro'}).click();
+    await expect(refundModal).toHaveCount(0);
+    expect((await loanDetail(request,id)).senas.filter(x=>x.tipo==='DEVOLUCION_SENA')).toHaveLength(1);
+
+    await expect(loanRow.getByRole('button',{name:'Donar seña a LALCEC'})).toBeVisible();
+    await loanRow.getByRole('button',{name:'Donar seña a LALCEC'}).click();
+    const donationModal=page.getByRole('dialog',{name:'Registrar donación de seña'});
+    await expect(donationModal).toBeVisible();
+    await donationModal.getByLabel('Monto que queda como donación ($)').fill('15.00');
+    await donationModal.getByLabel('Observaciones').fill('PW E2E DONACION PARCIAL');
+    await donationModal.getByRole('button',{name:'Confirmar donación'}).click();
+    await expect(donationModal).toHaveCount(0);
+    expect((await loanDetail(request,id)).senas.filter(x=>x.tipo==='SENA_DONADA')).toHaveLength(1);
     await assertError(request,'medicamentos_sena',{
       id_prestamo:id,tipo:'DEVOLUCION_SENA',monto:'41.00',id_medio_pago:medio,
     },/supera|pendiente/i);

@@ -1,10 +1,10 @@
 # LALCEC V2 — Testing de cierre de Medicamentos (10/10/2026)
 
-Esta entrega modifica **solo archivos de `tests/`**. No cambia producción, frontend, backend ni SQL. Usar junto con los **últimos** `backend.zip` y `src.zip` de LALCEC V2; el backend debe tener activo `core/e2e_guard.php` y los endpoints `e2e_cleanup`, `e2e_snapshot` y `e2e_guard_probe`.
+Esta corrección modifica **solo archivos de `tests/`** y aporta un SQL opcional de inicialización contable. **No cambia producción, frontend ni backend**. El SQL no se ejecuta automáticamente. Usar junto con los **últimos** `backend.zip` y `src.zip` de LALCEC V2; el backend debe tener activo `core/e2e_guard.php` y los endpoints `e2e_cleanup`, `e2e_snapshot` y `e2e_guard_probe`.
 
 ## Instalación
 
-Descomprimir el ZIP en la carpeta del proyecto, conservando la carpeta `tests/` (en el proyecto habitual estará dentro de `frontend/tests/`). Reemplazar `tests/00-cobertura-total.spec.js` y `tests/07-permisos-solo-lectura.spec.js`; agregar los tests 20-24 y `tests/helpers/medicamentos.helper.js`. **No reemplazar otros tests existentes.**
+Descomprimir el ZIP en la carpeta del proyecto, conservando la carpeta `tests/` (en el proyecto habitual estará dentro de `frontend/tests/`). Reemplazar exclusivamente los archivos incluidos en `tests/` (00, 21, 22, 23 y este README). Conservar intactos los otros tests. El archivo `PREPARAR_OPCIONES_CONTABLES.sql` es **opcional** y se ejecuta únicamente de forma deliberada en la DB de pruebas.
 
 ## Ejecución
 
@@ -42,4 +42,12 @@ npx playwright test --project=chromium --workers=1 --reporter=list
 | 07 — Permisos (actualizado) | Consultas de Medicamentos con cuenta lectura; prohibición de todas las mutaciones; ocultación de botones de escritura |
 | 00 — Contrato (actualizado) | Descubre ahora las 18 acciones declaradas por `foreach` en `routes.php`, antes ignoradas; exige referencias de cobertura en las specs |
 
-**Estado:** pruebas escritas y analizadas sintácticamente. No se ejecutaron contra una instalación de LALCEC/MySQL ni se calculó cobertura instrumentada de líneas o ramas; el resultado final depende de correr la suite completa.
+## Correcciones de la corrida 144/152 del 10/10/2026
+
+- `00`: ya no confunde `register('medicamentos_'.$accion, ...)` con la acción literal `medicamentos_`; verifica las 18 acciones dinámicas reales y la ruta alias `/medicamentos`.
+- `23`: corrige el filtro `Búsqueda`, recorre la pestaña `Primer ingreso` antes de llenar cantidad, valida estados en `Lotes asignados` y prueba la entrada de stock desde la UI.
+- `21`: conserva los contratos de compra/venta y comprueba la anulación mediante su modal real.
+- `22`: comprueba reintegro y donación parcial desde los botones y formularios reales, además de confirmar su persistencia.
+- **Cuatro opciones contables faltantes:** el backend las generaría automáticamente al contabilizar; eso alteraría configuración no E2E y haría fallar el control de integridad del entorno compartido. Por eso `requireAccountingOptions` sigue abortando antes de escribir. El archivo `PREPARAR_OPCIONES_CONTABLES.sql` permite darlas de alta **una sola vez, manualmente, en una DB de desarrollo/pruebas**, antes del inicio del test y de su snapshot.
+
+**Comprobación efectuada:** los cuatro archivos JS pasan `node --check`; la auditoría estática del test 00 encuentra 90 acciones declaradas, 20 rutas, sin acciones, rutas ni marcadores faltantes. **No se ha ejecutado nuevamente la suite Playwright con la DB y navegador reales.** Hasta repetir los 152 escenarios y revisar cleanup/baseline, no se puede certificar un cierre al 100 % ni congelar el módulo solo con esta revisión.

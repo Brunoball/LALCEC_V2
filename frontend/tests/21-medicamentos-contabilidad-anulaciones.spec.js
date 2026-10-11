@@ -24,7 +24,7 @@ async function prepare(request, use) {
 
 // No modificar opciones automáticas NO E2E: si faltan, el test falla antes de escribir.
 test.describe('Medicamentos: Contabilidad, compras, ventas y contramovimientos', () => {
-  test('compra: egreso, proveedor histórico, idempotencia y anulación con reintegro', async ({ request }) => {
+  test('compra: egreso, proveedor histórico, idempotencia y anulación con reintegro', async ({ request, page }) => {
     const medio = await prepare(request, {
       CATEGORIA_EGRESO:['COMPRA DE MEDICAMENTOS'],
       CONCEPTO_EGRESO:['COMPRA DE MEDICAMENTOS'],
@@ -57,6 +57,33 @@ test.describe('Medicamentos: Contabilidad, compras, ventas y contramovimientos',
     expect(hist.find(x=>Number(x.id_movimiento)===Number(original.id_movimiento))).toMatchObject({tipo:'INGRESO_COMPRA'});
     expect(hist.find(x=>Number(x.id_movimiento)===Number(original.id_movimiento)).anulada).toBeTruthy();
     await assertError(request,'medicamentos_anular',reversal,/anulada|repetir/i);
+    expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(fx.first.cantidad);
+
+    // 'Anular operación' también se comprueba desde la interfaz, en un
+    // segundo lote de prueba para no quitar el contrato API anterior.
+    const uiPurchase=entryFixture({origen:'COMPRA',cantidad:3,costo_unitario:'8.00',id_medio_pago:medio});
+    const uiCreated=await apiCall(request,'medicamentos_ingresar',{method:'POST',data:{id_medicamento:fx.id,...uiPurchase}});
+    await page.goto('/medicamentos/stock');
+    await page.getByRole('textbox',{name:'Búsqueda'}).fill(fx.medicine.nombre_comercial);
+    const table=page.getByRole('table',{name:'Stock de medicamentos'});
+    const medRow=table.getByRole('row').filter({hasText:fx.medicine.nombre_comercial});
+    await expect(medRow).toBeVisible();
+    await medRow.getByRole('button',{name:'Historial'}).click();
+    const histModal=page.getByRole('dialog',{name:/Historial/});
+    await expect(histModal).toBeVisible();
+    const movement=(await movementsOf(request,fx.id)).find(m=>Number(m.id_lote)===Number(uiCreated.id_lote) && m.tipo==='INGRESO_COMPRA');
+    expect(movement).toBeTruthy();
+    const movementRow=histModal.locator('.med-history-row').filter({hasText:uiPurchase.numero_lote});
+    await expect(movementRow).toBeVisible();
+    await movementRow.getByRole('button',{name:'Anular operación'}).click();
+    const annulModal=page.getByRole('dialog',{name:'Anular compra de medicamentos'});
+    await expect(annulModal).toBeVisible();
+    await annulModal.getByLabel('Medio de pago utilizado para el reintegro').selectOption(String(medio));
+    await annulModal.getByLabel('Motivo documentado de anulación').fill('PW E2E ANULACION DESDE UI POR COMPRA ERRONEA');
+    await annulModal.getByRole('checkbox',{name:/Confirmo la devolución física/}).check();
+    await annulModal.getByRole('button',{name:'Registrar anulación'}).click();
+    await expect(annulModal).toHaveCount(0);
+    expect((await movementsOf(request,fx.id)).find(m=>Number(m.id_movimiento)===Number(movement.id_movimiento)).anulada).toBeTruthy();
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(fx.first.cantidad);
   });
 
