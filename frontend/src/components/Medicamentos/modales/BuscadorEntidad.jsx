@@ -1,4 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /** Buscador en un solo campo: buscar, desplegar y seleccionar sin un segundo <select>. */
 export default function BuscadorEntidad({
@@ -7,6 +8,8 @@ export default function BuscadorEntidad({
 }) {
   const listId = useId();
   const inputRef = useRef(null);
+  const resultsRef = useRef(null);
+  const [popupStyle, setPopupStyle] = useState(null);
   const [texto, setTexto] = useState(selectedLabel);
   const [abierto, setAbierto] = useState(false);
   const [opciones, setOpciones] = useState([]);
@@ -47,6 +50,74 @@ export default function BuscadorEntidad({
     return () => { vigente = false; clearTimeout(temporizador); };
   }, [abierto, texto, buscar]);
 
+
+  // Los formularios de Medicamentos tienen paneles con overflow: auto/hidden.
+  // El desplegable sale del árbol visual del modal para evitar que lo recorten
+  // sus contenedores (incluido el pie fijo y las pestañas).
+  useLayoutEffect(() => {
+    if (!abierto || disabled) {
+      setPopupStyle(null);
+      return undefined;
+    }
+
+    let frame = null;
+    const ajustar = () => {
+      const input = inputRef.current;
+      if (!input) return;
+      const rect = input.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        setAbierto(false);
+        return;
+      }
+
+      const margen = 10;
+      const separacion = 6;
+      const anchoVentana = window.innerWidth;
+      const altoVentana = window.innerHeight;
+      const width = Math.min(rect.width, anchoVentana - margen * 2);
+      const left = Math.max(margen, Math.min(rect.left, anchoVentana - width - margen));
+      const abajo = Math.max(0, altoVentana - rect.bottom - separacion - margen);
+      const arriba = Math.max(0, rect.top - separacion - margen);
+      const mostrarArriba = abajo < 170 && arriba > abajo;
+      const maxHeight = Math.min(230, mostrarArriba ? arriba : abajo);
+      const top = mostrarArriba
+        ? rect.top - separacion - maxHeight
+        : rect.bottom + separacion;
+
+      // Si el usuario desplazó el panel y ya no ve el campo, ocultamos su lista.
+      const panel = input.closest('.med-tab-panel, .entity-modal__body');
+      if (panel) {
+        const area = panel.getBoundingClientRect();
+        if (rect.bottom <= area.top || rect.top >= area.bottom) {
+          setAbierto(false);
+          return;
+        }
+      }
+
+      const nuevo = { position: 'fixed', top, left, width, maxHeight };
+      setPopupStyle(prev => prev && Object.keys(nuevo).every(k => prev[k] === nuevo[k]) ? prev : nuevo);
+    };
+    const programar = () => {
+      if (frame != null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        ajustar();
+      });
+    };
+
+    ajustar();
+    // capture escucha el scroll de los paneles internos, no sólo el de window.
+    document.addEventListener('scroll', programar, true);
+    window.addEventListener('resize', programar);
+    window.visualViewport?.addEventListener('resize', programar);
+    return () => {
+      document.removeEventListener('scroll', programar, true);
+      window.removeEventListener('resize', programar);
+      window.visualViewport?.removeEventListener('resize', programar);
+      if (frame != null) window.cancelAnimationFrame(frame);
+    };
+  }, [abierto, disabled]);
+
   const elegir = (opcion) => {
     onSelect(opcion);
     setTexto(opcion?.nombre || '');
@@ -71,9 +142,38 @@ export default function BuscadorEntidad({
     }
   };
 
+  const resultados = abierto && popupStyle && createPortal(
+    <div ref={resultsRef} id={listId} className="med-buscador__resultados med-buscador__resultados--portal"
+      role="listbox" style={popupStyle} onMouseDown={event => event.stopPropagation()}>
+        <div className="med-buscador__resultados-scroll">
+          {cargando ? <div className="med-buscador__mensaje">Buscando...</div> : null}
+          {error ? <div className="med-buscador__mensaje med-buscador__error">{error}</div> : null}
+          {!cargando && !opciones.length && !error ?
+            <div className="med-buscador__mensaje">No se encontraron registros{manual ? '. Podés agregarlo de forma manual.' : '.'}</div> : null}
+          {!cargando && opciones.map((item, index) => <button type="button" role="option"
+            aria-selected={index === activo} id={`${listId}-option-${index}`}
+            className={`med-buscador__opcion${index === activo ? ' is-active' : ''}`}
+            key={item.clave} onMouseDown={event => event.preventDefault()}
+            onClick={() => elegir(item)}>
+            <span className="med-buscador__nombre">{item.nombre}</span>
+            <small>{item.tipo}{item.detalle ? ` · ${item.detalle}` : ''}</small>
+          </button>)}
+          {mostrarManual && !cargando ? <button type="button" role="option"
+            aria-selected={activo === opciones.length}
+            id={`${listId}-option-${opciones.length}`}
+            className={`med-buscador__opcion med-buscador__manual${activo === opciones.length ? ' is-active' : ''}`}
+            onMouseDown={event => event.preventDefault()} onClick={elegirManual}>
+            <span className="med-buscador__nombre">+ USAR COMO DONANTE / PROVEEDOR EXTERNO</span>
+            <small>{externo}</small>
+          </button> : null}
+        </div>
+      </div>,
+    document.body
+  );
+
   return <div className={`entity-field med-buscador${wide ? ' entity-field--wide' : ''}`}
     onBlur={event => {
-      if (event.currentTarget.contains(event.relatedTarget)) return;
+      if (event.currentTarget.contains(event.relatedTarget) || resultsRef.current?.contains(event.relatedTarget)) return;
       setAbierto(false);
       // Una búsqueda escrita pero no elegida no reemplaza la selección previa.
       setTexto(selectedLabel || '');
@@ -94,29 +194,8 @@ export default function BuscadorEntidad({
           setActivo(-1);
           if (value) onSelect(null); // Nunca enviar una selección antigua tras modificar la búsqueda.
         }} />
-      {abierto && <div id={listId} className="med-buscador__resultados" role="listbox">
-        {cargando ? <div className="med-buscador__mensaje">Buscando...</div> : null}
-        {error ? <div className="med-buscador__mensaje med-buscador__error">{error}</div> : null}
-        {!cargando && !opciones.length && !error ?
-          <div className="med-buscador__mensaje">No se encontraron registros{manual ? '. Podés agregarlo de forma manual.' : '.'}</div> : null}
-        {!cargando && opciones.map((item, index) => <button type="button" role="option"
-          aria-selected={index === activo} id={`${listId}-option-${index}`}
-          className={`med-buscador__opcion${index === activo ? ' is-active' : ''}`}
-          key={item.clave} onMouseDown={event => event.preventDefault()}
-          onClick={() => elegir(item)}>
-          <span className="med-buscador__nombre">{item.nombre}</span>
-          <small>{item.tipo}{item.detalle ? ` · ${item.detalle}` : ''}</small>
-        </button>)}
-        {mostrarManual && !cargando ? <button type="button" role="option"
-          aria-selected={activo === opciones.length}
-          id={`${listId}-option-${opciones.length}`}
-          className={`med-buscador__opcion med-buscador__manual${activo === opciones.length ? ' is-active' : ''}`}
-          onMouseDown={event => event.preventDefault()} onClick={elegirManual}>
-          <span className="med-buscador__nombre">+ USAR COMO DONANTE / PROVEEDOR EXTERNO</span>
-          <small>{externo}</small>
-        </button> : null}
-      </div>}
     </div>
+    {resultados}
     {manual && <small className="med-buscador__ayuda">Buscá en Contable o Socios, o escribí un nombre y elegí la opción de proveedor externo.</small>}
   </div>;
 }

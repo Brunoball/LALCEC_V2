@@ -50,6 +50,10 @@ const estadoVisible = m => {
   else if (num(m.stock_utilizable) === 0) notas.push('Sin stock disponible');
   return notas.join(' · ');
 };
+// Mantener coherencia entre el estado real del lote, su chip y el detalle visual.
+const tonoLote = lot => lot.estado === 'DESCARTADO' ? 'descartado'
+  : lot.fecha_vencimiento < fechaHoy() ? 'vencido'
+  : lot.estado === 'BLOQUEADO' ? 'bloqueado' : 'vigente';
 const situacionLote = lot => lot.fecha_vencimiento < fechaHoy()
   ? (lot.estado === 'BLOQUEADO' ? 'BLOQUEADO Y VENCIDO' : lot.estado === 'DESCARTADO' ? 'DESCARTADO' : 'VENCIDO')
   : (statusName[lot.estado] || lot.estado);
@@ -109,6 +113,7 @@ export default function Stock() {
   const [lotTarget, setLotTarget] = useState(null);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [selected, setSelected] = useState(null);
   const [med, setMed] = useState(newMedicine);
   const [entry, setEntry] = useState(newEntry);
@@ -203,7 +208,7 @@ export default function Stock() {
     setReintegroMedio('');
     setMotivoAnulacion('');
     setConfirmarDevolucion(false);
-    setModal('anular');
+    setConfirmation('anular');
   };
   const openHistory = (medicine) => {
     setSelected(medicine);
@@ -244,6 +249,8 @@ export default function Stock() {
       // La escritura ya se confirmó: una falla al actualizar la lista no debe
       // permitir reenviar el movimiento contable o el cambio de estado.
       void cargar({ silencioso: true });
+      if (modal === 'lotes' && selected) await loadLots(selected);
+      if (modal === 'history' && selected) await fetchHistory(selected, historyPage);
       return resultado;
     } finally {
       guardandoRef.current = false;
@@ -253,8 +260,8 @@ export default function Stock() {
   const closeConfirmation = () => {
     ++viewRequest.current;
     pendienteOperacion.current = null;
-    setModal('');
-    setSelected(null);
+    setConfirmation('');
+    if (!modal) setSelected(null);
     setLotTarget(null);
     setAnular(null);
   };
@@ -262,12 +269,12 @@ export default function Stock() {
   const openStatus = (medicine) => {
     ++viewRequest.current;
     setSelected(medicine);
-    setModal('estado');
+    setConfirmation('estado');
   };
   const openLotStatus = (lot) => {
     ++viewRequest.current;
     setLotTarget(lot);
-    setModal('lote_estado');
+    setConfirmation('lote_estado');
   };
 
   const activos = useMemo(() => registros.filter(m => num(m.activo) === 1), [registros]);
@@ -282,7 +289,7 @@ export default function Stock() {
   const cantidadValida = Number.isInteger(Number(out.cantidad)) && num(out.cantidad) > 0;
   const planEgreso = distribuirEgreso(lots, out.tipo, cantidadValida ? num(out.cantidad) : 0, fechaHoy());
   const stockSuficiente = cantidadValida && planEgreso.suficiente;
-  const close = () => { if (!saving) { ++viewRequest.current; pendienteOperacion.current = null; setModal(''); setSelected(null); } };
+  const close = () => { if (saving) return; if (confirmation) { closeConfirmation(); return; } if (!saving) { ++viewRequest.current; pendienteOperacion.current = null; setModal(''); setSelected(null); } };
   const updateMed = (key, value) => setMed(m => ({ ...m, [key]: value }));
   const updateOut = (key, value) => setOut(o => ({ ...o, [key]: value }));
 
@@ -300,7 +307,7 @@ export default function Stock() {
       {error ? <div className="med-inline-danger">{error}</div> : null}
       <GlobalDivTable ariaLabel="Stock de medicamentos" loading={loading}
         className={`med-table ${filtered.length ? 'has-bottom-pagination' : ''}`} empty={!loading && !error && !filtered.length} gridClassName="med-grid--stock"
-        columns={['Medicamento / droga', 'Laboratorio', 'Presentación / dosis', 'Disponible', 'Últ. ingreso / origen', 'Próx. venc.', { label: 'Acciones', align: 'center' }]}>
+        columns={['Medicamento / droga', 'Laboratorio', 'Presentación / dosis', 'Disponible', 'Últ. ingreso / origen', { label: 'Próx. venc.', align: 'center' }, { label: 'Acciones', align: 'center' }]}>
         {shown.map(m => <div key={m.id_medicamento} className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--stock" role="row">
           <div role="cell" className="mov-gridCell entity-main-cell" title={m.droga}>
             <strong>{m.nombre_comercial}</strong>
@@ -329,7 +336,7 @@ export default function Stock() {
             ) : null}
           </div>
           <div role="cell" className="mov-gridCell entity-main-cell">{fecha(m.ultimo_ingreso)}<span className="med-cell-secondary">{originName[m.ultimo_origen] || '—'}</span></div>
-          <div role="cell" className="mov-gridCell">{fecha(m.proximo_vencimiento)}</div>
+          <div role="cell" className="mov-gridCell is-center">{fecha(m.proximo_vencimiento)}</div>
           <div role="cell" className="mov-gridCell med-actions">
             <ActionButton icon={faBoxOpen} label="Lotes y vencimientos" onClick={() => openLots(m)} />
             <ActionButton icon={faClockRotateLeft} label="Historial" onClick={() => openHistory(m)} />
@@ -350,7 +357,7 @@ export default function Stock() {
       <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
     </ModulePage>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'med'} wide saving={saving}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'med'} wide saving={saving}
       title={med.id_medicamento ? 'Editar medicamento' : 'Nuevo medicamento'}
       subtitle={med.id_medicamento ? 'Los ingresos anteriores y sus vencimientos se consultan en Lotes y vencimientos.' : 'Completá el medicamento y su primera cantidad en un solo formulario.'}
       onClose={close}
@@ -373,31 +380,30 @@ export default function Stock() {
       </MedicamentosTabs>
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'entry'} wide saving={saving}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'entry'} wide saving={saving}
       title={`Ingresar stock · ${selected?.nombre_comercial || ''}`}
       subtitle="Cada nuevo ingreso conserva su fecha, origen y vencimiento."
       onClose={close} onSubmit={e => run(e, api.ingresar, entry)}>
       <StockEntryFields entry={entry} setEntry={setEntry} medios={medios} saving={saving} />
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'lotes'} wide hideSubmit
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'lotes'} wide hideSubmit
       loading={detailLoading} title={`Lotes y vencimientos · ${selected?.nombre_comercial || ''}`}
       subtitle={`${selected?.droga || ''} · ${selected?.presentacion || ''} · ${selected?.dosis || ''}`}
       onClose={close}>
-      <MedSection icon={faBoxOpen}>Lotes disponibles</MedSection>
-      {lots.length ? <div className="med-lot-list">{lots.map(l => <section className="med-box med-lot-card" key={l.id_lote}>
-        <div className="med-lot-heading"><strong>Lote {l.numero_lote || `#${l.id_lote}`}</strong><span className="med-lot-status">{situacionLote(l)}</span></div>
+      <MedSection icon={faBoxOpen}>Lotes y vencimientos</MedSection>
+      {lots.length ? <div className="med-lot-list">{lots.map(l => <section className={`med-box med-lot-card med-lot-card--${tonoLote(l)}`} key={l.id_lote}>
+        <div className="med-lot-heading"><strong>Lote {l.numero_lote || `#${l.id_lote}`}</strong><div className="med-lot-heading__summary"><span className="med-lot-available"><small>Disponible</small><strong>{l.cantidad_disponible} {l.unidad_stock}</strong></span><span className={`med-lot-status med-status-chip med-status-chip--${tonoLote(l)}`}>{situacionLote(l)}</span></div></div>
         <div className="med-lot-data">
           <div><small>Fecha de ingreso</small><strong>{fecha(l.fecha_ingreso)}</strong></div>
-          <div><small>Vencimiento</small><strong>{fecha(l.fecha_vencimiento)}</strong></div>
+          <div className="med-lot-data__expiry"><small>Vencimiento</small><strong>{fecha(l.fecha_vencimiento)}</strong></div>
           <div><small>Origen</small><strong>{originName[l.origen] || l.origen}</strong></div>
-          <div><small>Disponible</small><strong>{l.cantidad_disponible} {l.unidad_stock}</strong></div>
           {num(l.cantidad_cuarentena) > 0 ? <div><small>Devoluciones anteriores sin incorporar</small><strong>{l.cantidad_cuarentena}</strong></div> : null}
-          <div><small>Donante / proveedor</small><strong>{l.procedencia || '—'}</strong></div>
+          <div className="med-lot-data__provider"><small>Donante / proveedor</small><strong>{l.procedencia || '—'}</strong></div>
           {l.origen === 'COMPRA' ? <div><small>Costo unitario</small><strong>{dinero(l.costo_unitario)}</strong></div> : null}
         </div>
-        {l.observaciones ? <p className="med-lot-notes">{l.observaciones}</p> : null}
-        {write && l.estado !== 'DESCARTADO' ? <div className="med-actions">
+        {l.observaciones ? <div className="med-lot-notes"><small>Observaciones</small><p>{l.observaciones}</p></div> : null}
+        {write && l.estado !== 'DESCARTADO' ? <div className="med-actions med-lot-card__actions">
           <ActionButton icon={l.estado === 'ACTIVO' ? faBan : faRotateLeft}
             label={l.estado === 'ACTIVO' ? 'Bloquear lote' : 'Desbloquear lote'}
             onClick={() => openLotStatus(l)}
@@ -407,9 +413,10 @@ export default function Stock() {
       </section>)}</div> : !detailLoading ? <div className="med-empty"><FontAwesomeIcon icon={faInbox} /><span>Este medicamento todavía no tiene lotes.</span></div> : null}
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'history'} wide hideSubmit
+    <CrudModal modalClassName="med-modal med-history-modal" closeOnBackdrop={false} open={modal === 'history'} wide hideSubmit
       loading={detailLoading} title={`Historial · ${selected?.nombre_comercial || ''}`}
       subtitle="Movimientos registrados únicamente para este medicamento."
+      footerStart={<GlobalPagination page={historyPage} onPageChange={p => fetchHistory(selected, p)} total={historyTotal} perPage={50} loading={detailLoading} label="movimientos" />}
       onClose={close}>
       <MedSection icon={faClockRotateLeft}>Movimientos del medicamento</MedSection>
       {history.length ? <div className="med-history-list">{history.map(h => <div className="med-history-row" key={h.id_movimiento}>
@@ -423,11 +430,10 @@ export default function Stock() {
             <button type="button" className="med-anular-link" disabled={saving} onClick={() => openAnular(h)}>Anular operación</button> : null}
         </div>
       </div>)}</div> : !detailLoading ? <div className="med-empty"><FontAwesomeIcon icon={faInbox} /><span>No hay movimientos registrados.</span></div> : null}
-      <GlobalPagination page={historyPage} onPageChange={p => fetchHistory(selected, p)} total={historyTotal} perPage={50} loading={detailLoading} label="movimientos" />
     </CrudModal>
 
     <ModalEliminarGlobal
-      open={modal === 'anular'}
+      open={confirmation === 'anular'}
       operacion="advertencia"
       tone="danger"
       icon={faBan}
@@ -449,7 +455,7 @@ export default function Stock() {
       onClose={closeConfirmation}
       onConfirm={() => confirmarOperacion(api.anular, {
         id_movimiento: anular?.id_movimiento,
-        motivo: motivoAnulacion.trim(),
+        motivo: motivoAnulacion.trim().toLocaleUpperCase('es-AR'),
         id_medio_pago: reintegroMedio,
         devolucion_confirmada: confirmarDevolucion,
       })}
@@ -458,14 +464,14 @@ export default function Stock() {
       extraContent={<div className="med-global-confirm-fields">
         <Campos>
           <Campo label="Medio de pago utilizado para el reintegro" required options={[op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))]} value={reintegroMedio} onChange={setReintegroMedio} disabled={saving} />
-          <Campo label="Motivo documentado de anulación (mínimo 10 caracteres)" wide required textarea value={motivoAnulacion} onChange={setMotivoAnulacion} disabled={saving} />
+          <Campo label="Motivo documentado de anulación (mínimo 10 caracteres)" wide required textarea value={motivoAnulacion} onChange={value => setMotivoAnulacion(value.toLocaleUpperCase('es-AR'))} disabled={saving} />
         </Campos>
         <label className="med-anular-confirmacion"><input type="checkbox" checked={confirmarDevolucion} onChange={e => setConfirmarDevolucion(e.target.checked)} disabled={saving} /> Confirmo la devolución física de todas las unidades y el reintegro total del dinero.</label>
       </div>}
     />
 
     <ModalEliminarGlobal
-      open={modal === 'estado'}
+      open={confirmation === 'estado'}
       operacion={num(selected?.activo) === 1 ? 'baja' : 'alta'}
       row={selected}
       title={num(selected?.activo) === 1 ? 'Dar de baja medicamento' : 'Reactivar medicamento'}
@@ -495,7 +501,7 @@ export default function Stock() {
     />
 
     <ModalEliminarGlobal
-      open={modal === 'lote_estado'}
+      open={confirmation === 'lote_estado'}
       operacion={lotTarget?.estado === 'ACTIVO' ? 'baja' : 'alta'}
       row={lotTarget}
       title={lotTarget?.estado === 'ACTIVO' ? 'Bloquear lote' : 'Desbloquear lote'}
@@ -528,7 +534,7 @@ export default function Stock() {
       loading={saving}
     />
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'out'} wide saving={saving} loading={detailLoading}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'out'} wide saving={saving} loading={detailLoading}
       title={`Egresar stock · ${selected?.nombre_comercial || ''}`}
       onClose={close} onSubmit={e => run(e, api.salida, { ...out, id_medicamento: selected?.id_medicamento })}
       submitDisabled={!cantidadValida || !stockSuficiente}>

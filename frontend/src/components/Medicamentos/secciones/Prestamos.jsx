@@ -185,9 +185,9 @@ export default function Prestamos() {
       <GlobalDivTable ariaLabel="Préstamos de medicamentos" className={`med-table ${total > 0 ? 'has-bottom-pagination' : ''}`} empty={!loading && !error && !registros.length} gridClassName="med-grid--loans" loading={loading} columns={['N.º', 'Socio / documento', { label: 'Fecha', align: 'center' }, { label: 'Estado', align: 'center' }, { label: 'Seña pendiente', align: 'right' }, { label: 'Acciones', align: 'center' }]}>
         {shown.map(p => <div className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--loans" key={p.id_prestamo} role="row">
           <div className="mov-gridCell" role="cell">#{p.id_prestamo}</div>
-          <div className="mov-gridCell" role="cell">{p.socio || '—'} · {p.documento || '—'}</div>
+          <div className="mov-gridCell med-loan-person" role="cell"><span className="med-loan-person__name">{p.socio || '—'}</span><span className="med-cell-secondary">{p.documento || 'Sin documento'}</span></div>
           <div className="mov-gridCell is-center" role="cell">{fecha(p.fecha_entrega)}</div>
-          <div className="mov-gridCell is-center" role="cell">{p.estado}</div>
+          <div className="mov-gridCell is-center" role="cell"><span className={`med-status-chip med-status-chip--${p.estado === 'ABIERTO' ? 'abierto' : p.estado === 'CERRADO' ? 'cerrado' : 'neutral'}`}>{p.estado}</span></div>
           <div className="mov-gridCell is-right" role="cell">{dinero(saldoFila(p))}</div>
           <div className="mov-gridCell med-actions" role="cell">
             <IconAction icon={faEye} label={`Ver detalle del préstamo #${p.id_prestamo}`} onClick={() => openAction(p.id_prestamo, 'detalle')} disabled={fetchingId !== null || saving} />
@@ -210,7 +210,7 @@ export default function Prestamos() {
       <GlobalPagination page={pagina} total={total} perPage={por_pagina} onPageChange={setPage} loading={loading} label="préstamos" />
     </ModulePage>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoLotes} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoLotes} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
       onClose={cerrarPrestamoNuevo} submitDisabled={cargandoLotes || available.length === 0}
       onSubmit={e => run(e, api.prestar, form)}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Socio y seña', icon: faMoneyBillTransfer }, { label: 'Medicamentos', icon: faPills }]}>
@@ -223,13 +223,13 @@ export default function Prestamos() {
         <Campo label="Seña cobrada ($)" type="number" min="0" step="0.01" value={form.sena} onChange={v => setForm(f => ({ ...f, sena: v }))} />
         {num(form.sena) > 0 ? <Campo label="Medio de pago de seña" required value={form.id_medio_pago} options={paymentOpts} onChange={v => setForm(f => ({ ...f, id_medio_pago: v }))} /> : null}
 </Campos></div>
-        <div><Campos>        <div className="entity-field entity-field--wide"><span>Medicamentos y lotes entregados</span>
-          {form.items.map((item, i) => <div className="med-box" key={i}>
-            <div className="entity-form__grid"><Campo label={`Lote ${i + 1}`} required value={item.id_lote} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_lote: v } : r) }))} />
-              <Campo label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} /></div>
-            {form.items.length > 1 ? <button className="med-mini med-mini--danger" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar lote</button> : null}
+        <div><Campos>        <div className="entity-field entity-field--wide med-loan-items"><MedSection icon={faPills}>Medicamentos y lotes entregados</MedSection>
+          {form.items.map((item, i) => <div className="med-box med-lot-editor" key={i}>
+            <Campo className="med-lot-editor__select" label={`Lote ${i + 1}`} required value={item.id_lote} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_lote: v } : r) }))} />
+              <Campo className="med-lot-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
+            {form.items.length > 1 ? <button className="med-mini med-mini--danger med-lot-editor__remove" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar lote</button> : null}
           </div>)}
-          <button type="button" className="med-mini" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_lote: '', cantidad: '1' }] }))}>+ Agregar otro lote</button>
+          <button type="button" className="med-mini med-loan-items__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_lote: '', cantidad: '1' }] }))}>+ Agregar otro lote</button>
         </div>
         <Campo label="Observaciones" wide textarea value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
 </Campos>
@@ -238,7 +238,7 @@ export default function Prestamos() {
     </CrudModal>
 
     {/* Consulta solamente: ninguna otra acción se esconde dentro de este modal. */}
-    <CrudModal closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faEye, `Préstamo #${loanId || ''}`)}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faEye, `Préstamo #${loanId || ''}`)}
       subtitle={detail?.prestamo?.socio || ''} onClose={() => setModal('')}>
       {detail ? <MedicamentosTabs tabs={[{ label: 'Medicamentos', icon: faPills }, { label: 'Seña', icon: faMoneyBillTransfer }]}><div>
         <div className="med-loan-summary">
@@ -269,7 +269,7 @@ export default function Prestamos() {
 </div></MedicamentosTabs> : null}
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'devolucion'} saving={saving} title={tituloAccion(faRotateLeft, 'Registrar devolución de medicamentos')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'devolucion'} saving={saving} title={tituloAccion(faRotateLeft, 'Registrar devolución de medicamentos')}
       onClose={() => setModal('')} submitLabel="Registrar devolución"
       submitDisabled={!chosenReturn || returnMax < 1 || !Number.isInteger(Number(returnForm.cantidad)) || num(returnForm.cantidad) < 1 || num(returnForm.cantidad) > returnMax}
       onSubmit={e => run(e, api.devolver, returnForm)}>
@@ -291,7 +291,7 @@ export default function Prestamos() {
       <p className="med-inline-note">La devolución de medicamentos no devuelve dinero automáticamente. La seña tiene sus propias acciones.</p>
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'reintegrar'} saving={saving} title={tituloAccion(faMoneyBillTransfer, 'Reintegrar seña')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'reintegrar'} saving={saving} title={tituloAccion(faMoneyBillTransfer, 'Reintegrar seña')}
       onClose={() => setModal('')} submitLabel="Confirmar reintegro"
       onSubmit={e => run(e, api.sena, { ...moneyForm, tipo: 'DEVOLUCION_SENA', id_prestamo: loanId })}>
       <MedSection icon={faMoneyBillTransfer}>Datos del reintegro</MedSection>
@@ -307,7 +307,7 @@ export default function Prestamos() {
       <p className="med-inline-note">Se registrará un egreso por el dinero que LALCEC devuelve al socio.</p>
     </CrudModal>
 
-    <CrudModal closeOnBackdrop={false} open={modal === 'donar'} saving={saving} title={tituloAccion(faHeart, 'Registrar donación de seña')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'donar'} saving={saving} title={tituloAccion(faHeart, 'Registrar donación de seña')}
       onClose={() => setModal('')} submitLabel="Confirmar donación"
       onSubmit={e => run(e, api.sena, { ...moneyForm, tipo: 'SENA_DONADA', id_prestamo: loanId })}>
       <MedSection icon={faHeart}>Datos de la donación</MedSection>
