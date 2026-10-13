@@ -237,36 +237,70 @@ export default function Prestamos() {
       </MedicamentosTabs>
     </CrudModal>
 
-    {/* Consulta solamente: ninguna otra acción se esconde dentro de este modal. */}
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faEye, `Préstamo #${loanId || ''}`)}
+    {/* Detalle de solo lectura; estilos propios sin alterar el resto de modales. */}
+    <CrudModal modalClassName="med-modal med-loan-detail-modal" closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faEye, `Préstamo #${loanId || ''}`)}
       subtitle={detail?.prestamo?.socio || ''} onClose={() => setModal('')}>
-      {detail ? <MedicamentosTabs tabs={[{ label: 'Medicamentos', icon: faPills }, { label: 'Seña', icon: faMoneyBillTransfer }]}><div>
-        <div className="med-loan-summary">
-          <div><span>Estado</span><strong>{detail.prestamo.estado}</strong></div>
-          <div><span>Fecha de entrega</span><strong>{fecha(detail.prestamo.fecha_entrega)}</strong></div>
-          <div><span>Seña pendiente</span><strong>{dinero(balance)}</strong></div>
+      {detail ? <MedicamentosTabs tabs={[{ label: 'Medicamentos', icon: faPills }, { label: 'Seña', icon: faMoneyBillTransfer }]}><div className="med-loan-detail-content">
+        <div className="med-loan-summary med-loan-detail-summary">
+          <div className="med-loan-detail-stat med-loan-detail-stat--status">
+            <span>Estado del préstamo</span>
+            <strong><span className={`med-status-chip med-status-chip--${detail.prestamo.estado === 'ABIERTO' ? 'abierto' : 'cerrado'}`}>{detail.prestamo.estado}</span></strong>
+          </div>
+          <div className="med-loan-detail-stat med-loan-detail-stat--date">
+            <span>Fecha de entrega</span><strong>{fecha(detail.prestamo.fecha_entrega)}</strong>
+          </div>
+          <div className="med-loan-detail-stat med-loan-detail-stat--balance">
+            <span>Seña pendiente</span><strong>{dinero(balance)}</strong>
+          </div>
         </div>
-        <section className="med-box"><MedSection icon={faPills}>Medicamentos entregados</MedSection>
-          {details.map(d => <div className="med-detail-row" key={d.id_detalle_prestamo}>
-            <div><strong>{d.nombre_comercial} · {d.dosis}</strong>
-              <div className="med-loan-muted">Entregado: {d.cantidad_entregada} · Devuelto: {d.cantidad_recibida} · Pendiente: {Math.max(0, num(d.cantidad_entregada) - num(d.cantidad_recibida))}</div>
-            </div>
-          </div>)}
+        <section className="med-box med-loan-detail-card med-loan-detail-card--meds">
+          <div className="med-loan-detail-card__heading">
+            <MedSection icon={faPills}>Medicamentos entregados</MedSection>
+            <span className="med-loan-detail-count">{details.length} {details.length === 1 ? 'registro' : 'registros'}</span>
+          </div>
+          <div className="med-loan-detail-card__content">
+            {details.map(d => <div className="med-detail-row med-loan-detail-item" key={d.id_detalle_prestamo}>
+              <strong className="med-loan-detail-item__name">{d.nombre_comercial} · {d.dosis}</strong>
+              <div className="med-loan-detail-quantities">
+                <span className="med-loan-detail-quantity med-loan-detail-quantity--delivered">Entregado <strong>{d.cantidad_entregada}</strong></span>
+                <span className="med-loan-detail-quantity med-loan-detail-quantity--returned">Devuelto <strong>{d.cantidad_recibida}</strong></span>
+                <span className="med-loan-detail-quantity med-loan-detail-quantity--pending">Pendiente <strong>{Math.max(0, num(d.cantidad_entregada) - num(d.cantidad_recibida))}</strong></span>
+              </div>
+            </div>)}
+          </div>
         </section>
-        {detail.devoluciones.length > 0 ? <section className="med-box"><MedSection icon={faRotateLeft}>Devoluciones registradas</MedSection>
-          {detail.devoluciones.map(r => <div className="med-detail-row" key={r.id_devolucion}>
-            <div><strong>{r.cantidad} unidad(es) · {fecha(r.fecha_recepcion)}</strong>
-              <div className="med-loan-muted">Lote {r.numero_lote || r.id_lote_recibido || '—'}{r.estado === 'PENDIENTE_REVISION' ? ' · Registro anterior pendiente de incorporar' : r.estado === 'RECHAZADA' ? ' · No incorporado al stock' : r.estado_lote_recibido === 'BLOQUEADO' ? ' · Lote bloqueado (sin habilitar para uso)' : r.estado_lote_recibido === 'DESCARTADO' ? ' · Lote descartado' : ''}</div>
-            </div>
-          </div>)}
+        {detail.devoluciones.length > 0 ? <section className="med-box med-loan-detail-card med-loan-detail-card--returns">
+          <div className="med-loan-detail-card__heading">
+            <MedSection icon={faRotateLeft}>Devoluciones registradas</MedSection>
+            <span className="med-loan-detail-count">{detail.devoluciones.length} {detail.devoluciones.length === 1 ? 'registro' : 'registros'}</span>
+          </div>
+          <div className="med-loan-detail-card__content">
+            {detail.devoluciones.map(r => <div className="med-detail-row med-loan-detail-item" key={r.id_devolucion}>
+              <div className="med-loan-detail-return-heading">
+                <strong>{r.cantidad} {num(r.cantidad) === 1 ? 'unidad devuelta' : 'unidades devueltas'}</strong>
+                <span className="med-loan-detail-date">{fecha(r.fecha_recepcion)}</span>
+              </div>
+              <div className="med-loan-detail-description">Lote {r.numero_lote || r.id_lote_recibido || '—'}{r.estado === 'PENDIENTE_REVISION' ? ' · Registro anterior pendiente de incorporar' : r.estado === 'RECHAZADA' ? ' · No incorporado al stock' : r.estado_lote_recibido === 'BLOQUEADO' ? ' · Lote bloqueado (sin habilitar para uso)' : r.estado_lote_recibido === 'DESCARTADO' ? ' · Lote descartado' : ''}</div>
+            </div>)}
+          </div>
         </section> : null}
-</div><div>
-        <section className="med-box"><MedSection icon={faMoneyBillTransfer}>Movimientos de seña</MedSection>
-          {detail.senas.length ? detail.senas.map(m => <div className="med-detail-row" key={m.id_movimiento_sena}>
-            <span>{m.tipo === 'COBRO_SENA' ? 'Cobro' : m.tipo === 'DEVOLUCION_SENA' ? 'Reintegro' : 'Donación'} · {fecha(m.fecha_movimiento)} {m.medio_pago ? `· ${m.medio_pago}` : ''}</span><strong>{dinero(m.monto)}</strong>
-          </div>) : <div className="med-empty med-empty--compact"><FontAwesomeIcon icon={faInbox} /><span>Sin movimientos de seña.</span></div>}
+      </div><div className="med-loan-detail-content">
+        <section className="med-box med-loan-detail-card med-loan-detail-card--deposit">
+          <div className="med-loan-detail-card__heading">
+            <MedSection icon={faMoneyBillTransfer}>Movimientos de seña</MedSection>
+            <span className="med-loan-detail-count">{detail.senas.length} {detail.senas.length === 1 ? 'movimiento' : 'movimientos'}</span>
+          </div>
+          <div className="med-loan-detail-card__content">
+            {detail.senas.length ? detail.senas.map(m => <div className="med-detail-row med-loan-detail-payment" key={m.id_movimiento_sena}>
+              <div className="med-loan-detail-payment__info">
+                <strong>{m.tipo === 'COBRO_SENA' ? 'Cobro' : m.tipo === 'DEVOLUCION_SENA' ? 'Reintegro' : 'Donación'}</strong>
+                <span>{fecha(m.fecha_movimiento)}{m.medio_pago ? ` · ${m.medio_pago}` : ''}</span>
+              </div>
+              <strong className="med-loan-detail-payment__amount">{dinero(m.monto)}</strong>
+            </div>) : <div className="med-empty med-empty--compact"><FontAwesomeIcon icon={faInbox} /><span>Sin movimientos de seña.</span></div>}
+          </div>
         </section>
-</div></MedicamentosTabs> : null}
+      </div></MedicamentosTabs> : null}
     </CrudModal>
 
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'devolucion'} saving={saving} title={tituloAccion(faRotateLeft, 'Registrar devolución de medicamentos')}

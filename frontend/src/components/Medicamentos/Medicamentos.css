@@ -479,3 +479,190 @@
   clip-path: inset(0 round 10px);
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
+
+
+/* ============================================================
+   Detalle del préstamo (Medicamentos · Préstamos)
+   Tarjetas con jerarquía, acentos y datos legibles. Encapsulado
+   en el modal de consulta para no afectar otras operaciones.
+   ============================================================ */
+.med-loan-detail-modal .med-tabbed-form { flex: 1 1 auto; }
+.med-loan-detail-modal .med-tabbed-form > .med-tab-panel {
+  flex: 1 1 auto;
+  background: #f8fafc;
+}
+.med-loan-detail-content { display: flex; flex-direction: column; gap: 16px; }
+.med-loan-detail-modal .med-loan-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.med-loan-detail-modal .med-loan-detail-stat {
+  --loan-stat-accent: #ed751a;
+  --loan-stat-soft: #fff3e7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 91px;
+  padding: 14px 16px;
+  border: 1px solid #e3e9f0;
+  border-left: 3px solid var(--loan-stat-accent);
+  border-radius: 11px;
+  background: linear-gradient(110deg, var(--loan-stat-soft) 0%, #fff 92%);
+  box-shadow: 0 2px 7px rgb(15 23 42 / 0.035);
+}
+.med-loan-detail-stat--date { --loan-stat-accent: #477dbb; --loan-stat-soft: #edf5ff; }
+.med-loan-detail-stat--balance { --loan-stat-accent: #22866b; --loan-stat-soft: #eaf8f2; }
+.med-loan-detail-modal .med-loan-detail-stat > span {
+  color: #53647b;
+  font-size: 12px;
+  font-weight: 450;
+}
+.med-loan-detail-modal .med-loan-detail-stat > strong {
+  color: #14233a;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.med-loan-detail-modal .med-loan-detail-stat .med-status-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 11px;
+}
+.med-loan-detail-modal .med-loan-detail-card {
+  --loan-card-accent: #ed751a;
+  --loan-card-soft: #fff0e2;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #dce4ed;
+  border-left: 3px solid var(--loan-card-accent);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.065);
+}
+.med-loan-detail-card--returns { --loan-card-accent: #19836a; --loan-card-soft: #e8f6f0; }
+.med-loan-detail-card--deposit { --loan-card-accent: #3674b5; --loan-card-soft: #eaf3ff; }
+.med-loan-detail-card__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e4eaf1;
+  background: linear-gradient(95deg, var(--loan-card-soft), #fff 85%);
+}
+.med-loan-detail-modal .med-loan-detail-card .med-section-title {
+  margin: 0;
+  color: #17243a;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 1.3;
+}
+.med-loan-detail-modal .med-loan-detail-card .med-section-title svg { color: var(--loan-card-accent); font-size: 16px; }
+.med-loan-detail-count {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--loan-card-accent) 25%, #fff);
+  background: #fff;
+  color: var(--loan-card-accent);
+  font-size: 11px;
+  font-weight: 550;
+}
+.med-loan-detail-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px 16px;
+}
+.med-loan-detail-modal .med-loan-detail-item,
+.med-loan-detail-modal .med-loan-detail-payment {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid #e6ecf2;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.med-loan-detail-modal .med-loan-detail-item:last-child,
+.med-loan-detail-modal .med-loan-detail-payment:last-child { border-bottom: 1px solid #e6ecf2; }
+.med-loan-detail-item__name { color: #17243a; font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.med-loan-detail-quantities { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.med-loan-detail-quantity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--qty-border);
+  border-radius: 7px;
+  background: var(--qty-bg);
+  color: var(--qty-text);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.med-loan-detail-quantity strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+.med-loan-detail-quantity--delivered { --qty-bg: #ecf4ff; --qty-border: #cfe0f6; --qty-text: #245b97; }
+.med-loan-detail-quantity--returned { --qty-bg: #e9f7ef; --qty-border: #c6e6d3; --qty-text: #176a4b; }
+.med-loan-detail-quantity--pending { --qty-bg: #fff2e5; --qty-border: #f5d8b7; --qty-text: #9b530e; }
+.med-loan-detail-return-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; }
+.med-loan-detail-return-heading strong { color: #17243a; font-weight: 600; font-size: 14px; }
+.med-loan-detail-date { color: #23745f; background: #e7f5ed; border: 1px solid #cde7d9; border-radius: 7px; padding: 5px 9px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.med-loan-detail-description { color: #51627b; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.med-loan-detail-modal .med-loan-detail-payment { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.med-loan-detail-payment__info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.med-loan-detail-payment__info strong { color: #17243a; font-weight: 600; font-size: 14px; }
+.med-loan-detail-payment__info span { color: #58677c; font-size: 12px; overflow-wrap: anywhere; }
+.med-loan-detail-payment__amount { flex: 0 0 auto; color: #245f9e; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.med-loan-detail-modal .med-loan-detail-card .med-empty { color: #64748b; }
+
+@media (max-width: 680px) {
+  .med-loan-detail-modal .med-loan-detail-summary { grid-template-columns: 1fr; gap: 9px; }
+  .med-loan-detail-modal .med-loan-detail-stat { min-height: 0; padding: 11px 13px; }
+  .med-loan-detail-card__heading { padding: 13px 14px; }
+  .med-loan-detail-card__content { padding: 12px; }
+  .med-loan-detail-modal .med-loan-detail-item,
+  .med-loan-detail-modal .med-loan-detail-payment { padding: 12px; }
+}
+
+/* Contraste equivalente al alternar al modo oscuro global. */
+html[data-theme="oscuro"] .med-loan-detail-modal .med-tabbed-form > .med-tab-panel { background: #17202e; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-stat {
+  --loan-stat-soft: #253040;
+  border-color: #425065;
+  border-left-color: var(--loan-stat-accent);
+  background: #253040;
+  box-shadow: none;
+}
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-stat > span { color: #b7c5d5; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-stat > strong { color: #eff5fa; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-card { border-color: #485568; border-left-color: var(--loan-card-accent); background: #232e3d; box-shadow: none; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-card__heading { border-color: #455367; background: #303e4e; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-card .med-section-title { color: #ecf2f8; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-count { background: #243040; border-color: #526276; color: #f0bc8a; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-item,
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-payment { background: #1d2939; border-color: #415066; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-item__name,
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-return-heading strong,
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-payment__info strong { color: #f0f4fa; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-description,
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-payment__info span { color: #bccadd; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-payment__amount { color: #9dc9fa; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--delivered { --qty-bg: #203b5c; --qty-border: #3a5e87; --qty-text: #b2d5ff; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--returned { --qty-bg: #1b4339; --qty-border: #376956; --qty-text: #a2ead0; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--pending { --qty-bg: #4a3421; --qty-border: #755137; --qty-text: #fbd3a1; }
+html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { background: #1b4339; border-color: #386859; color: #a0ead1; }
