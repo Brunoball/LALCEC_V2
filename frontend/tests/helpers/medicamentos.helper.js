@@ -68,10 +68,10 @@ async function requireAccountingOptions(request, use) {
   );
 }
 
-async function createMedicine(request, { medicine = medFixture(), first = entryFixture(), key } = {}) {
+async function createMedicine(request, { medicine = medFixture(), first = entryFixture() } = {}) {
   const result = await apiCall(request, 'medicamentos_guardar', {
     method: 'POST',
-    data: { ...medicine, ingreso_inicial: first, ...(key ? { _idempotency_key: key } : {}) },
+    data: { ...medicine, ingreso_inicial: first },
   });
   const id = Number(result.id_medicamento);
   expect(id).toBeGreaterThan(0);

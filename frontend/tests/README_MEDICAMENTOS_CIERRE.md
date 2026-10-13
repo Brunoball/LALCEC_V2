@@ -1,17 +1,17 @@
-# LALCEC V2 — Testing de cierre de Medicamentos (10/10/2026)
+# LALCEC V2 — Testing de Medicamentos (actualización 11/10/2026)
 
-Esta corrección modifica **solo archivos de `tests/`** y aporta un SQL opcional de inicialización contable. **No cambia producción, frontend ni backend**. El SQL no se ejecuta automáticamente. Usar junto con los **últimos** `backend.zip` y `src.zip` de LALCEC V2; el backend debe tener activo `core/e2e_guard.php` y los endpoints `e2e_cleanup`, `e2e_snapshot` y `e2e_guard_probe`.
+Este ZIP contiene la suite Playwright **completa recibida** y una prueba PHP local opcional. **No contiene código de producción ni comandos de borrado de base de datos**. Está preparado para el frontend y backend **posteriores a la eliminación de la tabla auxiliar de solicitudes de Medicamentos**. El backend debe contar con `core/e2e_guard.php` y los endpoints `e2e_cleanup`, `e2e_snapshot` y `e2e_guard_probe`.
 
 ## Instalación
 
-Descomprimir el ZIP en la carpeta del proyecto, conservando la carpeta `tests/` (en el proyecto habitual estará dentro de `frontend/tests/`). Reemplazar exclusivamente los archivos incluidos en `tests/` (00, 21, 22, 23 y este README). Conservar intactos los otros tests. El archivo `PREPARAR_OPCIONES_CONTABLES.sql` es **opcional** y se ejecuta únicamente de forma deliberada en la DB de pruebas.
+Descomprimir el ZIP en la raíz `LALCEC_V2/`: copiar `tests/` dentro de `frontend/tests/` y `tests_local/` en `LALCEC_V2/tests_local/`. **No** copiar `tests/` directamente junto a `backend/`: la ruta prevista para Playwright es `frontend/tests/`. Se mantiene toda la suite original, con cambios puntuales en `20`, `21`, `24`, `helpers/medicamentos.helper.js` y la adición de `50`. El presente ZIP no incluye ningún SQL.
 
 ## Ejecución
 
 Desde `frontend` con las dependencias ya instaladas y `.env.test` configurado:
 
 ```powershell
-npx playwright test tests/20-medicamentos-stock-integridad.spec.js tests/21-medicamentos-contabilidad-anulaciones.spec.js tests/22-medicamentos-prestamos-senas.spec.js tests/23-medicamentos-ui-flujos.spec.js tests/24-medicamentos-seguridad-regresiones.spec.js tests/07-permisos-solo-lectura.spec.js tests/00-cobertura-total.spec.js --project=chromium --workers=1 --reporter=list
+npx playwright test tests/20-medicamentos-stock-integridad.spec.js tests/21-medicamentos-contabilidad-anulaciones.spec.js tests/22-medicamentos-prestamos-senas.spec.js tests/23-medicamentos-ui-flujos.spec.js tests/24-medicamentos-seguridad-regresiones.spec.js tests/50-medicamentos-sin-solicitudes.spec.js tests/07-permisos-solo-lectura.spec.js tests/00-cobertura-total.spec.js --project=chromium --workers=1 --reporter=list
 ```
 
 Para validar **el sistema administrativo completo**, correr después:
@@ -34,11 +34,13 @@ npx playwright test --project=chromium --workers=1 --reporter=list
 
 | Archivo | Escenarios reales |
 | --- | --- |
-| 20 — Stock | Alta atómica; edición con historial; baja/reactivación; entradas; FEFO de varios lotes; stock insuficiente; bloqueo/descartes; fechas; cantidades; idempotencia |
+| 20 — Stock | Alta atómica; edición con historial; baja/reactivación; FEFO de varios lotes; stock insuficiente; bloqueos/descartes; fechas y cantidades; doble ingreso explícito sin idempotencia |
 | 21 — Contabilidad | Compra y egreso/proveedor; venta multi-lote y asiento único; devoluciones y contramovimientos; anulación de compra; rechazo de doble anulación y compra usada |
 | 22 — Préstamos | Socio fixture; varios lotes; descuento único de stock; devoluciones parciales; reintegro y donación de seña; cierre con saldo pendiente; bloqueo de acciones tras cierre |
 | 23 — Interfaz | Formularios reales de alta y edición; pestañas Activos/Bajas; lotes/historial; egreso y validación visual FEFO; préstamo/detalle/devolución/cierre; catálogo de consultas |
-| 24 — Seguridad | Solicitudes incompatibles por stock; rollback de errores; escudo E2E ante alta sin marca; control de rutas/limpieza segura |
+| 24 — Seguridad | Concurrencia y stock insuficiente; rollback de errores; escudo E2E ante alta sin marca; rutas y limpieza de las siete tablas persistentes de Medicamentos |
+| 50 — Contrato sin solicitudes | No hay consultas a la tabla auxiliar ni envío de claves; transacciones/lockings y bloqueo de doble clic presentes en código local |
+| tests_local — Smoke PHP | Prueba transaccional y reintento de deadlock simulados; requiere PHP CLI y backend actualizado |
 | 07 — Permisos (actualizado) | Consultas de Medicamentos con cuenta lectura; prohibición de todas las mutaciones; ocultación de botones de escritura |
 | 00 — Contrato (actualizado) | Descubre ahora las 18 acciones declaradas por `foreach` en `routes.php`, antes ignoradas; exige referencias de cobertura en las specs |
 
@@ -48,6 +50,18 @@ npx playwright test --project=chromium --workers=1 --reporter=list
 - `23`: corrige el filtro `Búsqueda`, recorre la pestaña `Primer ingreso` antes de llenar cantidad, valida estados en `Lotes asignados` y prueba la entrada de stock desde la UI.
 - `21`: conserva los contratos de compra/venta y comprueba la anulación mediante su modal real.
 - `22`: comprueba reintegro y donación parcial desde los botones y formularios reales, además de confirmar su persistencia.
-- **Cuatro opciones contables faltantes:** el backend las generaría automáticamente al contabilizar; eso alteraría configuración no E2E y haría fallar el control de integridad del entorno compartido. Por eso `requireAccountingOptions` sigue abortando antes de escribir. El archivo `PREPARAR_OPCIONES_CONTABLES.sql` permite darlas de alta **una sola vez, manualmente, en una DB de desarrollo/pruebas**, antes del inicio del test y de su snapshot.
+- **Cuatro opciones contables faltantes:** el backend las generaría automáticamente al contabilizar; eso alteraría configuración no E2E y haría fallar el control de integridad del entorno compartido. Por eso `requireAccountingOptions` sigue abortando antes de escribir. Esas opciones deben prepararse **manualmente en Configuración sobre una DB de desarrollo/pruebas**, antes del inicio de la suite y de su snapshot. **Este ZIP no trae SQL para modificar la base.**
 
-**Comprobación efectuada:** los cuatro archivos JS pasan `node --check`; la auditoría estática del test 00 encuentra 90 acciones declaradas, 20 rutas, sin acciones, rutas ni marcadores faltantes. **No se ha ejecutado nuevamente la suite Playwright con la DB y navegador reales.** Hasta repetir los 152 escenarios y revisar cleanup/baseline, no se puede certificar un cierre al 100 % ni congelar el módulo solo con esta revisión.
+**Antecedente (10/10/2026):** una revisión previa encontró 90 acciones declaradas y 20 rutas. Este número no se volvió a comprobar mediante Playwright en la entrega actual. **No se ejecutó la suite con DB y navegador reales.** Se requiere volver a ejecutar la suite completa y revisar cleanup/baseline antes de congelar el módulo. El total histórico de 152 escenarios corresponde a la versión anterior.
+
+
+## Eliminación de la tabla auxiliar — 11/10/2026
+
+- `20`: se eliminó la expectativa de respuesta recuperada por clave; ahora demuestra que dos solicitudes POST independientes generan dos lotes y dos movimientos. **Advertencia:** no repetir un envío por un timeout sin verificar antes el resultado en el historial.
+- `21`: se quitó la etiqueta «idempotencia» de un escenario de compra que no verifica ese mecanismo.
+- `24`: la auditoría de limpieza espera solo las siete tablas persistentes del módulo.
+- `helpers/medicamentos.helper.js`: el alta ya no admite el argumento `key` ni incorpora `_idempotency_key`.
+- `50`: nuevo contrato estático contra archivos locales del backend/frontend actualizados (es intencional que el test incluya el nombre de la tabla en una afirmación **negativa**; no es una consulta SQL ni una dependencia de ejecución).
+- `tests_local/medicamentos_transaccion_smoke.php`: correr desde la raíz del proyecto con `php tests_local/medicamentos_transaccion_smoke.php`, opcional; no usa MySQL real.
+
+**Alcance de la validación de esta entrega:** lint de sintaxis Node para cada `.js`, análisis estático de referencias y smoke PHP local. **No** se ejecutaron los flujos E2E contra MySQL/Hostinger, por lo que el resultado real debe comprobarse en tu entorno.

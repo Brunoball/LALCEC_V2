@@ -1,6 +1,6 @@
-/* Columnas de Medicamentos: proporciones flexibles, sin anchos mínimos o fijos. */
+/* Columnas de Medicamentos: diseño compacto sin cambiar el resto de módulos. */
 .med-grid--stock {
-  grid-template-columns: 1.15fr .85fr 1.5fr .9fr 1fr .8fr 1.75fr;
+  grid-template-columns: 1.2fr .8fr 1.25fr 1.05fr 1.05fr .95fr 1.55fr;
 }
 .med-grid--loans {
   grid-template-columns: .5fr 1.5fr .8fr .7fr .9fr 1.3fr;
@@ -27,58 +27,98 @@
 .med-list { max-height:270px;overflow:auto; }
 @media(max-width:900px){ .med-toolbar input { width:100%; } }
 
-/* Stock simplificado: cada medicamento concentra sus ingresos, lotes e historial. */
-.med-cell-secondary { display:block;margin-top:3px;color:#64748b;font-size:11px; }
-/* Disponible: cantidad protagonista y unidad en su propia línea.
-   El detalle es secundario y puede ajustarse sin forzar la grilla. */
-.med-table .med-stock-availability {
-  white-space: normal;
-  gap: 2px;
+/* Stock: dos datos apilados por columna, conservando filas compactas. */
+.med-table .med-grid--stock.global-divTable__row > .mov-gridCell {
+  min-height: 54px;
+  padding: 7px 10px;
 }
+.med-table .med-grid--stock.global-divTable__row > .mov-gridCell:first-child {
+  padding-left: 19px;
+}
+.med-cell-secondary { display:block; margin-top:1px; color:#64748b; font-size:11px; }
+.med-table .med-grid--stock .med-two-lines {
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:2px;
+  white-space:nowrap;
+}
+.med-table .med-grid--stock .med-two-lines > .med-primary-line,
+.med-table .med-grid--stock .med-two-lines > .med-cell-secondary {
+  display:block;
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.med-table .med-grid--stock .med-two-lines > .med-primary-line { font-weight:550; }
+.med-table .med-grid--stock .med-two-lines > .med-cell-secondary { margin-top:0; }
+.med-table .med-stock-availability { white-space:nowrap; }
 .med-stock-amount {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 5px;
-  row-gap: 0;
-  max-width: 100%;
+  display:flex;
+  align-items:baseline;
+  gap:5px;
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  white-space:nowrap;
 }
-.med-stock-amount strong {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
+.med-stock-amount strong { font-size:16px; font-weight:600; line-height:1.25; font-variant-numeric:tabular-nums; }
+.med-stock-unit { font-size:11px; font-weight:500; color:var(--balto-ink,#334155); }
+.med-stock-detail { font-size:11px; color:var(--balto-text,#64748b); }
+/* Semáforo idéntico en concepto al indicador lateral de Socios. */
+.med-expiry-row { position:relative; }
+.med-expiry-row::before {
+  content:"";
+  position:absolute;
+  top:7px;
+  bottom:7px;
+  left:1px;
+  width:4px;
+  border-radius:999px;
+  pointer-events:none;
 }
-.med-stock-unit {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--balto-ink, #334155);
-  overflow-wrap: anywhere;
+.med-expiry-row.is-danger::before, .med-expiry-legend i.is-danger { background:var(--danger-500,#ef4444); }
+.med-expiry-row.is-warning::before, .med-expiry-legend i.is-warning { background:var(--warning-500,#f59e0b); }
+.med-expiry-row.is-safe::before, .med-expiry-legend i.is-safe { background:var(--success-500,#10b981); }
+.med-expiry-row.is-neutral::before, .med-expiry-legend i.is-neutral { background:var(--text-secondary,#94a3b8); }
+.med-expiry-cell { gap:5px; }
+.med-expiry-date { font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; }
+.med-expiry-row.is-danger .med-expiry-date { color:#b42318; font-weight:600; }
+.med-expiry-row.is-warning .med-expiry-date { color:#9a6700; font-weight:600; }
+.med-expiry-alert {
+  display:inline-flex;
+  flex:none;
+  justify-content:center;
+  align-items:center;
+  width:15px;
+  height:15px;
+  border-radius:50%;
+  background:#fee2e2;
+  color:#b42318;
+  font-size:10px;
+  font-weight:800;
 }
-.med-stock-caption {
-  display: block;
-  font-size: 11px;
-  color: var(--balto-text, #64748b);
+.med-table .med-grid--stock .med-actions { flex-wrap:nowrap; gap:4px; }
+.med-expiry-legend {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  padding:7px 14px 8px;
+  color:var(--text-secondary,#64748b);
+  font-size:10px;
+  background:var(--surface-color,#fff);
 }
-.med-stock-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--balto-text, #64748b);
+.med-expiry-legend strong { color:var(--text-primary,#334155); font-size:10px; letter-spacing:.02em; }
+.med-expiry-legend > span { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.med-expiry-legend i { display:block; width:4px; height:15px; border-radius:999px; }
+@media(max-width:1200px) {
+  .med-table .med-grid--stock.global-divTable__row > .mov-gridCell { padding-right:6px; padding-left:6px; }
+  .med-table .med-grid--stock.global-divTable__row > .mov-gridCell:first-child { padding-left:14px; }
+  .med-table .med-icon-action { padding:4px 5px; min-width:27px; min-height:28px; }
 }
-.med-stock-details span {
-  overflow-wrap: anywhere;
-}
-.med-stock-details b {
-  font-weight: 600;
-  color: var(--balto-ink, #334155);
-}
-/* Presentación destacada y dosis en una segunda línea, sin alargar la celda. */
-.med-stock-presentation { font-weight:550; }
 .med-icon-action { display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:30px;min-height:30px;padding:5px 7px; }
 .med-icon-action .med-action-label { display:none; }
 .med-icon-action:focus-visible { outline:2px solid #e87912;outline-offset:2px; }
@@ -169,9 +209,6 @@
 .med-loan-close-summary > div { display:flex;flex-direction:column;gap:5px;border:1px solid #e2e8f0;padding:12px;border-radius:9px; }
 .med-loan-close-summary strong { font-size:18px; }
 
-/* Un estado de catálogo por pestaña; avisos de lotes dentro de Activos. */
-.med-situacion { font-weight:650; color:#9a3412; letter-spacing:0; }
-.med-situacion--baja { color:#b42318; }
 
 /* Anulación compensatoria supervisada de compra/venta. */
 .med-anular-link {display:block;margin-top:5px;border:1px solid #fca5a5;background:#fff7f7;border-radius:6px;padding:5px 8px;color:#991b1b;cursor:pointer;font-size:11px;}

@@ -1,6 +1,5 @@
 const { test, expect } = require('./fixtures/auth.fixture');
 const { apiCall } = require('./helpers/api.helper');
-const { uniqueSuffix, todayIso } = require('./helpers/data.helper');
 const {
   futureIso, medFixture, entryFixture, createMedicine, stockOf, lotOf,
   movementsOf, assertError,
@@ -106,15 +105,24 @@ test.describe('Medicamentos: stock, lotes, FEFO e integridad API', () => {
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(2);
   });
 
-  test('idempotencia: misma clave no duplica stock; reutilizarla con otro payload se rechaza', async ({ request }) => {
+  test('sin tabla auxiliar: dos ingresos explícitos se registran como operaciones independientes', async ({ request }) => {
+    // Tras retirar la idempotencia, dos POST confirmados representan DOS ingresos.
+    // Este test usa únicamente un medicamento E2E; no reintenta automáticamente en la UI.
     const fx = await createMedicine(request);
-    const key = `e2e-${uniqueSuffix()}-stock`;
-    const payload = { id_medicamento:fx.id,...entryFixture({cantidad:7}),_idempotency_key:key };
-    const first = await apiCall(request,'medicamentos_ingresar',{method:'POST',data:payload});
-    const retry = await apiCall(request,'medicamentos_ingresar',{method:'POST',data:payload});
-    expect(retry.id_lote).toBe(first.id_lote);
-    expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(fx.first.cantidad+7);
-    await assertError(request,'medicamentos_ingresar',{...payload,cantidad:8},/clave|operaci[oó]n/i);
-    expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(fx.first.cantidad+7);
+    const payload = { id_medicamento: fx.id, ...entryFixture({ cantidad: 7 }) };
+    const before = await movementsOf(request, fx.id);
+
+    const first = await apiCall(request, 'medicamentos_ingresar', { method: 'POST', data: payload });
+    const second = await apiCall(request, 'medicamentos_ingresar', { method: 'POST', data: payload });
+
+    expect(Number(first.id_lote)).toBeGreaterThan(0);
+    expect(Number(second.id_lote)).toBeGreaterThan(0);
+    expect(Number(second.id_lote)).not.toBe(Number(first.id_lote));
+    expect(Number((await stockOf(request, fx.id)).stock_total)).toBe(fx.first.cantidad + 14);
+    expect(Number((await lotOf(request, first.id_lote)).cantidad_disponible)).toBe(7);
+    expect(Number((await lotOf(request, second.id_lote)).cantidad_disponible)).toBe(7);
+
+    const after = await movementsOf(request, fx.id);
+    expect(after.length - before.length).toBe(2);
   });
 });

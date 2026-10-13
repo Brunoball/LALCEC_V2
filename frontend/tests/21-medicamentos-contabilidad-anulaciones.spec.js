@@ -1,6 +1,6 @@
 const { test, expect } = require('./fixtures/auth.fixture');
 const { apiCall } = require('./helpers/api.helper');
-const { todayIso, uniqueSuffix } = require('./helpers/data.helper');
+const { todayIso } = require('./helpers/data.helper');
 const {
   medFixture, entryFixture, futureIso, medioPago, requireAccountingOptions, createMedicine,
   lotOf, stockOf, movementsOf, assertError,
@@ -24,7 +24,7 @@ async function prepare(request, use) {
 
 // No modificar opciones automáticas NO E2E: si faltan, el test falla antes de escribir.
 test.describe('Medicamentos: Contabilidad, compras, ventas y contramovimientos', () => {
-  test('compra: egreso, proveedor histórico, idempotencia y anulación con reintegro', async ({ request, page }) => {
+  test('compra: egreso, proveedor histórico y anulación con reintegro', async ({ request, page }) => {
     const medio = await prepare(request, {
       CATEGORIA_EGRESO:['COMPRA DE MEDICAMENTOS'],
       CONCEPTO_EGRESO:['COMPRA DE MEDICAMENTOS'],

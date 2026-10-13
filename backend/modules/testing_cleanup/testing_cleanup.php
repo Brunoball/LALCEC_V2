@@ -248,7 +248,6 @@ final class TestingCleanup
             'medicamentos_prestamos_detalle' => 0,
             'medicamentos_prestamos_devoluciones' => 0,
             'medicamentos_prestamos_senas_movimientos' => 0,
-            'medicamentos_solicitudes' => 0,
             'familias' => 0,
             'socios' => 0,
             'socios_eliminados' => 0,
@@ -387,11 +386,6 @@ final class TestingCleanup
             $counts['medicamentos_prestamos'] += self::deleteByIds($db,'medicamentos_prestamos','id_prestamo',$testPrestamosMedicamentos);
             $counts['medicamentos_lotes'] += self::deleteByIds($db,'medicamentos_lotes','id_lote',$testLotes);
             $counts['medicamentos'] += self::deleteByIds($db,'medicamentos','id_medicamento',$testMedicamentos);
-            if (self::tableExists($db,'medicamentos_solicitudes')) {
-                $q=$db->prepare("DELETE FROM medicamentos_solicitudes WHERE clave LIKE 'e2e-%'");
-                $q->execute();
-                $counts['medicamentos_solicitudes'] += $q->rowCount();
-            }
 
             $testPaymentIds = $testSocios === []
                 ? []
@@ -723,7 +717,6 @@ final class TestingCleanup
             'usuarios' => self::scalar($db, "SELECT COUNT(*) FROM sis_usuarios WHERE usuario LIKE 'pw_e2e_%' OR email LIKE '%@example.test'"),
             'contable_opciones' => self::scalar($db, "SELECT COUNT(*) FROM contable_opciones WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
             'medicamentos' => self::tableExists($db,'medicamentos') ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'") : 0,
-            'medicamentos_solicitudes' => self::tableExists($db,'medicamentos_solicitudes') ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_solicitudes WHERE clave LIKE 'e2e-%'") : 0,
             'contable_ingresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_ingresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %'"),
             'contable_egresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_egresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %' OR numero_comprobante LIKE 'E2E-%'"),
             'sesiones' => self::scalar($db, "SELECT COUNT(*) FROM sis_sesiones WHERE idSesion <> ? AND user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%'", [$currentSessionId]),
@@ -802,7 +795,6 @@ final class TestingCleanup
             $queries['medicamentos_prestamos_detalle']="SELECT d.* FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY d.id_detalle_prestamo";
             $queries['medicamentos_prestamos_devoluciones']="SELECT r.* FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY r.id_devolucion";
             $queries['medicamentos_prestamos_senas_movimientos']="SELECT sm.* FROM medicamentos_prestamos_senas_movimientos sm WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=sm.id_prestamo AND {$isTestMed}) ORDER BY sm.id_movimiento_sena";
-            $queries['medicamentos_solicitudes']="SELECT s.* FROM medicamentos_solicitudes s WHERE s.clave NOT LIKE 'e2e-%' ORDER BY s.clave";
             // Los asientos de medicamentos E2E no llevan necesariamente una
             // etiqueta en el texto: se identifican por sus FK de stock/señas.
             $testIncome = "(EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE x.id_ingreso_contable=i.id_ingreso AND {$isTestMed}) OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm JOIN medicamentos_prestamos_detalle d ON d.id_prestamo=sm.id_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE sm.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";

@@ -570,9 +570,25 @@ trait ContableConsultas
             $where[] = 'm.id_medio_pago = ?';
             $params[] = $meanId;
         }
+        $medicamentosLink = $isIncome ? 'id_ingreso_contable' : 'id_egreso_contable';
+        // Recupera el titular de señas anteriores que se guardaron sin proveedor.
+        // Sólo se usa el vínculo contable real: jamás se deduce por monto o descripción.
+        $nombreSocioPrestamo = "COALESCE(
+            NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),
+            NULLIF(TRIM(se.razon_social),''),
+            NULLIF(TRIM(sdel.denominacion),''),
+            CONCAT('SOCIO #',p.id_socio))";
+        $nombreSenaAnterior = "(SELECT {$nombreSocioPrestamo}
+            FROM medicamentos_prestamos_senas_movimientos sm
+            JOIN medicamentos_prestamos p ON p.id_prestamo=sm.id_prestamo
+            LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio
+            LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio
+            LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio
+            WHERE sm.{$medicamentosLink}=m.{$idColumn} LIMIT 1)";
+        $proveedorVisible = "COALESCE(NULLIF(TRIM(m.proveedor),''),{$nombreSenaAnterior})";
         $manualSearchExpression = $isIncome
-            ? "CONCAT_WS(' ', m.proveedor, m.categoria, m.concepto, mp.nombre, m.detalle) LIKE {param}"
-            : "CONCAT_WS(' ', m.proveedor, m.categoria, m.concepto, mp.nombre, m.detalle, m.numero_comprobante) LIKE {param}";
+            ? "CONCAT_WS(' ', {$proveedorVisible}, m.categoria, m.concepto, mp.nombre, m.detalle) LIKE {param}"
+            : "CONCAT_WS(' ', {$proveedorVisible}, m.categoria, m.concepto, mp.nombre, m.detalle, m.numero_comprobante) LIKE {param}";
         $searchFilter = build_search_filter(
             $search,
             [$manualSearchExpression],
@@ -584,13 +600,12 @@ trait ContableConsultas
             array_push($params, ...$searchFilter['params']);
         }
 
-        $medicamentosLink = $isIncome ? 'id_ingreso_contable' : 'id_egreso_contable';
         $extra = $isIncome
             ? "'' AS numero_comprobante, NULL AS archivo_path"
             : 'm.numero_comprobante, m.archivo_path';
         $statement = $db->prepare(
             "SELECT
-                m.{$idColumn}, m.fecha, m.id_medio_pago, m.proveedor, m.categoria,
+                m.{$idColumn}, m.fecha, m.id_medio_pago, {$proveedorVisible} AS proveedor, m.categoria,
                 m.concepto, m.importe, m.detalle, m.creado_en, m.actualizado_en,
                 COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio,
                 CASE WHEN EXISTS (SELECT 1 FROM medicamentos_movimientos mm WHERE mm.{$medicamentosLink} = m.{$idColumn})

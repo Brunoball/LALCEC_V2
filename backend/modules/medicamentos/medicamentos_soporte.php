@@ -64,59 +64,6 @@ trait MedicamentosSoporte {
         }
         throw new LogicException('La transacción de medicamentos no pudo completarse.');
     }
-    /**
-     * Una misma clave de solicitud equivale a una operación de escritura, incluso
-     * ante reintentos o respuestas perdidas. La fila se inserta y confirma en
-     * la MISMA transacción que stock, contabilidad y auditoría.
-     *
-     * Sin clave mantenemos compatibilidad con clientes antiguos. La interfaz
-     * actual siempre la envía. Requiere la migración SQL adjunta.
-     */
-    private static function tx(array $auth, callable $work): array {
-        $db=$auth['db'];
-        $body=request_body();
-        $key=$body['_idempotency_key']??null;
-        if($key===null) return self::transaccionMed($db,$work);
-        if(!is_string($key)||!preg_match('/^[A-Za-z0-9_.:-]{16,100}$/D',$key))
-            api_error('Clave de operación inválida.');
-        if (function_exists('e2e_request_enabled') && e2e_request_enabled()) {
-            // Nunca colisiona con una solicitud real y es identificable por
-            // la limpieza global de Playwright, sin modificar el cliente.
-            $key='e2e-'.hash('sha256',$key);
-        }
-        $action=request_action();
-        unset($body['_idempotency_key']);
-        // Evitar falsos positivos al cambiar el orden de las claves del JSON.
-        $normalize=static function(mixed $value) use (&$normalize): mixed {
-            if(!is_array($value)) return $value;
-            if(!array_is_list($value)) ksort($value,SORT_STRING);
-            foreach($value as &$item) $item=$normalize($item);
-            return $value;
-        };
-        $fingerprint=hash('sha256',json_encode([$action,$normalize($body)],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
-        try {
-            return self::transaccionMed($db,static function(PDO $db) use($key,$action,$fingerprint,$work): array {
-                $db->prepare('INSERT INTO medicamentos_solicitudes (clave,accion,contenido_sha256) VALUES (?,?,?)')
-                    ->execute([$key,$action,$fingerprint]);
-                $result=$work($db);
-                $db->prepare('UPDATE medicamentos_solicitudes SET resultado_json=? WHERE clave=?')
-                    ->execute([json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$key]);
-                return $result;
-            });
-        } catch(PDOException $error) {
-            // Únicamente una clave duplicada puede reproducir un resultado anterior.
-            // MySQL espera el COMMIT de la primera petición antes de responder 1062.
-            if((int)($error->errorInfo[1]??0)!==1062) throw $error;
-            $q=$db->prepare('SELECT accion,contenido_sha256,resultado_json FROM medicamentos_solicitudes WHERE clave=?');
-            $q->execute([$key]); $prev=$q->fetch();
-            if(!$prev) throw $error;
-            if($prev['accion']!==$action||$prev['contenido_sha256']!==$fingerprint)
-                api_error('La clave ya corresponde a otra operación. Volvé a abrir el formulario.');
-            $previous=json_decode((string)$prev['resultado_json'],true);
-            if(!is_array($previous)) throw new RuntimeException('Una solicitud anterior quedó incompleta.');
-            return $previous;
-        }
-    }
     private static function inventory(PDO $db,int $lote,string $tipo,int $quantity,int $deltaDisp,int $deltaQuar,?int $detalle=null,?int $devolucion=null,?int $socio=null,?int $ingreso=null,?int $egreso=null,?string $nota=null): int {
         if($quantity<=0||($deltaDisp===0&&$deltaQuar===0)) api_error('Movimiento de stock inválido.');
         $q=$db->prepare('UPDATE medicamentos_lotes SET cantidad_disponible=cantidad_disponible+?,cantidad_cuarentena=cantidad_cuarentena+? WHERE id_lote=? AND cantidad_disponible>=? AND cantidad_cuarentena>=? AND cantidad_disponible+?<=4294967295 AND cantidad_cuarentena+?<=4294967295');
@@ -133,12 +80,28 @@ trait MedicamentosSoporte {
             VALUES (?,?,1) ON DUPLICATE KEY UPDATE id_opcion=id_opcion");
         $q->execute([$tipo,$nombre]);
     }
-    private static function ingresoContable(PDO $db,string $fecha,int $medio,string $categoria,string $concepto,string $monto,?string $detalle=null): int {
+    /** Nombre del titular del préstamo para el asiento contable; no crea opciones de proveedores. */
+    private static function nombreSocioPrestamo(PDO $db,int $idSocio): string {
+        $q=$db->prepare("SELECT COALESCE(
+                NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),
+                NULLIF(TRIM(se.razon_social),''),
+                NULLIF(TRIM(sdel.denominacion),''),
+                CONCAT('SOCIO #',s.id_socio))
+            FROM socios s
+            LEFT JOIN socios_personas sp ON sp.id_socio=s.id_socio
+            LEFT JOIN socios_empresas se ON se.id_socio=s.id_socio
+            LEFT JOIN socios_eliminados sdel ON sdel.id_socio=s.id_socio
+            WHERE s.id_socio=? LIMIT 1");
+        $q->execute([$idSocio]);
+        $nombre=trim((string)($q->fetchColumn() ?: 'SOCIO #'.$idSocio));
+        return function_exists('mb_substr') ? mb_substr($nombre,0,160,'UTF-8') : substr($nombre,0,160);
+    }
+    private static function ingresoContable(PDO $db,string $fecha,int $medio,string $categoria,string $concepto,string $monto,?string $detalle=null,?string $proveedor=null): int {
         if((float)$monto>9999999999.99) api_error('El importe supera el máximo permitido por Contabilidad.');
         self::opcionContableAutomatica($db,'CATEGORIA_INGRESO',$categoria);
         self::opcionContableAutomatica($db,'CONCEPTO_INGRESO',$concepto);
-        $s=$db->prepare('INSERT INTO contable_ingresos (fecha,id_medio_pago,categoria,concepto,importe,detalle) VALUES (?,?,?,?,?,?)');
-        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,$detalle]); return (int)$db->lastInsertId();
+        $s=$db->prepare('INSERT INTO contable_ingresos (fecha,id_medio_pago,categoria,concepto,importe,detalle,proveedor) VALUES (?,?,?,?,?,?,?)');
+        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,$detalle,$proveedor]); return (int)$db->lastInsertId();
     }
     private static function egresoContable(PDO $db,string $fecha,int $medio,string $categoria,string $concepto,string $monto,?string $detalle=null,?string $proveedor=null): int {
         if((float)$monto>9999999999.99) api_error('El importe supera el máximo permitido por Contabilidad.');

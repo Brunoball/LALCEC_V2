@@ -1444,7 +1444,6 @@ export default function ContableModule({ view = "summary" }) {
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.proveedor || "—"}</strong>
                         <small>Categoría: {item.categoria || "—"}</small>
-                        {item.es_medicamentos ? <small>Registrado desde Medicamentos · movimiento protegido</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}
@@ -1500,7 +1499,6 @@ export default function ContableModule({ view = "summary" }) {
                       <div className="mov-gridCell entity-main-cell">
                         <strong>{item.proveedor || "—"}</strong>
                         <small>Categoría: {item.categoria || "—"}</small>
-                        {item.es_medicamentos ? <small>Registrado desde Medicamentos · movimiento protegido</small> : null}
                       </div>
                       <div className="mov-gridCell is-center">
                         {formatDate(item.fecha)}

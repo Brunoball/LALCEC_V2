@@ -6,7 +6,7 @@ trait MedicamentosGestion {
     use MedicamentosSoporte;
 
     protected static function guardarMedicamento(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=(int)($b['id_medicamento']??0);
             $fields=[self::req($b,'droga'),self::req($b,'nombre_comercial'),self::str($b,'laboratorio',160),self::req($b,'presentacion',100),self::req($b,'dosis',100),self::req($b,'unidad_stock',40),self::str($b,'observaciones',3000)];
             if($id){
@@ -34,7 +34,7 @@ trait MedicamentosGestion {
         });
     }
     protected static function cambiarEstadoMedicamento(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_medicamento']??null);$s=$db->prepare('SELECT activo FROM medicamentos WHERE id_medicamento=? FOR UPDATE');$s->execute([$id]);$old=$s->fetchColumn();if($old===false)api_error('Medicamento no encontrado.');
             $valor=$b['activo']??null;
             if(!in_array($valor,[0,1,'0','1'],true)) api_error('El estado del medicamento debe ser ACTIVO o BAJA.');
@@ -44,16 +44,17 @@ trait MedicamentosGestion {
         });
     }
     protected static function ingresarStock(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $med=positive_id($b['id_medicamento']??null,'medicamento');
             return self::registrarIngresoStock($db,$auth,$b,$med);
         });
     }
     /** Se comparte entre el primer ingreso al crear y los ingresos posteriores. */
     private static function registrarIngresoStock(PDO $db,array $auth,array $b,int $med,bool $primerIngreso=false): array {
-        $q=$db->prepare('SELECT activo FROM medicamentos WHERE id_medicamento=? FOR UPDATE');
+        $q=$db->prepare('SELECT activo,nombre_comercial,droga,unidad_stock FROM medicamentos WHERE id_medicamento=? FOR UPDATE');
         $q->execute([$med]);
-        if((int)$q->fetchColumn()!==1) api_error('Medicamento inactivo o inexistente.');
+        $medicamento=$q->fetch(PDO::FETCH_ASSOC);
+        if(!$medicamento || (int)$medicamento['activo']!==1) api_error('Medicamento inactivo o inexistente.');
         $origin=self::enum($b['origen']??'',['DONACION','COMPRA','INICIAL'],'origen');
         if($origin==='INICIAL' && !$primerIngreso) api_error('STOCK INICIAL solo está permitido al crear un medicamento nuevo.');
         $qty=self::qty($b['cantidad']??null);
@@ -71,7 +72,8 @@ trait MedicamentosGestion {
             if((float)$total>9999999999.99) api_error('El importe de la compra es demasiado alto.');
             $procedencia=trim((string)self::str($b,'procedencia',180));
             $proveedor=$procedencia!=='' ? (function_exists('mb_substr') ? mb_substr($procedencia,0,160,'UTF-8') : substr($procedencia,0,160)) : null;
-            $expense=self::egresoContable($db,$date,$method,'COMPRA DE MEDICAMENTOS','COMPRA DE MEDICAMENTOS',$total,'Ingreso de stock: '.$procedencia,$proveedor);
+            $detalleCompra='Ingreso de stock: '.$qty.' '.$medicamento['unidad_stock'].' de '.$medicamento['nombre_comercial'].' ('.$medicamento['droga'].')';
+            $expense=self::egresoContable($db,$date,$method,'COMPRA DE MEDICAMENTOS','COMPRA DE MEDICAMENTOS',$total,$detalleCompra,$proveedor);
         }
         $s=$db->prepare("INSERT INTO medicamentos_lotes (id_medicamento,numero_lote,fecha_vencimiento,fecha_ingreso,origen,procedencia,costo_unitario,cantidad_disponible,observaciones) VALUES (?,?,?,?,?,?,?,?,?)");
         $s->execute([$med,self::str($b,'numero_lote',100),$expiry,$date,$origin,self::str($b,'procedencia',180),$cost,0,self::str($b,'observaciones',3000)]);
@@ -84,7 +86,7 @@ trait MedicamentosGestion {
      * Compatibilidad: id_lote conserva la operación sobre un lote explícito.
      */
     protected static function salidaStock(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $type=self::enum($b['tipo']??'',['ENTREGA_DONACION','SALIDA_VENTA','AJUSTE_ENTRADA','AJUSTE_SALIDA','BAJA_VENCIMIENTO','BAJA_DESCARTE'],'movimiento');
             $qty=self::qty($b['cantidad']??null);
             $note=self::str($b,'detalle',500);
@@ -145,7 +147,7 @@ trait MedicamentosGestion {
         });
     }
     protected static function cambiarEstadoLote(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_lote']??null,'lote');$lot=self::lockedLote($db,$id);$state=self::enum($b['estado']??'',['ACTIVO','BLOQUEADO','DESCARTADO'],'estado');
             if($lot['estado']==='DESCARTADO' && $state!=='DESCARTADO')
                 api_error('Un lote descartado no puede reactivarse. Ingresá un nuevo lote para recuperar existencias.');
@@ -156,7 +158,7 @@ trait MedicamentosGestion {
         });
     }
     protected static function crearPrestamo(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $socio=positive_id($b['id_socio']??null,'socio');
             $items=$b['items']??[];if(!is_array($items)||count($items)<1||count($items)>30)api_error('Agregá entre 1 y 30 lotes al préstamo.');
             $parsed=[];
@@ -180,7 +182,9 @@ trait MedicamentosGestion {
             $db->prepare('INSERT INTO medicamentos_prestamos (id_socio,fecha_entrega,fecha_devolucion_prevista,observaciones) VALUES (?,?,?,?)')->execute([$socio,date('Y-m-d H:i:s'),$due,self::str($b,'observaciones',3000)]);$loan=(int)$db->lastInsertId();
             foreach($parsed as $lot=>$qty){$db->prepare('INSERT INTO medicamentos_prestamos_detalle (id_prestamo,id_lote,cantidad_entregada) VALUES (?,?,?)')->execute([$loan,$lot,$qty]);$detail=(int)$db->lastInsertId();self::inventory($db,$lot,'ENTREGA_PRESTAMO',$qty,-$qty,0,$detail,null,$socio);}
             $money=self::money($b['sena']??'0',true);
-            if((float)$money>0){$medio=self::medio($db,$b['id_medio_pago']??null);$ing=self::ingresoContable($db,date('Y-m-d'),$medio,'SEÑAS DE MEDICAMENTOS','COBRO DE SEÑA',$money,'Seña préstamo medicamentos #'.$loan);
+            if((float)$money>0){$medio=self::medio($db,$b['id_medio_pago']??null);
+                $nombreSocio=self::nombreSocioPrestamo($db,$socio);
+                $ing=self::ingresoContable($db,date('Y-m-d'),$medio,'SEÑAS DE MEDICAMENTOS','COBRO DE SEÑA',$money,'Seña préstamo medicamentos #'.$loan,$nombreSocio);
                 $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_ingreso_contable) VALUES (?,?,'COBRO_SENA',?,?,?)")->execute([$loan,date('Y-m-d H:i:s'),$money,$medio,$ing]);}
             self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$loan,null,['socio'=>$socio,'items'=>$parsed,'sena'=>$money]);return ['id_prestamo'=>$loan];
         });
@@ -189,7 +193,7 @@ trait MedicamentosGestion {
      * Se recibe en un lote nuevo para respetar el vencimiento real del producto devuelto.
      */
     protected static function devolverMedicamento(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_detalle_prestamo']??null,'detalle');
             // Serializar con el cierre para impedir recibir después de cerrar.
             $q=$db->prepare('SELECT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_detalle_prestamo=?');
@@ -285,7 +289,7 @@ trait MedicamentosGestion {
      * La seña sin reintegrar pasa a donación sin crear un segundo ingreso en caja.
      */
     protected static function cerrarPrestamo(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_prestamo']??null,'préstamo');
             $s=$db->prepare('SELECT estado FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
             $s->execute([$id]);
@@ -335,7 +339,7 @@ trait MedicamentosGestion {
      * una reversión completa y real por compra o venta.
      */
     protected static function anularOperacionEconomica(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db) use($auth,$b): array {
+        return self::transaccionMed($auth['db'],static function(PDO $db) use($auth,$b): array {
             $id=positive_id($b['id_movimiento']??null,'movimiento original');
             $motivo=self::req($b,'motivo',400);
             if (strlen(trim($motivo))<10) api_error('Explicá el motivo de la anulación con al menos 10 caracteres.');
@@ -444,13 +448,17 @@ trait MedicamentosGestion {
         });
     }
     protected static function registrarSena(array $auth,array $b): array {
-        return self::tx($auth,static function(PDO $db)use($auth,$b){
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_prestamo']??null,'préstamo');$type=self::enum($b['tipo']??'',['DEVOLUCION_SENA','SENA_DONADA'],'movimiento de seña');$money=self::money($b['monto']??null);
             $s=$db->prepare('SELECT * FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');$s->execute([$id]);$p=$s->fetch();if(!$p||$p['estado']!=='ABIERTO')api_error('El préstamo no está abierto.');
             $s=$db->prepare("SELECT COALESCE(SUM(CASE WHEN tipo='COBRO_SENA' THEN monto ELSE -monto END),0) saldo FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo=?");$s->execute([$id]);$saldo=(float)$s->fetchColumn();
             if((int)round((float)$money*100)>(int)round($saldo*100))api_error('El importe supera la seña pendiente de resolver.');
             $medio=null;$expense=null;
-            if($type==='DEVOLUCION_SENA'){$medio=self::medio($db,$b['id_medio_pago']??null);$expense=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$money,'Devolución seña préstamo #'.$id);}
+            if($type==='DEVOLUCION_SENA'){
+                $medio=self::medio($db,$b['id_medio_pago']??null);
+                $nombreSocio=self::nombreSocioPrestamo($db,(int)$p['id_socio']);
+                $expense=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$money,'Devolución seña préstamo #'.$id,$nombreSocio);
+            }
             $db->prepare('INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_egreso_contable,observaciones) VALUES (?,?,?,?,?,?,?)')->execute([$id,date('Y-m-d H:i:s'),$type,$money,$medio,$expense,self::str($b,'observaciones',500)]);
             $mov=(int)$db->lastInsertId();self::audit($db,$auth,$type,'medicamentos_prestamos_senas_movimientos',$mov,null,['prestamo'=>$id,'monto'=>$money,'egreso'=>$expense]);return ['id_movimiento_sena'=>$mov];
         });

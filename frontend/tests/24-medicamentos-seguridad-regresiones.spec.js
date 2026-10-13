@@ -66,8 +66,9 @@ test.describe('Medicamentos: seguridad E2E y regresiones', () => {
     }
     for(const table of ['medicamentos','medicamentos_lotes','medicamentos_movimientos',
       'medicamentos_prestamos','medicamentos_prestamos_detalle',
-      'medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos',
-      'medicamentos_solicitudes']) expect(cleanup).toContain(`'${table}'`);
+      'medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos']) {
+      expect(cleanup).toContain(`'${table}'`);
+    }
     expect(direct).toContain('Limpieza SQL directa deshabilitada');
   });
 });

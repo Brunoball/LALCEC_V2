@@ -13,7 +13,6 @@ import { useMedicamentos } from '../hooks/useMedicamentos';
 import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import BuscadorEntidad from '../modales/BuscadorEntidad';
 import { fecha, fechaHoy, dinero, num } from '../utils/medicamentosUtils';
-import { operacionConClave } from '../utils/medicamentosOperacion';
 import MedicamentosTabs, { MedSection } from '../modales/MedicamentosTabs';
 import '../Medicamentos.css';
 
@@ -61,7 +60,6 @@ export default function Prestamos() {
   const [fetchingId, setFetchingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const guardandoRef = useRef(false);
-  const pendienteOperacion = useRef(null);
   const consultaEnCurso = useRef(false);
   const solicitudLotes = useRef(0);
   const [cargandoLotes, setCargandoLotes] = useState(false);
@@ -80,7 +78,6 @@ export default function Prestamos() {
     const token = ++solicitudLotes.current;
     setForm(newLoan()); setChosenPerson(null); setLots([]); setModal('prestamo');
     setCargandoLotes(true);
-    pendienteOperacion.current = null;
     try {
       const response = await api.lotes({ disponibles: 1 });
       if (token === solicitudLotes.current) setLots(response.registros || []);
@@ -111,8 +108,7 @@ export default function Prestamos() {
       if (action !== 'detalle' && !isOpen) throw new Error('Este préstamo ya está cerrado.');
       if (action === 'devolucion' && remaining.length === 0) throw new Error('Este préstamo no tiene medicamentos pendientes de devolución.');
       if ((action === 'reintegrar' || action === 'donar') && balance < 0.01) throw new Error('No queda seña pendiente de resolver.');
-      pendienteOperacion.current = null;
-      setDetail(data);
+        setDetail(data);
       if (action === 'devolucion') setReturnForm(newReturn(remaining[0].id_detalle_prestamo));
       if (action === 'reintegrar' || action === 'donar') setMoneyForm({ ...newMoney(), monto: balance.toFixed(2) });
       setModal(action);
@@ -126,8 +122,7 @@ export default function Prestamos() {
     guardandoRef.current = true;
     setSaving(true);
     try {
-      const resultado = await method(operacionConClave(pendienteOperacion, payload));
-      pendienteOperacion.current = null;
+      const resultado = await method(payload);
       // Cerrar primero: una falla en la recarga no debe ofrecer repetir una escritura exitosa.
       setModal(''); setDetail(null);
       if (method === api.devolver && resultado?.estado_lote === 'BLOQUEADO') {
@@ -145,8 +140,7 @@ export default function Prestamos() {
     guardandoRef.current = true;
     setSaving(true);
     try {
-      const resultado = await api.cerrar(operacionConClave(pendienteOperacion, { id_prestamo: detail?.prestamo?.id_prestamo }));
-      pendienteOperacion.current = null;
+      const resultado = await api.cerrar({ id_prestamo: detail?.prestamo?.id_prestamo });
       // Se confirmó el cierre; una falla de lectura no debe repetir la escritura.
       void cargar({ silencioso: true });
       return resultado;
@@ -155,7 +149,7 @@ export default function Prestamos() {
       setSaving(false);
     }
   };
-  const cerrarConfirmacion = () => { setModal(''); setDetail(null); pendienteOperacion.current = null; };
+  const cerrarConfirmacion = () => { setModal(''); setDetail(null); };
   const toastConfirmacion = (tipo, mensaje, duracion) => setFeedback({ type: tipo, message: mensaje, duration: duracion });
 
   const available = lots.filter(l => num(l.medicamento_activo) === 1 && l.estado === 'ACTIVO' && l.fecha_vencimiento >= fechaHoy() && num(l.cantidad_disponible) > 0);
