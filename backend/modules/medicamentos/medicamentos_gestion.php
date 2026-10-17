@@ -31,7 +31,7 @@ trait MedicamentosGestion {
             }
             self::audit($db,$auth,$before?'EDITAR':'CREAR','medicamentos',$id,$before,$fields);
             return ['id_medicamento'=>$id];
-        });
+        },$auth,$b,'guardarMedicamento');
     }
     protected static function cambiarEstadoMedicamento(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
@@ -41,13 +41,13 @@ trait MedicamentosGestion {
             $state=(int)$valor;
             $db->prepare('UPDATE medicamentos SET activo=? WHERE id_medicamento=?')->execute([$state,$id]);
             self::audit($db,$auth,'CAMBIAR_ESTADO','medicamentos',$id,['activo'=>$old],['activo'=>$state]);return ['activo'=>$state];
-        });
+        },$auth,$b,'cambiarEstadoMedicamento');
     }
     protected static function ingresarStock(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $med=positive_id($b['id_medicamento']??null,'medicamento');
             return self::registrarIngresoStock($db,$auth,$b,$med);
-        });
+        },$auth,$b,'ingresarStock');
     }
     /** Se comparte entre el primer ingreso al crear y los ingresos posteriores. */
     private static function registrarIngresoStock(PDO $db,array $auth,array $b,int $med,bool $primerIngreso=false): array {
@@ -144,7 +144,7 @@ trait MedicamentosGestion {
                     ['lote'=>$op['lote'],'tipo'=>$type,'cantidad'=>$op['cantidad'],'ingreso'=>$ing]);
             }
             return ['id_movimiento'=>$ids[0],'id_movimientos'=>$ids,'lotes_utilizados'=>count($ids)];
-        });
+        },$auth,$b,'salidaStock');
     }
     protected static function cambiarEstadoLote(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
@@ -155,7 +155,7 @@ trait MedicamentosGestion {
             if($state==='ACTIVO' && $lot['fecha_vencimiento']<date('Y-m-d'))api_error('No podés activar un lote vencido.');
             $db->prepare('UPDATE medicamentos_lotes SET estado=? WHERE id_lote=?')->execute([$state,$id]);
             self::audit($db,$auth,'ESTADO_LOTE','medicamentos_lotes',$id,['estado'=>$lot['estado']],['estado'=>$state]);return ['estado'=>$state];
-        });
+        },$auth,$b,'cambiarEstadoLote');
     }
     protected static function crearPrestamo(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
@@ -187,7 +187,7 @@ trait MedicamentosGestion {
                 $ing=self::ingresoContable($db,date('Y-m-d'),$medio,'SEÑAS DE MEDICAMENTOS','COBRO DE SEÑA',$money,'Seña préstamo medicamentos #'.$loan,$nombreSocio);
                 $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_ingreso_contable) VALUES (?,?,'COBRO_SENA',?,?,?)")->execute([$loan,date('Y-m-d H:i:s'),$money,$medio,$ing]);}
             self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$loan,null,['socio'=>$socio,'items'=>$parsed,'sena'=>$money]);return ['id_prestamo'=>$loan];
-        });
+        },$auth,$b,'crearPrestamo');
     }
     /** La devolución queda registrada y disponible inmediatamente (sin paso de aprobación).
      * Se recibe en un lote nuevo para respetar el vencimiento real del producto devuelto.
@@ -232,7 +232,7 @@ trait MedicamentosGestion {
             self::inventory($db,$lot,'DEVOLUCION_LIBERADA',$qty,$qty,0,$id,$ret,(int)$detail['id_socio'],null,null,'Devolución registrada');
             self::audit($db,$auth,'REGISTRAR_DEVOLUCION','medicamentos_prestamos_devoluciones',$ret,null,['detalle'=>$id,'cantidad'=>$qty,'lote_recibido'=>$lot]);
             return ['id_devolucion'=>$ret,'id_lote_recibido'=>$lot,'estado_lote'=>$estadoRecibido];
-        });
+        },$auth,$b,'devolverMedicamento');
     }
     /** Compatibilidad con devoluciones antiguas que quedaron pendientes de revisión.
      * Al cerrar, se regularizan sin pedir al usuario una aprobación extra.
@@ -331,7 +331,7 @@ trait MedicamentosGestion {
             self::audit($db,$auth,'CERRAR_PRESTAMO','medicamentos_prestamos',$id,
                 ['estado'=>'ABIERTO'],['estado'=>'CERRADO','unidades_sin_devolver'=>$sinDevolver,'sena_donada'=>$donado]);
             return ['estado'=>'CERRADO','unidades_sin_devolver'=>$sinDevolver,'sena_donada'=>$donado];
-        });
+        },$auth,$b,'cerrarPrestamo');
     }
     /**
      * Reversión compensatoria: conserva el documento original y crea movimientos
@@ -413,8 +413,9 @@ trait MedicamentosGestion {
                 foreach ($ventas as $venta) {
                     if (!in_array((int)$venta['id_medicamento'],$medicamentosOperacion,true))
                         api_error('Los medicamentos de la venta cambiaron. Actualizá el historial.');
-                    if ($venta['estado']==='DESCARTADO')
-                        api_error('No puede revertirse automáticamente: uno de los lotes fue descartado. Registrá la devolución mediante un nuevo lote supervisado.');
+                    // El lote ORIGINAL puede haber sido descartado después de la venta.
+                    // Eso no impide la devolución: nunca se reactiva el original.
+                    // Todas las unidades vuelven a lotes NUEVOS y BLOQUEADOS.
                 }
                 $s=$db->prepare('SELECT importe FROM contable_ingresos WHERE id_ingreso=? FOR UPDATE');
                 $s->execute([$idContable]);$importe=$s->fetchColumn();
@@ -445,22 +446,31 @@ trait MedicamentosGestion {
                 ['id_contable_original'=>$idContable],
                 ['motivo'=>$motivo,'id_contable_compensatorio'=>$nuevoAsiento,'movimientos_inversos'=>$movimientos]);
             return ['operacion_anulada'=>$etiqueta,'movimientos_inversos'=>$movimientos,'id_contable_compensatorio'=>$nuevoAsiento];
-        });
+        },$auth,$b,'anularOperacionEconomica');
     }
+    /**
+     * Única operación manual sobre una seña: reintegrar dinero al socio.
+     * La donación restante se registra exclusivamente al cerrar el préstamo.
+     */
     protected static function registrarSena(array $auth,array $b): array {
-        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
-            $id=positive_id($b['id_prestamo']??null,'préstamo');$type=self::enum($b['tipo']??'',['DEVOLUCION_SENA','SENA_DONADA'],'movimiento de seña');$money=self::money($b['monto']??null);
-            $s=$db->prepare('SELECT * FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');$s->execute([$id]);$p=$s->fetch();if(!$p||$p['estado']!=='ABIERTO')api_error('El préstamo no está abierto.');
-            $s=$db->prepare("SELECT COALESCE(SUM(CASE WHEN tipo='COBRO_SENA' THEN monto ELSE -monto END),0) saldo FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo=?");$s->execute([$id]);$saldo=(float)$s->fetchColumn();
+        return self::transaccionMed($auth['db'],static function(PDO $db) use($auth,$b): array {
+            $id=positive_id($b['id_prestamo']??null,'préstamo');
+            self::enum($b['tipo']??'',['DEVOLUCION_SENA'],'movimiento de seña');
+            $money=self::money($b['monto']??null);
+            $s=$db->prepare('SELECT * FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
+            $s->execute([$id]);$p=$s->fetch();
+            if(!$p||$p['estado']!=='ABIERTO')api_error('El préstamo no está abierto.');
+            $s=$db->prepare("SELECT COALESCE(SUM(CASE WHEN tipo='COBRO_SENA' THEN monto ELSE -monto END),0) saldo FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo=?");
+            $s->execute([$id]);$saldo=(float)$s->fetchColumn();
             if((int)round((float)$money*100)>(int)round($saldo*100))api_error('El importe supera la seña pendiente de resolver.');
-            $medio=null;$expense=null;
-            if($type==='DEVOLUCION_SENA'){
-                $medio=self::medio($db,$b['id_medio_pago']??null);
-                $nombreSocio=self::nombreSocioPrestamo($db,(int)$p['id_socio']);
-                $expense=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$money,'Devolución seña préstamo #'.$id,$nombreSocio);
-            }
-            $db->prepare('INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_egreso_contable,observaciones) VALUES (?,?,?,?,?,?,?)')->execute([$id,date('Y-m-d H:i:s'),$type,$money,$medio,$expense,self::str($b,'observaciones',500)]);
-            $mov=(int)$db->lastInsertId();self::audit($db,$auth,$type,'medicamentos_prestamos_senas_movimientos',$mov,null,['prestamo'=>$id,'monto'=>$money,'egreso'=>$expense]);return ['id_movimiento_sena'=>$mov];
-        });
+            $medio=self::medio($db,$b['id_medio_pago']??null);
+            $nombreSocio=self::nombreSocioPrestamo($db,(int)$p['id_socio']);
+            $expense=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$money,'Devolución seña préstamo #'.$id,$nombreSocio);
+            $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_egreso_contable,observaciones) VALUES (?,?,'DEVOLUCION_SENA',?,?,?,?)")
+                ->execute([$id,date('Y-m-d H:i:s'),$money,$medio,$expense,self::str($b,'observaciones',500)]);
+            $mov=(int)$db->lastInsertId();
+            self::audit($db,$auth,'DEVOLUCION_SENA','medicamentos_prestamos_senas_movimientos',$mov,null,['prestamo'=>$id,'monto'=>$money,'egreso'=>$expense]);
+            return ['id_movimiento_sena'=>$mov];
+        },$auth,$b,'registrarSena');
     }
 }

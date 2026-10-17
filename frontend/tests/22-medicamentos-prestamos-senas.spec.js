@@ -58,7 +58,7 @@ test.describe('Medicamentos: préstamos, devoluciones y señas contables', () =>
     await page.getByRole('textbox',{name:'Búsqueda'}).fill(person.person.dni);
     const loansTable=page.getByRole('table',{name:'Préstamos de medicamentos'});
     // El locator `has` es relativo a cada fila; no debe empezar otra vez en la tabla.
-    const loanRow=loansTable.getByRole('row').filter({has:page.getByRole('cell',{name:`#${id}`,exact:true})});
+    const loanRow=loansTable.getByRole('row').filter({hasText:person.person.dni});
     await expect(loanRow).toBeVisible();
     await loanRow.getByRole('button',{name:'Reintegrar seña'}).click();
     const refundModal=page.getByRole('dialog',{name:'Reintegrar seña'});
@@ -69,34 +69,31 @@ test.describe('Medicamentos: préstamos, devoluciones y señas contables', () =>
     await expect(refundModal).toHaveCount(0);
     expect((await loanDetail(request,id)).senas.filter(x=>x.tipo==='DEVOLUCION_SENA')).toHaveLength(1);
 
-    await expect(loanRow.getByRole('button',{name:'Donar seña a LALCEC'})).toBeVisible();
-    await loanRow.getByRole('button',{name:'Donar seña a LALCEC'}).click();
-    const donationModal=page.getByRole('dialog',{name:'Registrar donación de seña'});
-    await expect(donationModal).toBeVisible();
-    await donationModal.getByLabel('Monto que queda como donación ($)').fill('15.00');
-    await donationModal.getByLabel('Observaciones').fill('PW E2E DONACION PARCIAL');
-    await donationModal.getByRole('button',{name:'Confirmar donación'}).click();
-    await expect(donationModal).toHaveCount(0);
-    expect((await loanDetail(request,id)).senas.filter(x=>x.tipo==='SENA_DONADA')).toHaveLength(1);
+    // La donación manual fue eliminada: solo se dona el remanente al finalizar.
+    await expect(loanRow.getByRole('button',{name:/Donar seña|Registrar donación/i})).toHaveCount(0);
+    await expect(page.getByRole('dialog',{name:'Registrar donación de seña'})).toHaveCount(0);
     await assertError(request,'medicamentos_sena',{
-      id_prestamo:id,tipo:'DEVOLUCION_SENA',monto:'41.00',id_medio_pago:medio,
+      id_prestamo:id,tipo:'SENA_DONADA',monto:'15.00',
+    },/inv[aá]lido|seña|permitid/i);
+    await assertError(request,'medicamentos_sena',{
+      id_prestamo:id,tipo:'DEVOLUCION_SENA',monto:'55.01',id_medio_pago:medio,
     },/supera|pendiente/i);
 
     const closed=await apiCall(request,'medicamentos_cerrar',{method:'POST',data:{id_prestamo:id}});
     expect(closed.estado).toBe('CERRADO');
     expect(Number(closed.unidades_sin_devolver)).toBe(2);
-    expect(cents(closed.sena_donada)).toBe(4000);
+    expect(cents(closed.sena_donada)).toBe(5500);
     detail=await loanDetail(request,id);
     expect(detail.prestamo.estado).toBe('CERRADO');
     expect(detail.senas.filter(s=>s.tipo==='COBRO_SENA')).toHaveLength(1);
     expect(detail.senas.filter(s=>s.tipo==='DEVOLUCION_SENA')).toHaveLength(1);
-    expect(detail.senas.filter(s=>s.tipo==='SENA_DONADA')).toHaveLength(2);
+    expect(detail.senas.filter(s=>s.tipo==='SENA_DONADA')).toHaveLength(1);
     expect(detail.senas.filter(s=>s.tipo==='COBRO_SENA').map(s=>Number(s.id_ingreso_contable)))
       .toEqual([originalIncome]);
     expect(detail.senas.filter(s=>s.tipo==='SENA_DONADA').every(s=>s.id_ingreso_contable===null)).toBe(true);
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(7);
     await assertError(request,'medicamentos_cerrar',{id_prestamo:id},/abierto/i);
-    await assertError(request,'medicamentos_sena',{id_prestamo:id,tipo:'SENA_DONADA',monto:1},/abierto/i);
+    await assertError(request,'medicamentos_sena',{id_prestamo:id,tipo:'SENA_DONADA',monto:1},/inv[aá]lido|seña|permitid/i);
     await assertError(request,'medicamentos_devolver',{
       id_detalle_prestamo:detailId,cantidad:1,fecha_vencimiento:futureIso(200),
     },/abierto/i);

@@ -127,6 +127,8 @@ test.describe('Permisos de usuario de solo lectura', () => {
         ['medicamentos_procedencias', { params: { buscar: 'PW E2E' } }],
         ['medicamentos_socios', { params: { buscar: person.dni } }],
         ['medicamentos_prestamos'],
+        ['medicamentos_alertas', { params: { tipo: 'LOTE' } }],
+        ['medicamentos_alertas', { params: { tipo: 'PRESTAMO' } }],
       ]) {
         const body = await apiCall(request, action, { ...options, session: viewSession });
         expect(body).toBeTruthy();

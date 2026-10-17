@@ -1,4 +1,5 @@
 const base = require('@playwright/test');
+const { createHash } = require('node:crypto');
 const { ensureAuthSession, normalizedApiBase } = require('../helpers/api.helper');
 const { SESSION_KEY } = require('../helpers/auth.helper');
 const { installHostingerPageThrottle } = require('../helpers/hostinger-throttle.helper');
@@ -6,6 +7,26 @@ const { installHostingerPageThrottle } = require('../helpers/hostinger-throttle.
 const test = base.test.extend({
   page: async ({ page, request }, use, testInfo) => {
     await installHostingerPageThrottle(page);
+    // Las escrituras reales de la UI ya generan claves; identificamos las de
+    // Playwright con un prefijo limpiable, sin cambiar el resto del payload.
+    // Una misma clave original se transforma siempre en la misma clave E2E.
+    await page.route(/api\.php\?[^#]*action=medicamentos_/, async route => {
+      const req = route.request();
+      if (req.method() !== 'POST') return route.fallback();
+      const action = new URL(req.url()).searchParams.get('action');
+      if (!new Set(['medicamentos_guardar','medicamentos_cambiar_estado',
+        'medicamentos_ingresar','medicamentos_salida','medicamentos_anular',
+        'medicamentos_revisar_lote','medicamentos_prestar','medicamentos_devolver',
+        'medicamentos_cerrar','medicamentos_sena']).has(action)) return route.fallback();
+      let data;
+      try { data = req.postDataJSON(); } catch (_error) { return route.fallback(); }
+      if (!data || typeof data !== 'object' || Array.isArray(data) ||
+          typeof data._idempotency_key !== 'string') return route.fallback();
+      const hash = createHash('sha256').update(data._idempotency_key).digest('hex').slice(0,48);
+      return route.fallback({ postData: JSON.stringify({
+        ...data, _idempotency_key: `med-PWE2E-${hash}`,
+      }) });
+    });
     const session = await ensureAuthSession(request);
     const appOrigin = new URL(process.env.PW_BASE_URL || 'http://localhost:3000').origin;
     await page.addInitScript(

@@ -133,6 +133,7 @@ const E2E_INFRA_ACTIONS = new Set([
   'e2e_cleanup',
   'e2e_cleanup_scope',
   'e2e_saldo_favor_fixture',
+  'e2e_medicamentos_contable_fixture',
   'e2e_guard_probe',
   'e2e_snapshot',
   'e2e_status',
@@ -241,8 +242,12 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Nuevo préstamo',
   'Registrar devolución de medicamentos',
   'Reintegrar seña',
-  'Donar seña a LALCEC',
-  'Cerrar préstamo',
+  'Información del préstamo',
+  'Finalizar préstamo',
+  'Seña por resolver',
+  'Referencias de vencimiento',
+  'Descartar alerta definitivamente',
+  'Ocultar tarjetas de alertas temporalmente',
 ];
 
 

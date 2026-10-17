@@ -50,12 +50,58 @@ trait MedicamentosSoporte {
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.
      */
-    private static function transaccionMed(PDO $db,callable $work): array {
+    /**
+     * Una solicitud de escritura tiene una clave obligatoria por usuario y operación.
+     * El registro de la clave y TODOS los cambios (inventario, contable, auditoría)
+     * comparten COMMIT o ROLLBACK: jamás guardamos una clave sin su resultado.
+     * El índice UNIQUE serializa dos pedidos concurrentes con la misma clave.
+     */
+    private static function transaccionMed(PDO $db,callable $work,array $auth,array $body,string $operacion): array {
+        $clave=$body['_idempotency_key']??null;
+        if (!is_string($clave) || !preg_match('/^med-[a-zA-Z0-9-]{20,100}$/D',$clave))
+            api_error('Falta la clave de seguridad de la operación. Recargá la pantalla y volvé a intentar.', 'IDEMPOTENCY_REQUIRED', 422);
+        $idUsuario=(int)($auth['id_usuario']??0);
+        if ($idUsuario<1) api_error('No se pudo identificar al usuario de esta operación.', 'AUTH_REQUIRED', 401);
+        $cuerpo=$body;
+        unset($cuerpo['_idempotency_key']);
+        $huella=hash('sha256',json_encode($cuerpo,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
         for($intento=0;$intento<3;$intento++) {
-            // El helper general invoca el callback sin argumentos. Los flujos
-            // de Medicamentos sí reciben PDO: se lo inyectamos aquí.
-            try { return transaction($db,static fn(): array => $work($db)); }
-            catch(PDOException $e) {
+            try {
+                return transaction($db,static function() use($db,$work,$idUsuario,$operacion,$clave,$huella): array {
+                    $idSolicitud=null;
+                    try {
+                        $q=$db->prepare('INSERT INTO medicamentos_solicitudes
+                            (id_usuario,operacion,clave,hash_solicitud) VALUES (?,?,?,?)');
+                        $q->execute([$idUsuario,$operacion,$clave,$huella]);
+                        $idSolicitud=(int)$db->lastInsertId();
+                    } catch(PDOException $e) {
+                        // Solo se recupera una colisión de la clave única. Otros errores
+                        // (incluida falta de migración) fallan cerrados.
+                        if ((int)($e->errorInfo[1]??0)!==1062) throw $e;
+                    }
+                    if ($idSolicitud===null) {
+                        $q=$db->prepare('SELECT hash_solicitud,respuesta_json FROM medicamentos_solicitudes
+                            WHERE id_usuario=? AND operacion=? AND clave=? FOR UPDATE');
+                        $q->execute([$idUsuario,$operacion,$clave]);
+                        $previa=$q->fetch(PDO::FETCH_ASSOC);
+                        if (!$previa) throw new RuntimeException('No se pudo recuperar la solicitud original.');
+                        if (!hash_equals((string)$previa['hash_solicitud'],$huella))
+                            api_error('La misma clave fue usada con datos diferentes. Volvé a abrir la operación.', 'IDEMPOTENCY_CONFLICT',409);
+                        if ($previa['respuesta_json']===null)
+                            throw new RuntimeException('La operación anterior no tiene resultado confirmado.');
+                        $respuesta=json_decode((string)$previa['respuesta_json'],true,512,JSON_THROW_ON_ERROR);
+                        if (!is_array($respuesta)) throw new RuntimeException('Respuesta anterior inválida.');
+                        return $respuesta;
+                    }
+                    $resultado=$work($db);
+                    $respuesta=json_encode($resultado,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+                    $q=$db->prepare('UPDATE medicamentos_solicitudes
+                        SET respuesta_json=?,completada_en=NOW() WHERE id_solicitud=?');
+                    $q->execute([$respuesta,$idSolicitud]);
+                    if ($q->rowCount()!==1) throw new RuntimeException('No se pudo confirmar el resultado de la operación.');
+                    return $resultado;
+                });
+            } catch(PDOException $e) {
                 $codigo=(int)($e->errorInfo[1]??0);
                 if(!in_array($codigo,[1213,1205],true) && (string)$e->getCode()!=='40001') throw $e;
                 if($intento===2) throw $e;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faRotateLeft, faLock, faMoneyBillTransfer, faHeart, faPills, faInbox } from '@fortawesome/free-solid-svg-icons';
+import { faCircleInfo, faRotateLeft, faLock, faMoneyBillTransfer, faPills, faInbox } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import GlobalDivTable from '../../Global/GlobalDivTable';
 import GlobalPagination from '../../Global/GlobalPagination';
@@ -14,6 +14,7 @@ import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import BuscadorEntidad from '../modales/BuscadorEntidad';
 import { fecha, fechaHoy, dinero, num } from '../utils/medicamentosUtils';
 import MedicamentosTabs, { MedSection } from '../modales/MedicamentosTabs';
+import AlertasVencimientos from '../alertas/AlertasVencimientos';
 import '../Medicamentos.css';
 
 const buscarSocios = async buscar => {
@@ -36,6 +37,12 @@ function IconAction({ icon, label, onClick, danger = false, disabled = false }) 
 }
 const saldoSena = items => Math.max(0, Math.round((items || []).reduce((n, item) => n + (item.tipo === 'COBRO_SENA' ? num(item.monto) : -num(item.monto)), 0) * 100) / 100);
 const saldoFila = p => Math.max(0, Math.round((num(p.sena_cobrada) - num(p.sena_devuelta) - num(p.sena_donada)) * 100) / 100);
+// Los movimientos válidos de devolución se suman en el backend al listar préstamos.
+const progresoMedicamentos = p => {
+  const entregadas = Math.max(0, num(p.unidades_entregadas));
+  const devueltas = Math.min(entregadas, Math.max(0, num(p.unidades_devueltas)));
+  return { entregadas, devueltas, sinDevolver: entregadas - devueltas };
+};
 const faltanDevolver = items => (items || []).reduce((n, item) => n + Math.max(0, num(item.cantidad_entregada) - num(item.cantidad_recibida)), 0);
 
 export default function Prestamos() {
@@ -64,6 +71,7 @@ export default function Prestamos() {
   const solicitudLotes = useRef(0);
   const [cargandoLotes, setCargandoLotes] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [alertRevision, setAlertRevision] = useState(0);
   const write = canWrite();
   const notify = (type, message) => setFeedback({ type, message });
 
@@ -107,10 +115,10 @@ export default function Prestamos() {
       const balance = saldoSena(data.senas);
       if (action !== 'detalle' && !isOpen) throw new Error('Este préstamo ya está cerrado.');
       if (action === 'devolucion' && remaining.length === 0) throw new Error('Este préstamo no tiene medicamentos pendientes de devolución.');
-      if ((action === 'reintegrar' || action === 'donar') && balance < 0.01) throw new Error('No queda seña pendiente de resolver.');
-        setDetail(data);
+      if (action === 'reintegrar' && balance < 0.01) throw new Error('No queda seña pendiente de resolver.');
+      setDetail(data);
       if (action === 'devolucion') setReturnForm(newReturn(remaining[0].id_detalle_prestamo));
-      if (action === 'reintegrar' || action === 'donar') setMoneyForm({ ...newMoney(), monto: balance.toFixed(2) });
+      if (action === 'reintegrar') setMoneyForm({ ...newMoney(), monto: balance.toFixed(2) });
       setModal(action);
     } catch (e) { notify('error', e.message || 'No se pudo abrir la operación.'); }
     finally { consultaEnCurso.current = false; setFetchingId(null); }
@@ -131,6 +139,7 @@ export default function Prestamos() {
         notify('success', 'Operación registrada correctamente.');
       }
       await cargar({ silencioso: true });
+      setAlertRevision(v => v + 1);
     } catch (e) { notify('error', e.message || 'No se pudo registrar la operación.'); }
     finally { guardandoRef.current = false; setSaving(false); }
   };
@@ -143,6 +152,7 @@ export default function Prestamos() {
       const resultado = await api.cerrar({ id_prestamo: detail?.prestamo?.id_prestamo });
       // Se confirmó el cierre; una falla de lectura no debe repetir la escritura.
       void cargar({ silencioso: true });
+      setAlertRevision(v => v + 1);
       return resultado;
     } finally {
       guardandoRef.current = false;
@@ -176,25 +186,35 @@ export default function Prestamos() {
         { type: 'select', label: 'Estado', className: 'med-filter--estado', value: status, onChange: v => { setStatus(v); setPage(1); }, options: [op('TODOS', 'TODOS'), op('ABIERTO', 'ABIERTOS'), op('CERRADO', 'CERRADOS')] }]}
       primaryActionLabel="Nuevo préstamo" onPrimaryAction={openLoan} canCreate={write}>
       {error ? <div className="med-inline-danger">{error}</div> : null}
-      <GlobalDivTable ariaLabel="Préstamos de medicamentos" className={`med-table ${total > 0 ? 'has-bottom-pagination' : ''}`} empty={!loading && !error && !registros.length} gridClassName="med-grid--loans" loading={loading} columns={['N.º', 'Socio / documento', { label: 'Fecha', align: 'center' }, { label: 'Estado', align: 'center' }, { label: 'Seña pendiente', align: 'right' }, { label: 'Acciones', align: 'center' }]}>
-        {shown.map(p => <div className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--loans" key={p.id_prestamo} role="row">
-          <div className="mov-gridCell" role="cell">#{p.id_prestamo}</div>
+      <GlobalDivTable ariaLabel="Préstamos de medicamentos" className={`med-table ${total > 0 ? 'has-bottom-pagination' : ''}`} empty={!loading && !error && !registros.length} gridClassName="med-grid--loans" loading={loading} columns={['Socio / documento', { label: 'Entrega / devolución', align: 'center' }, { label: 'Estado', align: 'center' }, 'Medicamentos', { label: 'Seña por resolver', align: 'right' }, { label: 'Acciones', align: 'center' }]}>
+        {shown.map(p => {
+          const { entregadas, devueltas, sinDevolver } = progresoMedicamentos(p);
+          return <div className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--loans" key={p.id_prestamo} role="row">
           <div className="mov-gridCell med-loan-person" role="cell"><span className="med-loan-person__name">{p.socio || '—'}</span><span className="med-cell-secondary">{p.documento || 'Sin documento'}</span></div>
-          <div className="mov-gridCell is-center" role="cell">{fecha(p.fecha_entrega)}</div>
+          <div className="mov-gridCell is-center med-loan-dates" role="cell">
+            <strong>{fecha(p.fecha_entrega)}</strong>
+            {p.fecha_devolucion_prevista ? <span className="med-cell-secondary">Prev.: {fecha(p.fecha_devolucion_prevista)}</span> : null}
+          </div>
           <div className="mov-gridCell is-center" role="cell"><span className={`med-status-chip med-status-chip--${p.estado === 'ABIERTO' ? 'abierto' : p.estado === 'CERRADO' ? 'cerrado' : 'neutral'}`}>{p.estado}</span></div>
+          <div className={`mov-gridCell med-loan-units${entregadas > 0 && sinDevolver === 0 ? ' med-loan-units--complete' : ''}`} role="cell">
+            {entregadas > 0 ? <>
+              <strong>{devueltas} de {entregadas} devueltas</strong>
+              <span>{sinDevolver === 0 ? 'Todo devuelto' : `${sinDevolver} ${p.estado === 'ABIERTO' ? 'por devolver' : 'sin devolver'}`}</span>
+            </> : '—'}
+          </div>
           <div className="mov-gridCell is-right" role="cell">{dinero(saldoFila(p))}</div>
           <div className="mov-gridCell med-actions" role="cell">
-            <IconAction icon={faEye} label={`Ver detalle del préstamo #${p.id_prestamo}`} onClick={() => openAction(p.id_prestamo, 'detalle')} disabled={fetchingId !== null || saving} />
+            <IconAction icon={faCircleInfo} label={`Información del préstamo #${p.id_prestamo}`} onClick={() => openAction(p.id_prestamo, 'detalle')} disabled={fetchingId !== null || saving} />
             {write && p.estado === 'ABIERTO' ? <>
               <IconAction icon={faRotateLeft} label="Registrar devolución de medicamentos" onClick={() => openAction(p.id_prestamo, 'devolucion')} disabled={fetchingId !== null || saving} />
               {saldoFila(p) >= 0.01 ? <>
                 <IconAction icon={faMoneyBillTransfer} label="Reintegrar seña" onClick={() => openAction(p.id_prestamo, 'reintegrar')} disabled={fetchingId !== null || saving} />
-                <IconAction icon={faHeart} label="Donar seña a LALCEC" onClick={() => openAction(p.id_prestamo, 'donar')} disabled={fetchingId !== null || saving} />
               </> : null}
-              <IconAction icon={faLock} label="Cerrar préstamo" danger onClick={() => openAction(p.id_prestamo, 'cierre')} disabled={fetchingId !== null || saving} />
+              <IconAction icon={faLock} label="Finalizar préstamo" danger onClick={() => openAction(p.id_prestamo, 'cierre')} disabled={fetchingId !== null || saving} />
             </> : null}
           </div>
-        </div>)}
+        </div>;
+        })}
         {!loading && !error && !registros.length ? <div className="module-empty">
           <FontAwesomeIcon icon={faInbox} />
           <strong>Sin préstamos para mostrar</strong>
@@ -203,6 +223,8 @@ export default function Prestamos() {
       </GlobalDivTable>
       <GlobalPagination page={pagina} total={total} perPage={por_pagina} onPageChange={setPage} loading={loading} label="préstamos" />
     </ModulePage>
+    <AlertasVencimientos tipo="PRESTAMO" actualizacion={alertRevision}
+      onSelect={aviso => openAction(aviso.id_referencia, write ? 'cierre' : 'detalle')} />
 
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoLotes} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
       onClose={cerrarPrestamoNuevo} submitDisabled={cargandoLotes || available.length === 0}
@@ -232,7 +254,7 @@ export default function Prestamos() {
     </CrudModal>
 
     {/* Detalle de solo lectura; estilos propios sin alterar el resto de modales. */}
-    <CrudModal modalClassName="med-modal med-loan-detail-modal" closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faEye, `Préstamo #${loanId || ''}`)}
+    <CrudModal modalClassName="med-modal med-loan-detail-modal" closeOnBackdrop={false} open={modal === 'detalle'} wide hideSubmit title={tituloAccion(faCircleInfo, `Préstamo #${loanId || ''}`)}
       subtitle={detail?.prestamo?.socio || ''} onClose={() => setModal('')}>
       {detail ? <MedicamentosTabs tabs={[{ label: 'Medicamentos', icon: faPills }, { label: 'Seña', icon: faMoneyBillTransfer }]}><div className="med-loan-detail-content">
         <div className="med-loan-summary med-loan-detail-summary">
@@ -244,7 +266,7 @@ export default function Prestamos() {
             <span>Fecha de entrega</span><strong>{fecha(detail.prestamo.fecha_entrega)}</strong>
           </div>
           <div className="med-loan-detail-stat med-loan-detail-stat--balance">
-            <span>Seña pendiente</span><strong>{dinero(balance)}</strong>
+            <span>Seña por resolver</span><strong>{dinero(balance)}</strong>
           </div>
         </div>
         <section className="med-box med-loan-detail-card med-loan-detail-card--meds">
@@ -335,28 +357,14 @@ export default function Prestamos() {
       <p className="med-inline-note">Se registrará un egreso por el dinero que LALCEC devuelve al socio.</p>
     </CrudModal>
 
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'donar'} saving={saving} title={tituloAccion(faHeart, 'Registrar donación de seña')}
-      onClose={() => setModal('')} submitLabel="Confirmar donación"
-      onSubmit={e => run(e, api.sena, { ...moneyForm, tipo: 'SENA_DONADA', id_prestamo: loanId })}>
-      <MedSection icon={faHeart}>Datos de la donación</MedSection>
-      <p className="med-loan-muted">Seña disponible para donar: <strong>{dinero(balance)}</strong></p>
-      <Campos>
-        <Campo label="Monto que queda como donación ($)" type="number" min="0.01" step="0.01" required value={moneyForm.monto}
-          onChange={v => setMoneyForm(f => ({ ...f, monto: v }))} />
-        <Campo label="Observaciones" wide textarea value={moneyForm.observaciones}
-          onChange={v => setMoneyForm(f => ({ ...f, observaciones: v }))} />
-      </Campos>
-      <p className="med-inline-note">LALCEC conserva ese dinero. No se registrará un segundo ingreso a caja.</p>
-    </CrudModal>
-
     <ModalEliminarGlobal
       open={modal === 'cierre'}
       operacion="advertencia"
       tone="danger"
       icon={faLock}
       row={detail?.prestamo}
-      title="Cerrar préstamo definitivamente"
-      message="Confirmá el cierre del préstamo. No se podrá seguir registrando devoluciones ni movimientos de seña sobre este préstamo."
+      title="Finalizar préstamo"
+      message="Confirmá la finalización del préstamo. Después no se podrán registrar devoluciones de medicamentos ni reintegros de seña."
       warning="Las unidades no se descuentan nuevamente del stock. Si queda seña pendiente, LALCEC la conservará como donación, sin cobrarla otra vez."
       details={detail ? [
         { label: 'Préstamo', value: `#${loanId}` },
@@ -364,11 +372,11 @@ export default function Prestamos() {
         { label: 'Unidades sin devolver', value: remaining },
         { label: 'Seña que quedará donada', value: dinero(balance) },
       ] : []}
-      confirmLabel="Confirmar cierre"
-      loadingLabel="Cerrando préstamo..."
-      loadingMessage="Cerrando préstamo…"
-      successMessage="Préstamo cerrado correctamente."
-      errorMessage="No se pudo cerrar el préstamo."
+      confirmLabel="Finalizar préstamo"
+      loadingLabel="Finalizando préstamo..."
+      loadingMessage="Finalizando préstamo…"
+      successMessage="Préstamo finalizado correctamente."
+      errorMessage="No se pudo finalizar el préstamo."
       onClose={cerrarConfirmacion}
       onConfirm={confirmarCierre}
       onToast={toastConfirmacion}

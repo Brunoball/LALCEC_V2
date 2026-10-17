@@ -1,67 +1,59 @@
-# LALCEC V2 — Testing de Medicamentos (actualización 11/10/2026)
+# LALCEC V2 — Testing actualizado de Medicamentos (17/10/2026)
 
-Este ZIP contiene la suite Playwright **completa recibida** y una prueba PHP local opcional. **No contiene código de producción ni comandos de borrado de base de datos**. Está preparado para el frontend y backend **posteriores a la eliminación de la tabla auxiliar de solicitudes de Medicamentos**. El backend debe contar con `core/e2e_guard.php` y los endpoints `e2e_cleanup`, `e2e_snapshot` y `e2e_guard_probe`.
+**Alcance:** stock/lotes, ventas y compras contables, devoluciones, préstamos, señas, cierre con donación automática, anulación de ventas en lotes descartados, semáforo/alertas y descartes persistentes, seguridad E2E e idempotencia.
 
-## Instalación
+## Instalación (importante)
 
-Descomprimir el ZIP en la raíz `LALCEC_V2/`: copiar `tests/` dentro de `frontend/tests/` y `tests_local/` en `LALCEC_V2/tests_local/`. **No** copiar `tests/` directamente junto a `backend/`: la ruta prevista para Playwright es `frontend/tests/`. Se mantiene toda la suite original, con cambios puntuales en `20`, `21`, `24`, `helpers/medicamentos.helper.js` y la adición de `50`. El presente ZIP no incluye ningún SQL.
+Este paquete contiene **solo archivos nuevos o modificados de pruebas y del escudo E2E**. No reemplaza el módulo Medicamentos. Extraer desde la raíz `LALCEC_V2/`, respetando las rutas:
+
+- `frontend/tests/...`: tests Playwright y helpers.
+- `backend/core/e2e_guard.php`: permite que el test de alertas solo descarte avisos de lotes/préstamos E2E, bloqueando avisos de terceros.
+- `backend/modules/testing_cleanup/testing_cleanup.php`: permite limpiar con seguridad los registros E2E de las dos nuevas tablas, protege los reales en el snapshot de huella y evita dejar residuos.
+
+El spec `tests/50-medicamentos-sin-solicitudes.spec.js` **se reemplaza con el mismo nombre** para que no persista un test viejo que exigía la eliminación de `medicamentos_solicitudes`. El nombre de archivo se conserva solo por compatibilidad; el contenido comprueba el módulo con idempotencia.
+
+No requiere SQL adicional, asumiendo que ya instalaste las tablas `medicamentos_solicitudes` y `medicamentos_alertas_descartadas` junto con el módulo actual. Es **indispensable** que `backend/core/e2e_guard.php` y `backend/modules/testing_cleanup/testing_cleanup.php` estén publicados en el entorno contra el que corrés Playwright **antes** de ejecutar tests que escriben datos.
+
+## Antes de correr
+
+1. Hacé un respaldo de la base de datos de pruebas.
+2. Confirmá `PW_ENVIRONMENT`, `PW_BASE_URL`, `PW_API_URL`, credenciales y `PW_E2E_HEADER` de tu `.env.test`. La API debe tener los endpoints `e2e_guard_probe`, `e2e_cleanup`, `e2e_status`, `e2e_snapshot` y proteger mutaciones por `X-LALCEC-E2E: PLAYWRIGHT`.
+3. El setup verifica escudo, limpia datos E2E previos y guarda la huella de datos ajenos a E2E; el teardown vuelve a limpiar y comparar. NO intentes forzar el setup si informa que falta el escudo.
+4. El frontend debe ser exactamente el de los últimos `src.zip`/`backend.zip` auditados. Las opciones de Contable de compras, ventas, anulaciones y señas deben existir de antemano (el test económico aborta sin escribir si faltan).
+
+**Las claves de idempotencia generadas por los tests llevan `med-PWE2E-...`**. En los tests de UI se transforma de manera determinista la clave del frontend antes de llegar al backend, manteniendo el comportamiento de reintento. La limpieza *solo* puede borrar esas claves, jamás las normales. Los descartes se eliminan únicamente si corresponden a lotes/préstamos identificados como E2E.
 
 ## Ejecución
 
-Desde `frontend` con las dependencias ya instaladas y `.env.test` configurado:
+Desde `LALCEC_V2/frontend`, con Playwright y su Chromium ya instalados:
 
 ```powershell
-npx playwright test tests/20-medicamentos-stock-integridad.spec.js tests/21-medicamentos-contabilidad-anulaciones.spec.js tests/22-medicamentos-prestamos-senas.spec.js tests/23-medicamentos-ui-flujos.spec.js tests/24-medicamentos-seguridad-regresiones.spec.js tests/50-medicamentos-sin-solicitudes.spec.js tests/07-permisos-solo-lectura.spec.js tests/00-cobertura-total.spec.js --project=chromium --workers=1 --reporter=list
+npx playwright test tests/20-medicamentos-stock-integridad.spec.js tests/21-medicamentos-contabilidad-anulaciones.spec.js tests/22-medicamentos-prestamos-senas.spec.js tests/23-medicamentos-ui-flujos.spec.js tests/24-medicamentos-seguridad-regresiones.spec.js tests/25-medicamentos-idempotencia.spec.js tests/26-medicamentos-alertas-vencimientos.spec.js tests/27-medicamentos-venta-lote-descartado.spec.js tests/50-medicamentos-sin-solicitudes.spec.js tests/07-permisos-solo-lectura.spec.js tests/00-cobertura-total.spec.js --project=chromium --workers=1 --reporter=list
 ```
 
-Para validar **el sistema administrativo completo**, correr después:
+Para toda la administración:
 
 ```powershell
 npx playwright test --project=chromium --workers=1 --reporter=list
 ```
 
-`--workers=1` evita bombardear Hostinger. La suite general existente no incluye pruebas reales del bot de WhatsApp, y ninguna suite finita certifica automáticamente el 100 % de los comportamientos posibles.
+`--workers=1` reduce riesgos de carreras no controladas contra Hostinger; los tests específicos de idempotencia sí envían solicitudes repetidas/concurrentes a propósito.
 
-## Seguridad y prerequisitos
+## Cobertura relevante
 
-- Las escrituras usan `X-LALCEC-E2E=PLAYWRIGHT` y fixtures con nombre `PW E2E`; el backend protege los registros reales. Setup y teardown ejecutan limpieza E2E y comparan la huella de registros reales. Si falla el **probe** del escudo, la suite aborta.
-- Los casos económicos exigen que las categorías y conceptos contables automáticos **ya existan** antes de crear movimientos. Si faltan, el test falla antes de escribir; crear estas opciones deliberadamente desde Configuración en un **ambiente de pruebas** o probar allí primero. Evita que Playwright agregue opciones globales a una base real y viole el baseline. Los nombres se informan en el error.
-- Antes de ejecutar por primera vez en producción, hacer backup y verificar que los archivos de backend, principalmente `testing_cleanup.php`, `e2e_guard.php` y Medicamentos, estén desplegados en la misma versión. Preferir staging con una copia de datos saneada para las pruebas de anulaciones y dinero.
-- Si un test falla, revisar `test-results`, la respuesta HTTP y la limpieza final. **No ejecutar SQL de limpieza manual** sobre datos reales.
-- Los escenarios de doble solicitud validan que no haya dos consumos exitosos con stock insuficiente; en Hostinger el throttling de Playwright puede serializar esas solicitudes. No sustituye un test de carga/concurrencia real.
+- **20:** altas atómicas, estados, FEFO, lotes, movimiento inválido y dos solicitudes intencionalmente distintas.
+- **21:** compras / reintegros, venta multi-lote, anulación y no duplicación de asientos.
+- **22:** préstamos / devoluciones / seña, reintegro como egreso, donación automática solo al finalizar, sin botón de donación manual.
+- **23:** acciones UI y tabla de préstamos sin N.º; información, devolución, finalización.
+- **24:** concurrencia, escudo E2E, validaciones y rutas actuales.
+- **25:** falta de clave, reintento idéntico, conflicto de payload, concurrencia con misma clave, seña y cierre idempotentes.
+- **26:** alertas a 30 días, fecha alterada, descarte permanente, confirmación/cancelación, mini-pestaña, préstamo con/sin fecha y cierre.
+- **27:** venta ya facturada y lote original descartado, anulación con un solo egreso, devolución a lote nuevo BLOQUEADO.
+- **50:** verificación del contrato fuente de las 10 escrituras, acciones nuevas y alertas.
+- **07, 00:** permisos solo-lectura, cobertura de API/UI general y ausencia de specs deshabilitados.
 
-## Cobertura agregada
+## Límites de la verificación
 
-| Archivo | Escenarios reales |
-| --- | --- |
-| 20 — Stock | Alta atómica; edición con historial; baja/reactivación; FEFO de varios lotes; stock insuficiente; bloqueos/descartes; fechas y cantidades; doble ingreso explícito sin idempotencia |
-| 21 — Contabilidad | Compra y egreso/proveedor; venta multi-lote y asiento único; devoluciones y contramovimientos; anulación de compra; rechazo de doble anulación y compra usada |
-| 22 — Préstamos | Socio fixture; varios lotes; descuento único de stock; devoluciones parciales; reintegro y donación de seña; cierre con saldo pendiente; bloqueo de acciones tras cierre |
-| 23 — Interfaz | Formularios reales de alta y edición; pestañas Activos/Bajas; lotes/historial; egreso y validación visual FEFO; préstamo/detalle/devolución/cierre; catálogo de consultas |
-| 24 — Seguridad | Concurrencia y stock insuficiente; rollback de errores; escudo E2E ante alta sin marca; rutas y limpieza de las siete tablas persistentes de Medicamentos |
-| 50 — Contrato sin solicitudes | No hay consultas a la tabla auxiliar ni envío de claves; transacciones/lockings y bloqueo de doble clic presentes en código local |
-| tests_local — Smoke PHP | Prueba transaccional y reintento de deadlock simulados; requiere PHP CLI y backend actualizado |
-| 07 — Permisos (actualizado) | Consultas de Medicamentos con cuenta lectura; prohibición de todas las mutaciones; ocultación de botones de escritura |
-| 00 — Contrato (actualizado) | Descubre ahora las 18 acciones declaradas por `foreach` en `routes.php`, antes ignoradas; exige referencias de cobertura en las specs |
+Estos tests fueron actualizados frente a los ZIP suministrados y sus archivos verificaron sintaxis. **No se ejecutó Playwright contra un MySQL/navegador real en este entorno**. Por eso la cobertura funcional declarada no puede presentarse como *100 % validada*. No se prueba el bot externo de WhatsApp y los tests unitarios Jest de la API y de `vencimientos.js` que ya existen dentro de `src/` siguen siendo útiles.
 
-## Correcciones de la corrida 144/152 del 10/10/2026
-
-- `00`: ya no confunde `register('medicamentos_'.$accion, ...)` con la acción literal `medicamentos_`; verifica las 18 acciones dinámicas reales y la ruta alias `/medicamentos`.
-- `23`: corrige el filtro `Búsqueda`, recorre la pestaña `Primer ingreso` antes de llenar cantidad, valida estados en `Lotes asignados` y prueba la entrada de stock desde la UI.
-- `21`: conserva los contratos de compra/venta y comprueba la anulación mediante su modal real.
-- `22`: comprueba reintegro y donación parcial desde los botones y formularios reales, además de confirmar su persistencia.
-- **Cuatro opciones contables faltantes:** el backend las generaría automáticamente al contabilizar; eso alteraría configuración no E2E y haría fallar el control de integridad del entorno compartido. Por eso `requireAccountingOptions` sigue abortando antes de escribir. Esas opciones deben prepararse **manualmente en Configuración sobre una DB de desarrollo/pruebas**, antes del inicio de la suite y de su snapshot. **Este ZIP no trae SQL para modificar la base.**
-
-**Antecedente (10/10/2026):** una revisión previa encontró 90 acciones declaradas y 20 rutas. Este número no se volvió a comprobar mediante Playwright en la entrega actual. **No se ejecutó la suite con DB y navegador reales.** Se requiere volver a ejecutar la suite completa y revisar cleanup/baseline antes de congelar el módulo. El total histórico de 152 escenarios corresponde a la versión anterior.
-
-
-## Eliminación de la tabla auxiliar — 11/10/2026
-
-- `20`: se eliminó la expectativa de respuesta recuperada por clave; ahora demuestra que dos solicitudes POST independientes generan dos lotes y dos movimientos. **Advertencia:** no repetir un envío por un timeout sin verificar antes el resultado en el historial.
-- `21`: se quitó la etiqueta «idempotencia» de un escenario de compra que no verifica ese mecanismo.
-- `24`: la auditoría de limpieza espera solo las siete tablas persistentes del módulo.
-- `helpers/medicamentos.helper.js`: el alta ya no admite el argumento `key` ni incorpora `_idempotency_key`.
-- `50`: nuevo contrato estático contra archivos locales del backend/frontend actualizados (es intencional que el test incluya el nombre de la tabla en una afirmación **negativa**; no es una consulta SQL ni una dependencia de ejecución).
-- `tests_local/medicamentos_transaccion_smoke.php`: correr desde la raíz del proyecto con `php tests_local/medicamentos_transaccion_smoke.php`, opcional; no usa MySQL real.
-
-**Alcance de la validación de esta entrega:** lint de sintaxis Node para cada `.js`, análisis estático de referencias y smoke PHP local. **No** se ejecutaron los flujos E2E contra MySQL/Hostinger, por lo que el resultado real debe comprobarse en tu entorno.
+No uses `tests/helpers/db-cleanup.php` para borrar registros: la limpieza debe realizarla exclusivamente la API con escudo E2E. Para producción, ejecutá primero en local/staging y comprobá el teardown y el snapshot antes de repetir en Hostinger.

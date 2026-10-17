@@ -105,9 +105,9 @@ test.describe('Medicamentos: stock, lotes, FEFO e integridad API', () => {
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(2);
   });
 
-  test('sin tabla auxiliar: dos ingresos explícitos se registran como operaciones independientes', async ({ request }) => {
-    // Tras retirar la idempotencia, dos POST confirmados representan DOS ingresos.
-    // Este test usa únicamente un medicamento E2E; no reintenta automáticamente en la UI.
+  test('dos claves distintas registran operaciones independientes y no confunden ingresos', async ({ request }) => {
+    // Dos operaciones deliberadamente independientes usan claves E2E DISTINTAS.
+    // Un reintento con la MISMA clave se prueba en 25-medicamentos-idempotencia.
     const fx = await createMedicine(request);
     const payload = { id_medicamento: fx.id, ...entryFixture({ cantidad: 7 }) };
     const before = await movementsOf(request, fx.id);

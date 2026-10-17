@@ -52,20 +52,42 @@ const accountingNames = {
 };
 
 async function requireAccountingOptions(request, use) {
+  // MySQL usa una intercalación insensible a mayúsculas/acentos para estas
+  // opciones: la precondición debe comparar con el mismo criterio lógico.
+  const key = value => String(value || '').trim().toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // Una transacción de Medicamentos puede crear nuevas opciones de Contabilidad.
   // Si faltan, NO ejecutamos escrituras económicas en una DB compartida: esa
   // creación no sería fixture E2E y el snapshot de datos reales se alteraría.
   const catalogs = await apiCall(request, 'contable_opciones_configuracion');
   const missing = [];
   for (const [type, wanted] of Object.entries(use)) {
-    const existing = new Set((catalogs.listas?.[type] || []).map(x => String(x.nombre || '').toUpperCase()));
-    for (const name of wanted) if (!existing.has(name)) missing.push(`${type}: ${name}`);
+    const existing = new Set((catalogs.listas?.[type] || []).map(x => key(x.nombre)));
+    for (const name of wanted) if (!existing.has(key(name))) missing.push(`${type}: ${name}`);
   }
-  if (missing.length) throw new Error(
-    `Faltan opciones de Contabilidad previas al testing económico de Medicamentos. ` +
-    `No se escribieron asientos para evitar modificar datos no E2E. ` +
-    `Cargalas desde Configuración antes de ejecutar la suite: ${missing.join('; ')}`,
-  );
+  if (!missing.length) return;
+
+  // Las categorías/conceptos automáticos son nombres fijos del módulo, no
+  // etiquetas PW E2E. El fixture protegido registra propiedad de las opciones
+  // que NO existían, y el cleanup las elimina solo si no fueron usadas por
+  // movimientos reales. No se modifica ninguna opción preexistente.
+  await apiCall(request, 'e2e_medicamentos_contable_fixture', {
+    method: 'POST',
+    data: {
+      confirmacion: 'LIMPIAR_PLAYWRIGHT',
+      opciones: missing.map(item => {
+        const index = item.indexOf(': ');
+        return { tipo: item.slice(0, index), nombre: item.slice(index + 2) };
+      }),
+    },
+  });
+  const after = await apiCall(request, 'contable_opciones_configuracion');
+  for (const [type, wanted] of Object.entries(use)) {
+    const existing = new Set((after.listas?.[type] || []).map(x => key(x.nombre)));
+    for (const name of wanted) {
+      expect(existing.has(key(name)), `No quedó preparada la opción ${type}: ${name}`).toBe(true);
+    }
+  }
 }
 
 async function createMedicine(request, { medicine = medFixture(), first = entryFixture() } = {}) {

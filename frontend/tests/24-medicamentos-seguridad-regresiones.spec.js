@@ -58,15 +58,17 @@ test.describe('Medicamentos: seguridad E2E y regresiones', () => {
     const cleanup=fs.readFileSync(path.join(backend,'modules','testing_cleanup','testing_cleanup.php'),'utf8');
     const direct=fs.readFileSync(path.join(__dirname,'helpers','db-cleanup.php'),'utf8');
     const actions=[...routes.matchAll(/'([^']+)'=>'[^']+'/g)].map(x=>`medicamentos_${x[1]}`);
-    expect(actions).toHaveLength(18);
+    expect(actions).toHaveLength(20);
     for(const action of actions.filter(x=>!['medicamentos_catalogo','medicamentos_lotes',
       'medicamentos_historial','medicamentos_prestamos','medicamentos_prestamo_detalle',
+      'medicamentos_alertas',
       'medicamentos_socios','medicamentos_procedencias','medicamentos_medios'].includes(x))){
       expect(guard).toContain(`case '${action}'`);
     }
     for(const table of ['medicamentos','medicamentos_lotes','medicamentos_movimientos',
       'medicamentos_prestamos','medicamentos_prestamos_detalle',
-      'medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos']) {
+      'medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos',
+      'medicamentos_solicitudes','medicamentos_alertas_descartadas']) {
       expect(cleanup).toContain(`'${table}'`);
     }
     expect(direct).toContain('Limpieza SQL directa deshabilitada');

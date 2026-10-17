@@ -16,9 +16,10 @@ import { useMedicamentos } from '../hooks/useMedicamentos';
 import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import BuscadorEntidad from '../modales/BuscadorEntidad';
 import { fecha, fechaHoy, dinero, num, MED_TIPOS } from '../utils/medicamentosUtils';
-import { operacionConClave } from '../utils/medicamentosOperacion';
 import { distribuirEgreso } from '../utils/medicamentosDistribucion';
 import MedicamentosTabs, { MedSection } from '../modales/MedicamentosTabs';
+import AlertasVencimientos from '../alertas/AlertasVencimientos';
+import { tonoVencimiento } from '../utils/vencimientos';
 import '../Medicamentos.css';
 
 const newMedicine = () => ({
@@ -111,6 +112,8 @@ export default function Stock() {
   const [query, setQuery] = useState('');
   const [section, setSection] = useState('ACTIVOS');
   const [lotTarget, setLotTarget] = useState(null);
+  const [loteResaltado, setLoteResaltado] = useState(null);
+  const [alertRevision, setAlertRevision] = useState(0);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -118,6 +121,7 @@ export default function Stock() {
   const [med, setMed] = useState(newMedicine);
   const [entry, setEntry] = useState(newEntry);
   const [out, setOut] = useState(newOut);
+  const [loteSalida, setLoteSalida] = useState(null);
   const [lots, setLots] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyPage, setHistoryPage] = useState(1);
@@ -130,7 +134,6 @@ export default function Stock() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const viewRequest = useRef(0);
-  const pendienteOperacion = useRef(null);
   const guardandoRef = useRef(false);
   const write = canWrite();
   const notify = (type, message) => setFeedback({ type, message });
@@ -169,17 +172,19 @@ export default function Stock() {
     setEntry(newEntry(medicine.id_medicamento));
     setModal('entry');
   };
-  const openLots = (medicine) => {
+  const openLots = (medicine, loteAviso = null) => {
+    setLoteResaltado(loteAviso);
     setSelected(medicine);
     setLots([]);
     setModal('lotes');
     loadLots(medicine);
   };
-  const openOut = async (medicine) => {
+  const openOut = async (medicine, tipoInicial = null, loteSeleccionado = null) => {
     const request = ++viewRequest.current;
     setSelected(medicine);
+    setLoteSalida(loteSeleccionado);
     setLots([]);
-    setOut(newOut(num(medicine.activo) === 1 && num(medicine.stock_utilizable) > 0 ? 'ENTREGA_DONACION' : num(medicine.stock_vencido) > 0 ? 'BAJA_VENCIMIENTO' : 'BAJA_DESCARTE'));
+    setOut(newOut(tipoInicial || (num(medicine.activo) === 1 && num(medicine.stock_utilizable) > 0 ? 'ENTREGA_DONACION' : num(medicine.stock_vencido) > 0 ? 'BAJA_VENCIMIENTO' : 'BAJA_DESCARTE')));
     setModal('out');
     setDetailLoading(true);
     try {
@@ -225,13 +230,13 @@ export default function Stock() {
     guardandoRef.current = true;
     setSaving(true);
     try {
-      await handler(operacionConClave(pendienteOperacion, payload));
-      pendienteOperacion.current = null;
+      await handler(payload);
       ++viewRequest.current;
       setModal('');
       setSelected(null);
       notify('success', 'Operación registrada correctamente.');
       await cargar();
+      setAlertRevision(v => v + 1);
     } catch (e) { notify('error', e.message || 'No se pudo guardar.'); }
     finally { guardandoRef.current = false; setSaving(false); }
   };
@@ -243,12 +248,12 @@ export default function Stock() {
     guardandoRef.current = true;
     setSaving(true);
     try {
-      const resultado = await handler(operacionConClave(pendienteOperacion, payload));
-      pendienteOperacion.current = null;
+      const resultado = await handler(payload);
       ++viewRequest.current;
       // La escritura ya se confirmó: una falla al actualizar la lista no debe
       // permitir reenviar el movimiento contable o el cambio de estado.
       void cargar({ silencioso: true });
+      setAlertRevision(v => v + 1);
       if (modal === 'lotes' && selected) await loadLots(selected);
       if (modal === 'history' && selected) await fetchHistory(selected, historyPage);
       return resultado;
@@ -259,7 +264,6 @@ export default function Stock() {
   };
   const closeConfirmation = () => {
     ++viewRequest.current;
-    pendienteOperacion.current = null;
     setConfirmation('');
     if (!modal) setSelected(null);
     setLotTarget(null);
@@ -287,9 +291,24 @@ export default function Stock() {
   const shown = filtered.slice((Math.min(page, maxPage) - 1) * 20, Math.min(page, maxPage) * 20);
   useEffect(() => { if (page > maxPage) setPage(maxPage); }, [page, maxPage]);
   const cantidadValida = Number.isInteger(Number(out.cantidad)) && num(out.cantidad) > 0;
-  const planEgreso = distribuirEgreso(lots, out.tipo, cantidadValida ? num(out.cantidad) : 0, fechaHoy());
+  const lotesParaSalida = loteSalida ? lots.filter(l => String(l.id_lote) === String(loteSalida)) : lots;
+  const planEgreso = distribuirEgreso(lotesParaSalida, out.tipo, cantidadValida ? num(out.cantidad) : 0, fechaHoy());
   const stockSuficiente = cantidadValida && planEgreso.suficiente;
-  const close = () => { if (saving) return; if (confirmation) { closeConfirmation(); return; } if (!saving) { ++viewRequest.current; pendienteOperacion.current = null; setModal(''); setSelected(null); } };
+  useEffect(() => {
+    if (modal !== 'lotes' || !loteResaltado || !lots.length) return undefined;
+    const timer = window.setTimeout(() => document.getElementById(`med-lote-${loteResaltado}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 120);
+    return () => window.clearTimeout(timer);
+  }, [modal, loteResaltado, lots]);
+  const abrirAlertaLote = async (aviso) => {
+    let medicine = registros.find(m => String(m.id_medicamento) === String(aviso.id_medicamento));
+    if (!medicine) {
+      const response = await api.catalogo();
+      medicine = (response.registros || []).find(m => String(m.id_medicamento) === String(aviso.id_medicamento));
+    }
+    if (!medicine) throw new Error('El medicamento ya no existe. Actualizá las alertas.');
+    openLots(medicine, aviso.id_referencia);
+  };
+  const close = () => { if (saving) return; if (confirmation) { closeConfirmation(); return; } if (!saving) { ++viewRequest.current; setModal(''); setSelected(null); } };
   const updateMed = (key, value) => setMed(m => ({ ...m, [key]: value }));
   const updateOut = (key, value) => setOut(o => ({ ...o, [key]: value }));
 
@@ -307,8 +326,10 @@ export default function Stock() {
       {error ? <div className="med-inline-danger">{error}</div> : null}
       <GlobalDivTable ariaLabel="Stock de medicamentos" loading={loading}
         className={`med-table ${filtered.length ? 'has-bottom-pagination' : ''}`} empty={!loading && !error && !filtered.length} gridClassName="med-grid--stock"
-        columns={['Medicamento / droga', 'Laboratorio', 'Presentación / dosis', 'Disponible', 'Últ. ingreso / origen', { label: 'Próx. venc.', align: 'center' }, { label: 'Acciones', align: 'center' }]}>
-        {shown.map(m => <div key={m.id_medicamento} className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--stock" role="row">
+        columns={['Medicamento / droga', 'Laboratorio', 'Presentación / dosis', 'Disponible', 'Últ. ingreso / origen', { label: 'Vencimiento', align: 'center' }, { label: 'Acciones', align: 'center' }]}>
+        {shown.map(m => <div key={m.id_medicamento}
+          className={`mov-gridTable mov-gridTable--row global-divTable__row med-grid--stock med-expiry-row is-${tonoVencimiento(m.vencimiento_referencia)}`}
+          role="row" title={m.vencimiento_referencia ? `Vencimiento del stock: ${fecha(m.vencimiento_referencia)}` : 'Sin vencimiento aplicable al stock existente'}>
           <div role="cell" className="mov-gridCell entity-main-cell" title={m.droga}>
             <strong>{m.nombre_comercial}</strong>
             <span className="med-cell-secondary">{m.droga}</span>
@@ -336,7 +357,7 @@ export default function Stock() {
             ) : null}
           </div>
           <div role="cell" className="mov-gridCell entity-main-cell">{fecha(m.ultimo_ingreso)}<span className="med-cell-secondary">{originName[m.ultimo_origen] || '—'}</span></div>
-          <div role="cell" className="mov-gridCell is-center">{fecha(m.proximo_vencimiento)}</div>
+          <div role="cell" className="mov-gridCell is-center med-expiry-cell"><span className="med-expiry-date">{fecha(m.vencimiento_referencia)}</span></div>
           <div role="cell" className="mov-gridCell med-actions">
             <ActionButton icon={faBoxOpen} label="Lotes y vencimientos" onClick={() => openLots(m)} />
             <ActionButton icon={faClockRotateLeft} label="Historial" onClick={() => openHistory(m)} />
@@ -355,7 +376,15 @@ export default function Stock() {
         </div> : null}
       </GlobalDivTable>
       <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
+      <div className="med-expiry-legend" aria-label="Referencias de vencimiento">
+        <strong>VENCIMIENTOS</strong>
+        <span><i className="is-danger" />Rojo: vencido</span>
+        <span><i className="is-warning" />Amarillo: vence hoy o dentro de 30 días</span>
+        <span><i className="is-safe" />Verde: faltan más de 30 días</span>
+        <span><i className="is-neutral" />Gris: sin vencimiento aplicable</span>
+      </div>
     </ModulePage>
+    <AlertasVencimientos tipo="LOTE" onSelect={abrirAlertaLote} actualizacion={alertRevision} />
 
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'med'} wide saving={saving}
       title={med.id_medicamento ? 'Editar medicamento' : 'Nuevo medicamento'}
@@ -392,7 +421,7 @@ export default function Stock() {
       subtitle={`${selected?.droga || ''} · ${selected?.presentacion || ''} · ${selected?.dosis || ''}`}
       onClose={close}>
       <MedSection icon={faBoxOpen}>Lotes y vencimientos</MedSection>
-      {lots.length ? <div className="med-lot-list">{lots.map(l => <section className={`med-box med-lot-card med-lot-card--${tonoLote(l)}`} key={l.id_lote}>
+      {lots.length ? <div className="med-lot-list">{lots.map(l => <section id={`med-lote-${l.id_lote}`} className={`med-box med-lot-card med-lot-card--${tonoLote(l)}${String(loteResaltado) === String(l.id_lote) ? ' med-lot-card--alerta' : ''}`} key={l.id_lote}>
         <div className="med-lot-heading"><strong>Lote {l.numero_lote || `#${l.id_lote}`}</strong><div className="med-lot-heading__summary"><span className="med-lot-available"><small>Disponible</small><strong>{l.cantidad_disponible} {l.unidad_stock}</strong></span><span className={`med-lot-status med-status-chip med-status-chip--${tonoLote(l)}`}>{situacionLote(l)}</span></div></div>
         <div className="med-lot-data">
           <div><small>Fecha de ingreso</small><strong>{fecha(l.fecha_ingreso)}</strong></div>
@@ -404,6 +433,8 @@ export default function Stock() {
         </div>
         {l.observaciones ? <div className="med-lot-notes"><small>Observaciones</small><p>{l.observaciones}</p></div> : null}
         {write && l.estado !== 'DESCARTADO' ? <div className="med-actions med-lot-card__actions">
+          {l.fecha_vencimiento < fechaHoy() && num(l.cantidad_disponible) > 0 ?
+            <ActionButton icon={faArrowUp} label="Registrar baja por vencimiento" onClick={() => openOut(selected, 'BAJA_VENCIMIENTO', l.id_lote)} disabled={saving} /> : null}
           <ActionButton icon={l.estado === 'ACTIVO' ? faBan : faRotateLeft}
             label={l.estado === 'ACTIVO' ? 'Bloquear lote' : 'Desbloquear lote'}
             onClick={() => openLotStatus(l)}
@@ -536,13 +567,14 @@ export default function Stock() {
 
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'out'} wide saving={saving} loading={detailLoading}
       title={`Egresar stock · ${selected?.nombre_comercial || ''}`}
-      onClose={close} onSubmit={e => run(e, api.salida, { ...out, id_medicamento: selected?.id_medicamento })}
+      onClose={close} onSubmit={e => run(e, api.salida, { ...out, ...(loteSalida ? { id_lote: loteSalida } : { id_medicamento: selected?.id_medicamento }) })}
       submitDisabled={!cantidadValida || !stockSuficiente}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Datos del egreso', icon: faArrowUp }, { label: 'Lotes asignados', icon: faBoxOpen }]}>
         <div>      <MedSection icon={faArrowUp}>Datos del egreso</MedSection>
       <Campos>
         <Campo label="Medicamento" wide value={`${selected?.nombre_comercial || ''} · ${selected?.dosis || ''}`} disabled />
-        <Campo label="Motivo del egreso" required options={OUT_TYPES.filter(x => num(selected?.activo) === 1 || !['ENTREGA_DONACION','SALIDA_VENTA'].includes(x)).map(x => op(x, MED_TIPOS[x]))}
+        {loteSalida ? <Campo label="Lote de baja" wide value={lotesParaSalida.length ? (lotesParaSalida[0].numero_lote || `#${loteSalida}`) : `#${loteSalida}`} disabled /> : null}
+        <Campo label="Motivo del egreso" required options={(loteSalida ? ['BAJA_VENCIMIENTO'] : OUT_TYPES).filter(x => num(selected?.activo) === 1 || !['ENTREGA_DONACION','SALIDA_VENTA'].includes(x)).map(x => op(x, MED_TIPOS[x]))}
           value={out.tipo} onChange={v => updateOut('tipo', v)} />
         <Campo label="Cantidad" type="number" required min="1" step="1" value={out.cantidad} onChange={v => updateOut('cantidad', v)} />
         {out.tipo === 'SALIDA_VENTA' ? <>

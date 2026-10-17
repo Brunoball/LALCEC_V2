@@ -3,7 +3,7 @@
   grid-template-columns: 1.2fr .8fr 1.25fr 1.05fr 1.05fr .95fr 1.55fr;
 }
 .med-grid--loans {
-  grid-template-columns: .5fr 1.5fr .8fr .7fr .9fr 1.3fr;
+  grid-template-columns: 1.65fr .78fr .72fr 1.1fr 1fr 1.35fr;
 }
 .med-table { min-width: 0; display:flex; flex-direction:column; flex:1; }
 .med-actions { display:flex;flex-wrap:wrap;gap:5px; }
@@ -498,6 +498,22 @@
 .med-table .mov-gridCell.med-loan-person { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; white-space: normal; }
 .med-loan-person__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .med-loan-person .med-cell-secondary { margin: 0; }
+/* Resumen real de las unidades devueltas, sin consultar cada préstamo individualmente. */
+.med-table .mov-gridCell.med-loan-units {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
+}
+.med-loan-units strong { color: #263448; font-size: 12px; font-weight: 600; }
+.med-loan-units span { color: #9b530e; font-size: 11px; }
+.med-loan-units--complete span { color: #23745f; }
+html[data-theme="oscuro"] .med-loan-units strong { color: #e2e8f0; }
+html[data-theme="oscuro"] .med-loan-units span { color: #f3be7b; }
+html[data-theme="oscuro"] .med-loan-units--complete span { color: #83d8aa; }
 @media (max-width: 600px) {
   .med-lot-card .med-lot-heading { flex-direction: column; }
   .med-lot-heading__summary { width: 100%; justify-content: space-between; }
@@ -703,3 +719,47 @@ html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--deli
 html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--returned { --qty-bg: #1b4339; --qty-border: #376956; --qty-text: #a2ead0; }
 html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-quantity--pending { --qty-bg: #4a3421; --qty-border: #755137; --qty-text: #fbd3a1; }
 html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { background: #1b4339; border-color: #386859; color: #a0ead1; }
+
+/* Semáforo de stock: vuelve a utilizar las clases ya previstas en el módulo. */
+.med-table .med-expiry-row.is-danger::before { background:#dc3545; }
+.med-table .med-expiry-row.is-warning::before { background:#e8a014; }
+.med-table .med-expiry-row.is-safe::before { background:#1b9b62; }
+.med-table .med-expiry-row.is-neutral::before { background:#94a3b8; }
+.med-lot-card--alerta { outline:2px solid #ee841d; outline-offset:2px; }
+
+/* Panel contextual sin bloquear las tablas. La solapa permanece al ocultarlo. */
+.med-alertas { position:fixed; right:20px; bottom:20px; z-index:100; width:min(375px,calc(100vw - 28px)); font-family:inherit; }
+.med-alertas--abiertas { background:#fff; border:1px solid #d4dce6; border-radius:13px; box-shadow:0 14px 45px rgba(15,23,42,.20); overflow:hidden; }
+.med-alertas__head { padding:11px 12px 10px 15px; display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff8f0; border-bottom:1px solid #efdfcf; }
+.med-alertas__heading { display:flex; align-items:center; gap:9px; color:#88470e; font-size:13px; min-width:0; }
+.med-alertas__heading strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.med-alertas__heading > span { color:#fff; background:#ca6518; font-weight:700; border-radius:999px; min-width:20px; padding:2px 5px; text-align:center; }
+.med-alertas__minimizar, .med-alertas__descartar { flex:none; background:transparent; border:0; border-radius:6px; cursor:pointer; color:#586579; padding:7px; }
+.med-alertas__minimizar:hover, .med-alertas__descartar:hover { background:#f0e5da; color:#9c391c; }
+.med-alertas__scroll { padding:8px; max-height:min(48vh,365px); overflow-y:auto; display:flex; flex-direction:column; gap:7px; }
+.med-alertas__item { display:flex; align-items:flex-start; gap:3px; border-radius:9px; border:1px solid #e2e8f0; border-left:4px solid #e7a21c; background:#fffaf0; }
+.med-alertas__item--vencido { border-left-color:#ce3d41; background:#fff4f3; }
+.med-alertas__contenido { display:flex; flex-direction:column; align-items:flex-start; gap:4px; flex:1; min-width:0; border:0; text-align:left; background:none; padding:11px 6px 11px 12px; cursor:pointer; font:inherit; color:#334155; }
+.med-alertas__contenido:hover .med-alertas__nombre { text-decoration:underline; }
+.med-alertas__nombre { font-weight:650; font-size:12px; overflow-wrap:anywhere; }
+.med-alertas__contenido strong { font-size:12px; color:#974b05; }
+.med-alertas__item--vencido .med-alertas__contenido strong { color:#b22630; }
+.med-alertas__contenido small { font-size:11px; color:#64748b; }
+.med-alertas__descartar { margin:4px 4px 0 0; }
+.med-alertas__hint { border-top:1px solid #f0f0f0; color:#64748b; font-size:10px; line-height:1.45; margin:0; padding:8px 12px; }
+.med-alertas__error { font-size:11px; color:#ad2830; padding:8px 12px; }
+.med-alertas__error button { background:transparent; border:0; text-decoration:underline; color:inherit; cursor:pointer; }
+.med-alertas__tab { display:flex; align-items:center; gap:9px; margin-left:auto; padding:10px 14px; background:#fff8f0; color:#8b4b18; border:1px solid #ddaa74; box-shadow:0 6px 20px rgba(0,0,0,.16); border-radius:11px; cursor:pointer; font-size:12px; font-weight:700; }
+.med-alertas__tab:hover { background:#ffebd7; }
+.med-alertas__contenido:focus-visible,.med-alertas__descartar:focus-visible,.med-alertas__tab:focus-visible,.med-alertas__minimizar:focus-visible { outline:2px solid #e87912; outline-offset:2px; }
+@media(max-width:680px) { .med-alertas { bottom:12px; right:12px; } .med-alertas__scroll { max-height:36vh; } .med-expiry-legend { gap:6px 12px; } }
+html[data-theme="oscuro"] .med-alertas--abiertas { background:#222d3a; border-color:#516075; }
+html[data-theme="oscuro"] .med-alertas__head,html[data-theme="oscuro"] .med-alertas__tab { background:#3d3028; color:#f9c693; border-color:#715842; }
+html[data-theme="oscuro"] .med-alertas__heading { color:#ffcb90; }
+html[data-theme="oscuro"] .med-alertas__item { background:#363327; border-color:#65513a; border-left-color:#e7a21c; }
+html[data-theme="oscuro"] .med-alertas__item--vencido { background:#3c282b; border-left-color:#ef6e73; }
+html[data-theme="oscuro"] .med-alertas__contenido,html[data-theme="oscuro"] .med-alertas__nombre { color:#f0f3f6; }
+html[data-theme="oscuro"] .med-alertas__contenido small,html[data-theme="oscuro"] .med-alertas__hint { color:#b7c4d2; }
+
+.med-table .med-loan-dates { flex-direction:column; gap:3px; line-height:1.2; }
+.med-table .med-loan-dates strong { font-weight:550; font-size:12px; }

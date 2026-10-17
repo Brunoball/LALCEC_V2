@@ -380,9 +380,21 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
     $db = $auth['db'];
     $body = request_body();
 
-    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture'], true)) return;
+    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture', 'e2e_medicamentos_contable_fixture'], true)) return;
 
     switch ($action) {
+        case 'medicamentos_descartar_alerta': {
+            $tipo=strtoupper(trim((string)($body['tipo']??'')));
+            $id=$body['id_referencia']??null;
+            if ($tipo==='LOTE') {
+                e2e_require_target_or_missing($db,$action,$id,'e2e_lote','medicamentos_lotes','id_lote');
+            } elseif ($tipo==='PRESTAMO') {
+                e2e_require_target_or_missing($db,$action,$id,'e2e_prestamo','medicamentos_prestamos','id_prestamo');
+            } else {
+                e2e_scope_error($action,'El tipo de alerta E2E debe ser LOTE o PRESTAMO.');
+            }
+            return;
+        }
         case 'medicamentos_guardar': {
             $id=e2e_positive_int($body['id_medicamento'] ?? null);
             if ($id!==null) {

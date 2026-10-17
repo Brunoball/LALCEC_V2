@@ -171,6 +171,25 @@ test.describe('Contratos, validaciones y seguridad de la API actual', () => {
       },
       { status: 409, code: 'E2E_SCOPE_BLOCKED' },
     );
+    // Las opciones económicas faltantes solo pueden prepararse con admin,
+    // header E2E, confirmación y nombres automáticos predefinidos.
+    await expectApiError(request, 'e2e_medicamentos_contable_fixture', {
+      method: 'POST', headers: { 'X-LALCEC-E2E': 'NO' },
+      data: { confirmacion: 'LIMPIAR_PLAYWRIGHT', opciones: [
+        { tipo: 'CATEGORIA_EGRESO', nombre: 'COMPRA DE MEDICAMENTOS' },
+      ] },
+    }, { status: 403, code: 'E2E_HEADER_REQUIRED' });
+    await expectApiError(request, 'e2e_medicamentos_contable_fixture', {
+      method: 'POST', data: { confirmacion: 'NO', opciones: [
+        { tipo: 'CATEGORIA_EGRESO', nombre: 'COMPRA DE MEDICAMENTOS' },
+      ] },
+    }, { status: 422, code: 'E2E_CLEANUP_CONFIRMACION_INVALIDA' });
+    await expectApiError(request, 'e2e_medicamentos_contable_fixture', {
+      method: 'POST', data: { confirmacion: 'LIMPIAR_PLAYWRIGHT', opciones: [
+        { tipo: 'CATEGORIA_EGRESO', nombre: 'PW E2E OPCION NO AUTORIZADA' },
+      ] },
+    }, { status: 422, code: 'E2E_MED_OPCION_NO_PERMITIDA' });
+
     await expectApiError(
       request,
       'e2e_auditoria',

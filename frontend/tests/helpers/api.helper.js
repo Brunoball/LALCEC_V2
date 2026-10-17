@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('node:crypto');
 const { loadTestEnv } = require('./env.helper');
 const { waitForHostingerRequestSlot } = require('./hostinger-throttle.helper');
 
@@ -105,7 +106,23 @@ async function apiResult(requestContext, action, options = {}) {
     headers,
     failOnStatusCode: false,
   };
-  if (options.data !== undefined) requestOptions.data = options.data;
+  // Solo las diez escrituras transaccionales necesitan clave. Cada invocación
+  // independiente genera una clave E2E; los reintentos explícitos conservan la suya.
+  // El prefijo controlado permite que el backend limpie únicamente solicitudes
+  // Playwright, sin tocar las operaciones de usuarios reales.
+  const transactionalMedicationActions = new Set([
+    'medicamentos_guardar', 'medicamentos_cambiar_estado', 'medicamentos_ingresar',
+    'medicamentos_salida', 'medicamentos_anular', 'medicamentos_revisar_lote',
+    'medicamentos_prestar', 'medicamentos_devolver', 'medicamentos_cerrar',
+    'medicamentos_sena',
+  ]);
+  if (options.data !== undefined) {
+    const isMedicineWrite = method === 'POST' && transactionalMedicationActions.has(action);
+    requestOptions.data = isMedicineWrite && options.autoIdempotency !== false &&
+      options.data && typeof options.data === 'object' && !Array.isArray(options.data)
+      ? { ...options.data, _idempotency_key: options.data._idempotency_key || `med-PWE2E-${randomUUID()}` }
+      : options.data;
+  }
 
   await waitForHostingerRequestSlot();
   const response = await requestContext.fetch(

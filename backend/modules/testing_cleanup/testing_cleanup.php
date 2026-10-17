@@ -78,6 +78,77 @@ final class TestingCleanup
      * el backend conversacional del bot sea quien genere los SOBRANTES reales.
      * Sólo admite socios E2E y nunca queda expuesto como API funcional normal.
      */
+    /**
+     * Prepara solamente opciones CONTABLES AUTOMÁTICAS de Medicamentos que
+     * faltan en la DB durante Playwright. Son nombres fijos, por lo que
+     * contable_opcion_guardar (que exige "PW E2E") no sirve para este caso.
+     * Un registro de auditoría marcado como PW E2E identifica EXCLUSIVAMENTE
+     * la opción creada aquí para su posterior limpieza segura.
+     */
+    public static function medicamentosContableFixture(): never
+    {
+        $auth = self::requireE2EAdmin();
+        $body = request_body();
+        self::requireConfirmation($body);
+        $items = $body['opciones'] ?? null;
+        if (!is_array($items) || array_is_list($items) === false || count($items) < 1 || count($items) > 12) {
+            api_error('Opciones de medicamentos E2E inválidas.', 'E2E_MED_OPCIONES_INVALIDAS', 422);
+        }
+        $permitidas = [
+            'CATEGORIA_EGRESO' => [
+                'COMPRA DE MEDICAMENTOS', 'DEVOLUCIONES DE SEÑAS',
+                'DEVOLUCIONES DE VENTAS DE MEDICAMENTOS',
+            ],
+            'CONCEPTO_EGRESO' => [
+                'COMPRA DE MEDICAMENTOS', 'DEVOLUCIÓN DE SEÑA',
+                'DEVOLUCIÓN DE VENTA DE MEDICAMENTOS',
+            ],
+            'CATEGORIA_INGRESO' => [
+                'VENTA DE MEDICAMENTOS', 'SEÑAS DE MEDICAMENTOS',
+                'REINTEGROS DE COMPRAS DE MEDICAMENTOS',
+            ],
+            'CONCEPTO_INGRESO' => [
+                'VENTA DE MEDICAMENTOS', 'COBRO DE SEÑA',
+                'REINTEGRO DE COMPRA DE MEDICAMENTOS',
+            ],
+        ];
+        $db = $auth['db'];
+        $creadas = [];
+        $existentes = [];
+        $db->beginTransaction();
+        try {
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    api_error('Opción de medicamentos E2E inválida.', 'E2E_MED_OPCION_INVALIDA', 422);
+                }
+                $tipo = (string)($item['tipo'] ?? '');
+                $nombre = (string)($item['nombre'] ?? '');
+                if (!isset($permitidas[$tipo]) || !in_array($nombre, $permitidas[$tipo], true)) {
+                    api_error('Opción no autorizada para el fixture de Medicamentos.', 'E2E_MED_OPCION_NO_PERMITIDA', 422);
+                }
+                $q = $db->prepare("INSERT INTO contable_opciones (tipo,nombre,activo)
+                    VALUES (?,?,1) ON DUPLICATE KEY UPDATE id_opcion=LAST_INSERT_ID(id_opcion)");
+                $q->execute([$tipo, $nombre]);
+                $id = (int)$db->lastInsertId();
+                if ($q->rowCount() === 1) {
+                    audit_change($db, $auth, 'TESTING', 'E2E_MEDICAMENTOS_OPCION',
+                        'contable_opciones', $id,
+                        'PW E2E OPCION AUTOMATICA MEDICAMENTOS ' . $tipo,
+                        null, ['tipo' => $tipo, 'nombre' => $nombre]);
+                    $creadas[] = $id;
+                } else {
+                    $existentes[] = $id;
+                }
+            }
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $error;
+        }
+        api_success(['creadas' => $creadas, 'existentes' => $existentes],
+            'Opciones contables de Medicamentos preparadas para Playwright.');
+    }
+
     public static function saldoFavorFixture(): never
     {
         $auth = self::requireE2EAdmin();
@@ -234,6 +305,17 @@ final class TestingCleanup
         ], 'Huella de datos reales obtenida.');
     }
 
+    /** Opciones comunes de Medicamentos creadas por el fixture (no por usuarios). */
+    private static function fixtureOpcionesMedicamentosSql(string $alias = 'o'): string
+    {
+        return "EXISTS (SELECT 1 FROM auditoria fixture_a
+            WHERE fixture_a.tabla_afectada = 'contable_opciones'
+              AND fixture_a.id_registro = (CAST({$alias}.id_opcion AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci)
+              AND fixture_a.modulo = 'TESTING'
+              AND fixture_a.accion = 'E2E_MEDICAMENTOS_OPCION'
+              AND fixture_a.descripcion LIKE 'PW E2E OPCION AUTOMATICA MEDICAMENTOS %')";
+    }
+
     private static function cleanup(PDO $db, int $currentSessionId): array
     {
         $filesToDelete = [];
@@ -248,6 +330,8 @@ final class TestingCleanup
             'medicamentos_prestamos_detalle' => 0,
             'medicamentos_prestamos_devoluciones' => 0,
             'medicamentos_prestamos_senas_movimientos' => 0,
+            'medicamentos_solicitudes' => 0,
+            'medicamentos_alertas_descartadas' => 0,
             'familias' => 0,
             'socios' => 0,
             'socios_eliminados' => 0,
@@ -295,6 +379,12 @@ final class TestingCleanup
             $testOptions = self::ids($db,
                 "SELECT id_opcion FROM contable_opciones
                  WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"
+            );
+            // Guardar aparte los IDs firmados por nuestro fixture. La opción
+            // preexistente no tiene esta marca y jamás puede ser eliminada.
+            $fixtureOptions = self::ids($db,
+                'SELECT o.id_opcion FROM contable_opciones o WHERE '
+                . self::fixtureOpcionesMedicamentosSql('o')
             );
 
             $testIncomeIds = self::ids($db,
@@ -379,6 +469,24 @@ final class TestingCleanup
                 $testDevolucionesMedicamentos=self::ids($db,
                     "SELECT id_devolucion FROM medicamentos_prestamos_devoluciones WHERE id_detalle_prestamo IN ({$in})",$testDetallesMedicamentos);
             }
+            // Eliminar SOLO claves E2E marcadas por Playwright; no existe FK
+            // de las solicitudes al medicamento. Jamás borrar claves normales.
+            if (self::tableExists($db,'medicamentos_solicitudes')) {
+                $q=$db->prepare("DELETE FROM medicamentos_solicitudes WHERE clave LIKE 'med-PWE2E-%'");
+                $q->execute();
+                $counts['medicamentos_solicitudes'] += $q->rowCount();
+            }
+            // Descartes de lotes/préstamos E2E, ANTES de borrar sus padres.
+            // Se filtran simultáneamente tipo y referencia para evitar colisiones.
+            if (self::tableExists($db,'medicamentos_alertas_descartadas')) {
+                foreach ([['LOTE',$testLotes],['PRESTAMO',$testPrestamosMedicamentos]] as [$tipo,$ids]) {
+                    if ($ids === []) continue;
+                    $q=$db->prepare('DELETE FROM medicamentos_alertas_descartadas WHERE tipo=? AND id_referencia IN ('
+                        .self::placeholders(count($ids)).')');
+                    $q->execute(array_merge([$tipo],$ids));
+                    $counts['medicamentos_alertas_descartadas'] += $q->rowCount();
+                }
+            }
             $counts['medicamentos_movimientos'] += self::deleteByIds($db,'medicamentos_movimientos','id_movimiento',$testMovimientosMedicamentos);
             $counts['medicamentos_prestamos_senas_movimientos'] += self::deleteByIds($db,'medicamentos_prestamos_senas_movimientos','id_movimiento_sena',$testSenasMedicamentos);
             $counts['medicamentos_prestamos_devoluciones'] += self::deleteByIds($db,'medicamentos_prestamos_devoluciones','id_devolucion',$testDevolucionesMedicamentos);
@@ -422,6 +530,36 @@ final class TestingCleanup
             }
             $counts['familias'] += self::deleteByIds($db, 'familias', 'id_familia', $testFamilies);
 
+            // Los asientos E2E ya fueron eliminados. Antes de borrar una
+            // opción automática de prueba, verificar que ningún asiento REAL
+            // haya empezado a utilizarla en paralelo. En ese caso se conserva.
+            foreach ($fixtureOptions as $fixtureId) {
+                $q = $db->prepare('SELECT tipo,nombre FROM contable_opciones WHERE id_opcion=? FOR UPDATE');
+                $q->execute([$fixtureId]);
+                $opcion = $q->fetch();
+                if (!$opcion) continue;
+                $mapa = [
+                    'CATEGORIA_INGRESO' => ['contable_ingresos', 'categoria'],
+                    'CONCEPTO_INGRESO' => ['contable_ingresos', 'concepto'],
+                    'CATEGORIA_EGRESO' => ['contable_egresos', 'categoria'],
+                    'CONCEPTO_EGRESO' => ['contable_egresos', 'concepto'],
+                ];
+                if (!isset($mapa[$opcion['tipo']])) {
+                    $skipped['opciones_med_e2e_inseguras'][] = $fixtureId;
+                    continue;
+                }
+                [$tabla, $columna] = $mapa[$opcion['tipo']];
+                $uso = self::scalar($db,
+                    "SELECT COUNT(*) FROM {$tabla} WHERE {$columna} = ?",
+                    [$opcion['nombre']]
+                );
+                if ($uso > 0) {
+                    $skipped['opciones_med_e2e_usadas'][] = $fixtureId;
+                    continue;
+                }
+                $testOptions[] = $fixtureId;
+            }
+            $testOptions = array_values(array_unique($testOptions));
             $counts['contable_opciones'] += self::deleteByIds($db, 'contable_opciones', 'id_opcion', $testOptions);
 
             if ($testCategories !== []) {
@@ -529,7 +667,7 @@ final class TestingCleanup
 
             $statement = $db->prepare(
                 "DELETE FROM auditoria
-                 WHERE descripcion LIKE '%PW E2E%'
+                 WHERE (descripcion LIKE '%PW E2E%'
                     OR descripcion LIKE '%PW EE%'
                     OR datos_anteriores LIKE '%PW E2E%'
                     OR datos_anteriores LIKE '%PW EE%'
@@ -539,7 +677,12 @@ final class TestingCleanup
                     OR datos_nuevos LIKE '%pw_e2e_%'
                     OR datos_anteriores LIKE '%@example.test%'
                     OR datos_nuevos LIKE '%@example.test%'
-                    OR user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%'"
+                    OR user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%')
+                   AND NOT (modulo = 'TESTING'
+                     AND accion = 'E2E_MEDICAMENTOS_OPCION'
+                     AND tabla_afectada = 'contable_opciones'
+                     AND EXISTS (SELECT 1 FROM contable_opciones o
+                         WHERE o.id_opcion = CAST(auditoria.id_registro AS UNSIGNED)))"
             );
             $statement->execute();
             $counts['auditoria'] += $statement->rowCount();
@@ -715,8 +858,16 @@ final class TestingCleanup
             'medios_pago' => self::scalar($db, "SELECT COUNT(*) FROM medios_pago WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
             'condiciones_iva' => self::scalar($db, "SELECT COUNT(*) FROM condiciones_iva WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
             'usuarios' => self::scalar($db, "SELECT COUNT(*) FROM sis_usuarios WHERE usuario LIKE 'pw_e2e_%' OR email LIKE '%@example.test'"),
-            'contable_opciones' => self::scalar($db, "SELECT COUNT(*) FROM contable_opciones WHERE nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %'"),
+            'contable_opciones' => self::scalar($db,
+                "SELECT COUNT(*) FROM contable_opciones o WHERE o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %' OR "
+                . self::fixtureOpcionesMedicamentosSql('o')),
             'medicamentos' => self::tableExists($db,'medicamentos') ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'") : 0,
+            'medicamentos_solicitudes' => self::tableExists($db,'medicamentos_solicitudes')
+                ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_solicitudes WHERE clave LIKE 'med-PWE2E-%'") : 0,
+            'medicamentos_alertas_descartadas' => self::tableExists($db,'medicamentos_alertas_descartadas')
+                ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_alertas_descartadas x WHERE
+                    (x.tipo='LOTE' AND EXISTS (SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE l.id_lote=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+                    OR (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))") : 0,
             'contable_ingresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_ingresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %'"),
             'contable_egresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_egresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %' OR numero_comprobante LIKE 'E2E-%'"),
             'sesiones' => self::scalar($db, "SELECT COUNT(*) FROM sis_sesiones WHERE idSesion <> ? AND user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%'", [$currentSessionId]),
@@ -773,7 +924,8 @@ final class TestingCleanup
             'saldos_favor_movimientos' => "SELECT sf.* FROM saldos_favor_movimientos sf WHERE NOT EXISTS (" . self::e2eSocioExistsSql('sf.id_socio') . ") ORDER BY sf.id_movimiento",
             'medios_pago' => "SELECT m.* FROM medios_pago m WHERE NOT (m.nombre LIKE 'PW E2E %' OR m.nombre LIKE 'PW EE %') ORDER BY m.id_medio_pago",
             'condiciones_iva' => "SELECT c.* FROM condiciones_iva c WHERE NOT (c.nombre LIKE 'PW E2E %' OR c.nombre LIKE 'PW EE %') ORDER BY c.id_condicion_iva",
-            'contable_opciones' => "SELECT o.* FROM contable_opciones o WHERE NOT (o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %') ORDER BY o.id_opcion",
+            'contable_opciones' => "SELECT o.* FROM contable_opciones o WHERE NOT (o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %') AND NOT "
+                . self::fixtureOpcionesMedicamentosSql('o') . ' ORDER BY o.id_opcion',
             'contable_ingresos' => "SELECT i.* FROM contable_ingresos i WHERE NOT (i.detalle LIKE 'PW E2E %' OR i.detalle LIKE 'PW EE %' OR i.proveedor LIKE 'PW E2E %' OR i.proveedor LIKE 'PW EE %' OR i.categoria LIKE 'PW E2E %' OR i.categoria LIKE 'PW EE %' OR i.concepto LIKE 'PW E2E %' OR i.concepto LIKE 'PW EE %') ORDER BY i.id_ingreso",
             'contable_egresos' => "SELECT e.* FROM contable_egresos e WHERE NOT (e.detalle LIKE 'PW E2E %' OR e.detalle LIKE 'PW EE %' OR e.proveedor LIKE 'PW E2E %' OR e.proveedor LIKE 'PW EE %' OR e.categoria LIKE 'PW E2E %' OR e.categoria LIKE 'PW EE %' OR e.concepto LIKE 'PW E2E %' OR e.concepto LIKE 'PW EE %' OR e.numero_comprobante LIKE 'E2E-%') ORDER BY e.id_egreso",
             'sis_usuarios' => "SELECT u.* FROM sis_usuarios u WHERE u.usuario NOT LIKE 'pw_e2e_%' AND COALESCE(u.email,'') NOT LIKE '%@example.test' ORDER BY u.idUsuario",
@@ -801,6 +953,18 @@ final class TestingCleanup
             $testExpense = str_replace(['i.id_ingreso','id_ingreso_contable'],['e.id_egreso','id_egreso_contable'],$testIncome);
             $queries['contable_ingresos']=preg_replace('/ ORDER BY i\\.id_ingreso$/'," AND NOT {$testIncome} ORDER BY i.id_ingreso",$queries['contable_ingresos']);
             $queries['contable_egresos']=preg_replace('/ ORDER BY e\\.id_egreso$/'," AND NOT {$testExpense} ORDER BY e.id_egreso",$queries['contable_egresos']);
+        }
+        // Incluir en la huella de seguridad las dos tablas nuevas de
+        // Medicamentos sin contar registros creados por Playwright.
+        if (self::tableExists($db, 'medicamentos_solicitudes')) {
+            $queries['medicamentos_solicitudes'] = "SELECT s.* FROM medicamentos_solicitudes s
+                WHERE s.clave NOT LIKE 'med-PWE2E-%' ORDER BY s.id_solicitud";
+        }
+        if (self::tableExists($db, 'medicamentos_alertas_descartadas')) {
+            $queries['medicamentos_alertas_descartadas'] = "SELECT x.* FROM medicamentos_alertas_descartadas x
+              WHERE NOT (x.tipo='LOTE' AND EXISTS (SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE l.id_lote=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+                AND NOT (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+              ORDER BY x.id_alerta";
         }
         if (self::tableExists($db, 'pagos_inscripciones')) {
             $queries['pagos_inscripciones'] = "SELECT p.* FROM pagos_inscripciones p WHERE NOT EXISTS (" . self::e2eSocioExistsSql('p.id_socio') . ") ORDER BY p.id_pago_inscripcion";

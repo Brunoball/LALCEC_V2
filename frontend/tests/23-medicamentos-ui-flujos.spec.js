@@ -122,12 +122,12 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
     await search.fill(borrower.person.dni);
     const table=page.getByRole('table',{name:'Préstamos de medicamentos'});
     // Buscar la celda exacta dentro de cada fila, sin reanclar el filtro a la tabla.
-    const row=table.getByRole('row').filter({has:page.getByRole('cell',{name:`#${loanId}`,exact:true})});
+    const row=table.getByRole('row').filter({hasText:borrower.person.dni});
     await expect(row).toContainText(borrower.person.dni);
-    await row.getByRole('button',{name:`Ver detalle del préstamo #${loanId}`}).click();
+    await row.getByRole('button',{name:`Información del préstamo #${loanId}`}).click();
     const detail=page.getByRole('dialog',{name:new RegExp(`Préstamo #${loanId}`)});
     await expect(detail).toContainText(fx.medicine.nombre_comercial);
-    await expect(detail).toContainText('Pendiente: 2');
+    await expect(detail).toContainText(/Pendiente\s*2/);
     await detail.getByRole('button',{name:'Cerrar'}).click();
     await row.getByRole('button',{name:'Registrar devolución de medicamentos'}).click();
     const returnDialog=page.getByRole('dialog',{name:/Registrar devolución de medicamentos/});
@@ -139,13 +139,13 @@ test.describe('Medicamentos: interacción real con la interfaz', () => {
     await returnDialog.getByRole('button',{name:'Registrar devolución'}).click();
     await expect(returnDialog).toHaveCount(0);
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(4);
-    await row.getByRole('button',{name:'Cerrar préstamo'}).click();
-    const closing=page.getByRole('dialog',{name:/Cerrar préstamo definitivamente/});
+    await row.getByRole('button',{name:'Finalizar préstamo'}).click();
+    const closing=page.getByRole('dialog',{name:'Finalizar préstamo'});
     // Verificar la etiqueta real del modal y el saldo pendiente después de devolver 1 de 2 unidades.
     const pendingUnits = closing.locator('.gdel-row').filter({hasText:'Unidades sin devolver'});
     await expect(pendingUnits.locator('.gdel-label')).toHaveText('Unidades sin devolver');
     await expect(pendingUnits.locator('.gdel-value')).toHaveText('1');
-    await closing.getByRole('button',{name:'Confirmar cierre'}).click();
+    await closing.getByRole('button',{name:'Finalizar préstamo'}).click();
     await expect(closing).toHaveCount(0);
     const details=await apiCall(request,'medicamentos_prestamo_detalle',{params:{id:loanId}});
     expect(details.prestamo.estado).toBe('CERRADO');

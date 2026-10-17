@@ -15,6 +15,7 @@ trait MedicamentosConsultas {
           COALESCE(SUM(CASE WHEN l.estado='DESCARTADO' THEN 1 ELSE 0 END),0) AS lotes_descartados,
           COALESCE(SUM(CASE WHEN l.fecha_vencimiento<? THEN l.cantidad_disponible ELSE 0 END),0) stock_vencido,
           MIN(CASE WHEN m.activo=1 AND l.estado='ACTIVO' AND l.cantidad_disponible>0 AND l.fecha_vencimiento>=? THEN l.fecha_vencimiento END) AS proximo_vencimiento,
+          MIN(CASE WHEN m.activo=1 AND l.estado<>'DESCARTADO' AND l.cantidad_disponible>0 THEN l.fecha_vencimiento END) AS vencimiento_referencia,
           MAX(CASE WHEN l.origen<>'DEVOLUCION' THEN l.fecha_ingreso END) AS ultimo_ingreso,
           (SELECT l2.origen FROM medicamentos_lotes l2 WHERE l2.id_medicamento=m.id_medicamento AND l2.origen<>'DEVOLUCION' ORDER BY l2.fecha_ingreso DESC,l2.id_lote DESC LIMIT 1) AS ultimo_origen
           FROM medicamentos m LEFT JOIN medicamentos_lotes l ON l.id_medicamento=m.id_medicamento
@@ -126,7 +127,7 @@ trait MedicamentosConsultas {
         $suffix=$where?' WHERE '.implode(' AND ',$where):'';
         $q=$db->prepare('SELECT COUNT(*)'.$from.$suffix);$q->execute($params);$total=(int)$q->fetchColumn();
         $page=min($page,max(1,(int)ceil($total/$perPage)));
-        $sql="SELECT p.*,{$nombreSocio} AS socio,{$documentoSocio} AS documento,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='COBRO_SENA'),0) AS sena_cobrada,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='DEVOLUCION_SENA'),0) AS sena_devuelta,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='SENA_DONADA'),0) AS sena_donada,(SELECT COUNT(*) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo) renglones";
+        $sql="SELECT p.*,{$nombreSocio} AS socio,{$documentoSocio} AS documento,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='COBRO_SENA'),0) AS sena_cobrada,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='DEVOLUCION_SENA'),0) AS sena_devuelta,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='SENA_DONADA'),0) AS sena_donada,(SELECT COUNT(*) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo) renglones,COALESCE((SELECT SUM(d.cantidad_entregada) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo),0) AS unidades_entregadas,COALESCE((SELECT SUM(r.cantidad) FROM medicamentos_prestamos_devoluciones r INNER JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo WHERE d.id_prestamo=p.id_prestamo AND r.estado IN ('APROBADA','PENDIENTE_REVISION')),0) AS unidades_devueltas";
         $q=$db->prepare($sql.$from.$suffix.' ORDER BY p.id_prestamo DESC LIMIT ? OFFSET ?');
         foreach($params as $index=>$param)$q->bindValue($index+1,$param,PDO::PARAM_STR);
         $q->bindValue(count($params)+1,$perPage,PDO::PARAM_INT);
