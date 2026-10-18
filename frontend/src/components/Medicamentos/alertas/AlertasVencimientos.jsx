@@ -85,9 +85,10 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
   if (!alertas.length && !error && !aDescartar) return null;
   return <>
     <aside className={`med-alertas ${desplegado ? 'med-alertas--abiertas' : 'med-alertas--minimizadas'}`} aria-label={`Alertas de ${tipo === 'LOTE' ? 'medicamentos' : 'préstamos'}`}>
-      {!desplegado ? <button className="med-alertas__tab" type="button" onClick={() => setDesplegado(true)} aria-expanded={false}>
+      {<button className="med-alertas__tab" tabIndex={desplegado ? -1 : 0} aria-hidden={desplegado} type="button" onClick={() => setDesplegado(true)} aria-expanded={false}>
         <FontAwesomeIcon icon={faBell} /> Alertas {alertas.length ? `(${alertas.length})` : ''} <FontAwesomeIcon icon={faChevronUp} />
-      </button> : <>
+      </button>}
+      <div className="med-alertas__panel" aria-hidden={!desplegado} inert={!desplegado ? "" : undefined}>
         <div className="med-alertas__head">
           <div className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>Alertas de vencimiento</strong><span>{alertas.length}</span></div>
           <button type="button" className="med-alertas__minimizar" aria-label="Ocultar tarjetas de alertas temporalmente" title="Ocultar tarjetas" onClick={() => setDesplegado(false)}><FontAwesomeIcon icon={faChevronDown} /></button>
@@ -107,7 +108,7 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
         </div> : null}
         {error ? <div className="med-alertas__error" role="alert">{error} <button type="button" onClick={() => void cargar()}>Reintentar</button></div> : null}
         <p className="med-alertas__hint">Tocá un aviso para gestionarlo. La flecha oculta las tarjetas; la X descarta solo esa alerta.</p>
-      </>}
+      </div>
     </aside>
     <ModalEliminarGlobal
       open={!!aDescartar}

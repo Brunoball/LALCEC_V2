@@ -375,13 +375,15 @@ export default function Stock() {
           <span>{section === 'ACTIVOS' ? 'No hay medicamentos activos que coincidan.' : 'No hay medicamentos dados de baja que coincidan.'}</span>
         </div> : null}
       </GlobalDivTable>
-      <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
+      <div className="med-stock-footer">
       <div className="med-expiry-legend" aria-label="Referencias de vencimiento">
         <strong>VENCIMIENTOS</strong>
         <span><i className="is-danger" />Rojo: vencido</span>
         <span><i className="is-warning" />Amarillo: vence hoy o dentro de 30 días</span>
         <span><i className="is-safe" />Verde: faltan más de 30 días</span>
         <span><i className="is-neutral" />Gris: sin vencimiento aplicable</span>
+      </div>
+      <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
       </div>
     </ModulePage>
     <AlertasVencimientos tipo="LOTE" onSelect={abrirAlertaLote} actualizacion={alertRevision} />
