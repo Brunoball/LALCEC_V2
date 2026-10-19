@@ -171,7 +171,6 @@ export default function Stock() {
       { type: 'search', label: 'Búsqueda', value: query, onChange: v => { setQuery(v);setPage(1); }, placeholder: ' ' },
     ]} primaryActionLabel="Nuevo medicamento" onPrimaryAction={() => openMed()} canCreate={write}>
       {error ? <div className="med-inline-danger">{error}</div> : null}
-      {section === 'ACTIVOS' ? <div className="med-expiry-legend"><strong>Vencimientos:</strong><span><i className="is-danger"/> Vencido o vence hoy</span><span><i className="is-warning"/> Vence en 30 días o menos</span><span><i className="is-safe"/> Más de 30 días</span><span><i className="is-neutral"/> Sin fecha</span></div> : null}
       <GlobalDivTable ariaLabel="Stock de medicamentos" loading={loading} empty={!loading && !error && !filtered.length}
         className={`med-table ${filtered.length ? 'has-bottom-pagination' : ''}`} gridClassName={section === 'ACTIVOS' ? 'med-grid--stock-simple med-grid--stock-expiry' : 'med-grid--stock-simple'}
         columns={section === 'ACTIVOS' ? ['Medicamento / droga','Laboratorio','Presentación / dosis','Stock actual','Vencimiento','Último ingreso / origen',{ label: 'Acciones', align: 'center' }]
@@ -195,7 +194,10 @@ export default function Stock() {
         </div>)}
         {!loading && !error && !filtered.length ? <div className="module-empty"><FontAwesomeIcon icon={faInbox} /><strong>Sin medicamentos para mostrar</strong><span>No hay registros que coincidan.</span></div> : null}
       </GlobalDivTable>
-      <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
+      <div className="med-stock-footer">
+        {section === 'ACTIVOS' ? <div className="med-expiry-legend"><strong>Vencimientos:</strong><span><i className="is-danger"/> Vencido o vence hoy</span><span><i className="is-warning"/> Vence en 30 días o menos</span><span><i className="is-safe"/> Más de 30 días</span><span><i className="is-neutral"/> Sin fecha</span></div> : null}
+        <GlobalPagination page={page} onPageChange={setPage} total={filtered.length} loading={loading} label="medicamentos" />
+      </div>
     </ModulePage>
 
     <CrudModal modalClassName="med-modal" open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}

@@ -735,3 +735,62 @@ html[data-theme="oscuro"] .med-alertas__item--vencido .med-alertas__contenido st
 /* Stock simple con columna de vencimiento: conservar bajas sin alterar. */
 .med-grid--stock-simple.med-grid--stock-expiry { grid-template-columns:1.27fr .8fr 1fr .64fr .92fr 1.1fr 1.13fr; min-width:1020px; }
 .med-grid--stock-simple.med-grid--stock-expiry.med-expiry-row::before { left:1px; }
+
+/* Préstamos: información principal y subtítulo en dos líneas compactas. */
+.med-table .med-grid--loans > .mov-gridCell.med-loan-person,
+.med-table .med-grid--loans > .mov-gridCell.med-loan-units {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:3px;
+  min-width:0;
+  line-height:1.25;
+}
+.med-table .med-grid--loans .med-loan-person > span,
+.med-table .med-grid--loans .med-loan-units > strong,
+.med-table .med-grid--loans .med-loan-units > span {
+  display:block;
+  min-width:0;
+  max-width:100%;
+}
+.med-table .med-grid--loans .med-loan-person > span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.med-table .med-grid--loans .med-loan-person__name {
+  font-size:12px;
+  font-weight:550;
+  color:var(--text-primary);
+}
+.med-table .med-grid--loans .med-loan-person .med-cell-secondary {
+  margin:0;
+  font-size:11px;
+  color:var(--text-secondary);
+}
+.med-table .med-grid--loans .med-loan-units > strong,
+.med-table .med-grid--loans .med-loan-units > span {
+  white-space:normal;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}
+
+/* El contenido apilado vive dentro de la celda flex global. */
+.med-table .med-grid--loans .med-loan-cell-content > * {
+  display:block;
+  min-width:0;
+  margin:0;
+  line-height:1.3;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.med-table .med-grid--loans .med-loan-cell-content .med-loan-person__name {
+  font-size:13px;
+  font-weight:550;
+}
+.med-table .med-grid--loans .med-loan-cell-content .med-cell-secondary {
+  font-size:11px;
+  color:var(--text-secondary,#64748b);
+}

@@ -186,17 +186,17 @@ export default function Prestamos() {
         {shown.map(p => {
           const { entregadas, devueltas, sinDevolver } = progresoMedicamentos(p);
           return <div className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--loans" key={p.id_prestamo} role="row">
-          <div className="mov-gridCell med-loan-person" role="cell"><span className="med-loan-person__name">{p.socio || '—'}</span><span className="med-cell-secondary">{p.documento || 'Sin documento'}</span></div>
+          <div className="mov-gridCell med-loan-person" role="cell"><div className="med-loan-cell-content" style={{ display: 'grid', gap: 3, minWidth: 0, width: '100%' }}><span className="med-loan-person__name" title={p.socio || undefined}>{p.socio || '—'}</span><span className="med-cell-secondary" title={p.documento ? `Documento: ${p.documento}` : undefined}>{p.documento ? `Documento: ${p.documento}` : 'Sin documento'}</span></div></div>
           <div className="mov-gridCell is-center med-loan-dates" role="cell">
             <strong>{fecha(p.fecha_entrega)}</strong>
             {p.fecha_devolucion_prevista ? <span className="med-cell-secondary">Prev.: {fecha(p.fecha_devolucion_prevista)}</span> : null}
           </div>
           <div className="mov-gridCell is-center" role="cell"><span className={`med-status-chip med-status-chip--${p.estado === 'ABIERTO' ? 'abierto' : p.estado === 'CERRADO' ? 'cerrado' : 'neutral'}`}>{p.estado}</span></div>
           <div className={`mov-gridCell med-loan-units${entregadas > 0 && sinDevolver === 0 ? ' med-loan-units--complete' : ''}`} role="cell">
-            {entregadas > 0 ? <>
-              <strong>{devueltas} de {entregadas} devueltas</strong>
+            {entregadas > 0 ? <div className="med-loan-cell-content" style={{ display: 'grid', gap: 3, minWidth: 0, width: '100%' }}>
+              <strong className="med-loan-units__returned">{devueltas} / {entregadas} devueltas</strong>
               <span>{sinDevolver === 0 ? 'Todo devuelto' : `${sinDevolver} ${p.estado === 'ABIERTO' ? 'por devolver' : 'sin devolver'}`}</span>
-            </> : '—'}
+            </div> : '—'}
           </div>
           <div className="mov-gridCell is-right" role="cell">{dinero(saldoFila(p))}</div>
           <div className="mov-gridCell med-actions" role="cell">
