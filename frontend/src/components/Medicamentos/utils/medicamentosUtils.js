@@ -13,6 +13,16 @@ export const num = (value) => Number(value || 0);
 export const MED_TIPOS = {
   INGRESO_DONACION:'Ingreso por donación', INGRESO_COMPRA:'Ingreso por compra', INGRESO_INICIAL:'Stock inicial',
   ENTREGA_PRESTAMO:'Préstamo', ENTREGA_DONACION:'Entrega sin cargo', SALIDA_VENTA:'Venta',
-  DEVOLUCION_A_CUARENTENA:'Devolución anterior', DEVOLUCION_LIBERADA:'Devolución registrada', DEVOLUCION_DESCARTADA:'Devolución anterior no incorporada',
-  AJUSTE_ENTRADA:'Ajuste positivo',AJUSTE_SALIDA:'Ajuste negativo',BAJA_VENCIMIENTO:'Baja por vencimiento',BAJA_DESCARTE:'Descarte',PASE_CUARENTENA:'Liberación de cuarentena',
+  DEVOLUCION_LIBERADA:'Devolución registrada',
+  AJUSTE_ENTRADA:'Ajuste positivo',AJUSTE_SALIDA:'Ajuste negativo',BAJA_DESCARTE:'Descarte',
+};
+
+// Comparación de fechas ISO en la zona horaria operativa de LALCEC.
+export const estadoVencimiento = (fechaVence) => {
+  if (!fechaVence) return 'is-neutral';
+  const hoy = fechaHoy();
+  if (fechaVence <= hoy) return 'is-danger';
+  const [a,m,d] = hoy.split('-').map(Number);
+  const limite = new Date(Date.UTC(a,m-1,d+30)).toISOString().slice(0,10);
+  return fechaVence <= limite ? 'is-warning' : 'is-safe';
 };

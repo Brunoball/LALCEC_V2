@@ -123,15 +123,6 @@
 .med-icon-action .med-action-label { display:none; }
 .med-icon-action:focus-visible { outline:2px solid #e87912;outline-offset:2px; }
 .med-form-heading { margin:16px 0 10px;padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:700;font-size:14px; }
-.med-lot-list { display:grid;gap:10px;margin-top:10px; }
-.med-lot-card { margin:0; }
-.med-lot-heading { display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px; }
-.med-lot-status { font-size:12px;color:#475569; }
-.med-lot-data { display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px; }
-.med-lot-data small { display:block;color:#64748b;font-size:11px;margin-bottom:3px; }
-.med-lot-data strong { font-size:12px;font-weight:600;overflow-wrap:anywhere; }
-.med-lot-notes { color:#475569;font-size:12px;margin:12px 0; }
-.med-lot-card .med-actions { margin-top:12px; }
 .med-history-list { display:flex;flex-direction:column; }
 .med-history-row { display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 4px;border-bottom:1px solid #e2e8f0; }
 .med-history-details { display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere; }
@@ -345,7 +336,7 @@
 .med-modal .med-inline-note + .med-fields { margin-top: 20px; }
 .med-modal .med-loan-items { gap: 16px; }
 .med-loan-items > .med-section-title { margin: 0; }
-.med-modal .med-lot-editor {
+.med-modal .med-med-editor {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -353,9 +344,9 @@
   margin: 0;
   padding: 18px 14px;
 }
-.med-lot-editor > .med-lot-editor__select { flex: 1 1 280px; width: auto; }
-.med-lot-editor > .med-lot-editor__quantity { flex: 0 1 120px; width: 120px; }
-.med-lot-editor__remove {
+.med-med-editor > .med-med-editor__select { flex: 1 1 280px; width: auto; }
+.med-med-editor > .med-med-editor__quantity { flex: 0 1 120px; width: 120px; }
+.med-med-editor__remove {
   flex: 0 0 auto;
   min-height: 38px;
   padding: 8px 12px;
@@ -371,16 +362,16 @@
 .med-modal .entity-modal__footer > .mov-btn { white-space: normal; }
 @media (max-width: 600px) {
   .med-fields__row > * { flex-basis: 100%; }
-  .med-lot-editor > .med-lot-editor__select { flex-basis: 100%; }
-  .med-lot-editor > .med-lot-editor__quantity { flex: 1 1 110px; }
-  .med-lot-editor__remove { margin-left: auto; }
+  .med-med-editor > .med-med-editor__select { flex-basis: 100%; }
+  .med-med-editor > .med-med-editor__quantity { flex: 1 1 110px; }
+  .med-med-editor__remove { margin-left: auto; }
   .med-modal:not(.med-history-modal) .entity-modal__footer > .mov-btn {
     flex: 1 1 0;
     min-width: 0;
   }
 }
 
-/* Estados de préstamos y lotes: chips compactos y tonos diferenciados. */
+/* Estados de préstamos: chips compactos y tonos diferenciados. */
 .med-status-chip {
   --med-chip-bg: #f1f5f9;
   --med-chip-fg: #475569;
@@ -426,88 +417,7 @@
   --med-chip-border: #f2c4bc;
 }
 
-/* Lotes: encabezado y datos en pequeñas tarjetas, con acento según su estado. */
-.med-lot-card {
-  --med-lot-accent: #238563;
-  --med-lot-soft: #eef8f2;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid #dee7ee;
-  border-left: 3px solid var(--med-lot-accent);
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
-}
-.med-lot-card--vencido { --med-lot-accent: #c34a3b; --med-lot-soft: #fff2ef; }
-.med-lot-card--bloqueado { --med-lot-accent: #c0801d; --med-lot-soft: #fff7e9; }
-.med-lot-card--descartado { --med-lot-accent: #8492a5; --med-lot-soft: #f3f6f9; }
-.med-lot-card .med-lot-heading {
-  align-items: flex-start;
-  gap: 16px;
-  margin: 0 0 14px;
-  padding: 15px 16px;
-  border-bottom: 1px solid #e9eff5;
-  background: linear-gradient(100deg, var(--med-lot-soft), #fff 77%);
-}
-.med-lot-heading > strong { font-size: 14px; font-weight: 550; overflow-wrap: anywhere; }
-.med-lot-heading__summary { display: flex; align-items: center; justify-content: flex-end; gap: 16px; flex-wrap: wrap; }
-.med-lot-available { display: flex; flex-direction: column; gap: 4px; }
-.med-lot-available small { color: #64748b; font-size: 11px; }
-.med-lot-available strong { font-size: 13px; font-weight: 550; }
-.med-lot-card .med-lot-status { flex: 0 1 auto; }
-.med-lot-card .med-lot-data {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 0 16px 14px;
-}
-.med-lot-data > div {
-  flex: 1 1 145px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #edf1f5;
-  border-radius: 9px;
-  background: #f8fafc;
-}
-.med-lot-data > .med-lot-data__provider { flex: 2 1 200px; }
-.med-lot-card .med-lot-data__expiry {
-  border-color: color-mix(in srgb, var(--med-lot-accent) 20%, white);
-  background: var(--med-lot-soft);
-}
-.med-lot-card .med-lot-data__expiry strong { color: var(--med-lot-accent); }
-.med-lot-card .med-lot-notes {
-  margin: 0 16px 14px;
-  padding: 10px 12px;
-  border: 1px solid #edf1f5;
-  border-radius: 9px;
-  background: #f8fafc;
-}
-.med-lot-notes small { color: #64748b; font-size: 11px; }
-.med-lot-card .med-lot-notes p { margin: 5px 0 0; overflow-wrap: anywhere; }
-.med-lot-card .med-lot-card__actions {
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
-  margin: 0 16px;
-  padding: 13px 0 16px;
-  border-top: 1px solid #edf0f3;
-}
-.med-lot-card__actions .med-action-label { display: inline; }
-.med-lot-card__actions .med-icon-action { min-height: 36px; padding: 8px 12px; font-weight: 500; }
-.med-table .mov-gridCell.med-loan-person { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; white-space: normal; }
-.med-loan-person__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.med-loan-person .med-cell-secondary { margin: 0; }
-/* Resumen real de las unidades devueltas, sin consultar cada préstamo individualmente. */
-.med-table .mov-gridCell.med-loan-units {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  white-space: normal;
-  font-variant-numeric: tabular-nums;
-}
+
 .med-loan-units strong { color: #263448; font-size: 12px; font-weight: 600; }
 .med-loan-units span { color: #9b530e; font-size: 11px; }
 .med-loan-units--complete span { color: #23745f; }
@@ -725,7 +635,6 @@ html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { backgro
 .med-table .med-expiry-row.is-warning::before { background:#e8a014; }
 .med-table .med-expiry-row.is-safe::before { background:#1b9b62; }
 .med-table .med-expiry-row.is-neutral::before { background:#94a3b8; }
-.med-lot-card--alerta { outline:2px solid #ee841d; outline-offset:2px; }
 
 /* Panel contextual sin bloquear las tablas. La solapa permanece al ocultarlo. */
 
@@ -815,3 +724,14 @@ html[data-theme="oscuro"] .med-alertas__item--vencido .med-alertas__contenido st
  .med-stock-footer .med-expiry-legend > span { white-space:normal; }
  .med-stock-footer .med-expiry-legend i { flex-shrink:0; }
 }
+/* Simplificación: sin lotes; gestión centralizada en Editar. */
+.med-grid--stock-simple { grid-template-columns: 1.35fr .85fr 1.1fr .72fr 1.55fr 1.15fr; }
+.med-reason-cell { white-space:normal;overflow-wrap:anywhere; }
+.med-simple-tabs { margin-bottom:12px; }
+.med-direction-switch { display:flex; gap:8px; padding:12px 0; }
+.med-direction-switch .med-mini.is-active { color:var(--balto-action,#b65a12); border-color:currentColor; background:#fff8ee; }
+@media(max-width:960px){.med-grid--stock-simple{min-width:850px;}}
+
+/* Stock simple con columna de vencimiento: conservar bajas sin alterar. */
+.med-grid--stock-simple.med-grid--stock-expiry { grid-template-columns:1.27fr .8fr 1fr .64fr .92fr 1.1fr 1.13fr; min-width:1020px; }
+.med-grid--stock-simple.med-grid--stock-expiry.med-expiry-row::before { left:1px; }

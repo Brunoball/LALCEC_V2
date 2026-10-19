@@ -29,10 +29,8 @@ function entryFixture(overrides = {}) {
     origen: 'DONACION',
     cantidad: 12,
     fecha_ingreso: todayIso(),
-    fecha_vencimiento: futureIso(365),
-    numero_lote: `E2E-${uniqueSuffix().slice(-12)}`,
     procedencia: `PW E2E PROVEEDOR ${uniqueSuffix()}`,
-    observaciones: 'LOTE EXCLUSIVO DE PLAYWRIGHT',
+    observaciones: 'INGRESO EXCLUSIVO DE PLAYWRIGHT',
     ...overrides,
   };
 }
@@ -97,10 +95,7 @@ async function createMedicine(request, { medicine = medFixture(), first = entryF
   });
   const id = Number(result.id_medicamento);
   expect(id).toBeGreaterThan(0);
-  const lots = await apiCall(request, 'medicamentos_lotes', { params: { id_medicamento: id } });
-  const lot = (lots.registros || []).find(l => l.numero_lote === first.numero_lote);
-  expect(lot, `No se encontró el lote inicial de ${medicine.nombre_comercial}`).toBeTruthy();
-  return { id, lotId: Number(lot.id_lote), medicine, first };
+  return { id, medicine, first };
 }
 
 async function stockOf(request, id) {
@@ -108,13 +103,6 @@ async function stockOf(request, id) {
   const row = (catalog.registros || []).find(m => Number(m.id_medicamento) === Number(id));
   expect(row, `El medicamento E2E #${id} no aparece en el catálogo`).toBeTruthy();
   return row;
-}
-
-async function lotOf(request, id) {
-  const res = await apiCall(request, 'medicamentos_lotes');
-  const lot = (res.registros || []).find(x => Number(x.id_lote) === Number(id));
-  expect(lot, `No aparece el lote E2E #${id}`).toBeTruthy();
-  return lot;
 }
 
 async function movementsOf(request, id) {
@@ -141,5 +129,5 @@ async function assertError(request, action, data, matcher = /./) {
 
 module.exports = {
   futureIso, medFixture, entryFixture, medioPago, accountingNames, requireAccountingOptions,
-  createMedicine, createBorrower, stockOf, lotOf, movementsOf, assertError,
+  createMedicine, createBorrower, stockOf, movementsOf, assertError,
 };

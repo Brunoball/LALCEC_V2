@@ -9,7 +9,7 @@ const key = () => `med-PWE2E-${randomUUID()}`;
 // Las claves son distintas para operaciones independientes. Solo se repite
 // expresamente la clave al simular pérdida de respuesta o concurrencia.
 test.describe('Medicamentos: idempotencia transaccional y protección de caja/stock', () => {
-  test('rechaza POST sin clave y no crea ingreso, lote ni movimiento', async ({ request }) => {
+  test('rechaza POST sin clave y no crea ingreso ni movimiento', async ({ request }) => {
     const fx = await createMedicine(request);
     const before = (await movementsOf(request, fx.id)).length;
     const response = await apiResult(request, 'medicamentos_ingresar', {
@@ -27,9 +27,9 @@ test.describe('Medicamentos: idempotencia transaccional y protección de caja/st
     const original={id_medicamento:fx.id,...entryFixture({cantidad:3}),_idempotency_key:key()};
     const a=await apiCall(request,'medicamentos_ingresar',{method:'POST',data:original});
     const b=await apiCall(request,'medicamentos_ingresar',{method:'POST',data:{...original}});
-    expect(b.id_lote).toBe(a.id_lote);
+    expect(b.id_movimiento).toBe(a.id_movimiento);
     expect(Number((await stockOf(request,fx.id)).stock_total)).toBe(before+3);
-    expect((await movementsOf(request,fx.id)).filter(m=>Number(m.id_lote)===Number(a.id_lote))).toHaveLength(1);
+    expect((await movementsOf(request,fx.id)).filter(m=>Number(m.id_movimiento)===Number(a.id_movimiento))).toHaveLength(1);
     const conflict=await apiResult(request,'medicamentos_ingresar',{method:'POST',data:{...original,cantidad:4}});
     expect(conflict.status).toBe(409);
     expect(conflict.body.codigo).toBe('IDEMPOTENCY_CONFLICT');
@@ -58,7 +58,7 @@ test.describe('Medicamentos: idempotencia transaccional y protección de caja/st
     const fx=await createMedicine(request,{first:entryFixture({cantidad:5})});
     const socio=await createBorrower(request);
     const medio=await medioPago(request);
-    const body={id_socio:socio.id,items:[{id_lote:fx.lotId,cantidad:2}],
+    const body={id_socio:socio.id,items:[{id_medicamento:fx.id,cantidad:2}],
       sena:'40.00',id_medio_pago:medio,observaciones:'PW E2E PRESTAMO IDEMPOTENTE',
       _idempotency_key:key()};
     const first=await apiCall(request,'medicamentos_prestar',{method:'POST',data:body});

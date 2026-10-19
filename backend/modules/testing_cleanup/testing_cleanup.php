@@ -324,7 +324,6 @@ final class TestingCleanup
             'contable_egresos' => 0,
             'contable_opciones' => 0,
             'medicamentos' => 0,
-            'medicamentos_lotes' => 0,
             'medicamentos_movimientos' => 0,
             'medicamentos_prestamos' => 0,
             'medicamentos_prestamos_detalle' => 0,
@@ -407,52 +406,42 @@ final class TestingCleanup
                 $filesToDelete = self::columnForIds($db, 'contable_egresos', 'id_egreso', 'archivo_path', $testExpenseIds);
             }
 
-            // Playwright sólo puede crear/modificar medicamentos con nombre E2E
-            // y préstamos cuyos socios y lotes son E2E (ver e2e_guard.php).
-            // Suprimir primero las referencias a caja para mantener las FK,
-            // y después eliminar los asientos compensatorios de prueba.
+            // Préstamos y movimientos vinculados a medicamentos E2E, sin lotes.
             $testMedicamentos = [];
-            $testLotes = [];
             $testMovimientosMedicamentos = [];
             $testPrestamosMedicamentos = [];
             $testDetallesMedicamentos = [];
             $testDevolucionesMedicamentos = [];
             $testSenasMedicamentos = [];
-            if (self::tableExists($db, 'medicamentos')) {
-                $testMedicamentos = self::ids($db,
+            if (self::tableExists($db,'medicamentos')) {
+                $testMedicamentos=self::ids($db,
                     "SELECT id_medicamento FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'");
             }
             if ($testMedicamentos !== []) {
-                $in = self::placeholders(count($testMedicamentos));
-                $testLotes = self::ids($db,"SELECT id_lote FROM medicamentos_lotes WHERE id_medicamento IN ({$in})",$testMedicamentos);
-            }
-            if ($testLotes !== []) {
-                $in = self::placeholders(count($testLotes));
-                $testPrestamosMedicamentos = self::ids($db,
-                    "SELECT DISTINCT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_lote IN ({$in})",$testLotes);
-                $testMovimientosMedicamentos = self::ids($db,
-                    "SELECT id_movimiento FROM medicamentos_movimientos WHERE id_lote IN ({$in})",$testLotes);
-                $linkedIncome = self::ids($db,
-                    "SELECT DISTINCT id_ingreso_contable FROM medicamentos_movimientos WHERE id_lote IN ({$in}) AND id_ingreso_contable IS NOT NULL",$testLotes);
-                $linkedExpense = self::ids($db,
-                    "SELECT DISTINCT id_egreso_contable FROM medicamentos_movimientos WHERE id_lote IN ({$in}) AND id_egreso_contable IS NOT NULL",$testLotes);
-                $testIncomeIds = array_values(array_unique(array_merge($testIncomeIds,$linkedIncome)));
-                $testExpenseIds = array_values(array_unique(array_merge($testExpenseIds,$linkedExpense)));
+                $in=self::placeholders(count($testMedicamentos));
+                $testPrestamosMedicamentos=self::ids($db,
+                    "SELECT DISTINCT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_medicamento IN ({$in})",$testMedicamentos);
+                $testMovimientosMedicamentos=self::ids($db,
+                    "SELECT id_movimiento FROM medicamentos_movimientos WHERE id_medicamento IN ({$in})",$testMedicamentos);
+                $linkedIncome=self::ids($db,
+                    "SELECT DISTINCT id_ingreso_contable FROM medicamentos_movimientos WHERE id_medicamento IN ({$in}) AND id_ingreso_contable IS NOT NULL",$testMedicamentos);
+                $linkedExpense=self::ids($db,
+                    "SELECT DISTINCT id_egreso_contable FROM medicamentos_movimientos WHERE id_medicamento IN ({$in}) AND id_egreso_contable IS NOT NULL",$testMedicamentos);
+                $testIncomeIds=array_values(array_unique(array_merge($testIncomeIds,$linkedIncome)));
+                $testExpenseIds=array_values(array_unique(array_merge($testExpenseIds,$linkedExpense)));
             }
             if ($testPrestamosMedicamentos !== []) {
                 $in=self::placeholders(count($testPrestamosMedicamentos));
-                // Fail closed si un préstamo enlazó accidentalmente un socio o
-                // un lote real: no borrar una relación no perteneciente a E2E.
+                // Fail closed si un préstamo enlazó un socio real.
                 $realSocios=self::ids($db,
                     "SELECT DISTINCT id_socio FROM medicamentos_prestamos WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
                 if (array_diff($realSocios,$testSocios)!==[]) {
                     api_error('Hay préstamos de medicamentos E2E asociados a socios reales. Se requiere revisar los datos antes de limpiar.', 'E2E_CLEANUP_INTEGRIDAD', 409);
                 }
-                $otherLots=self::ids($db,
-                    "SELECT DISTINCT id_lote FROM medicamentos_prestamos_detalle WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
-                if (array_diff($otherLots,$testLotes)!==[]) {
-                    api_error('Un préstamo E2E incluye lotes fuera de pruebas. Limpieza cancelada.', 'E2E_CLEANUP_INTEGRIDAD', 409);
-                }
+                $otherMedicines=self::ids($db,
+                    "SELECT DISTINCT id_medicamento FROM medicamentos_prestamos_detalle WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
+                if(array_diff($otherMedicines,$testMedicamentos)!==[])
+                    api_error('Un préstamo E2E incluye medicamentos reales. Limpieza cancelada.', 'E2E_CLEANUP_INTEGRIDAD', 409);
                 $testDetallesMedicamentos=self::ids($db,
                     "SELECT id_detalle_prestamo FROM medicamentos_prestamos_detalle WHERE id_prestamo IN ({$in})",$testPrestamosMedicamentos);
                 $testSenasMedicamentos=self::ids($db,
@@ -476,10 +465,10 @@ final class TestingCleanup
                 $q->execute();
                 $counts['medicamentos_solicitudes'] += $q->rowCount();
             }
-            // Descartes de lotes/préstamos E2E, ANTES de borrar sus padres.
+            // Descartes de medicamentos/préstamos E2E, ANTES de borrar sus padres.
             // Se filtran simultáneamente tipo y referencia para evitar colisiones.
             if (self::tableExists($db,'medicamentos_alertas_descartadas')) {
-                foreach ([['LOTE',$testLotes],['PRESTAMO',$testPrestamosMedicamentos]] as [$tipo,$ids]) {
+                foreach ([['MEDICAMENTO',$testMedicamentos],['PRESTAMO',$testPrestamosMedicamentos]] as [$tipo,$ids]) {
                     if ($ids === []) continue;
                     $q=$db->prepare('DELETE FROM medicamentos_alertas_descartadas WHERE tipo=? AND id_referencia IN ('
                         .self::placeholders(count($ids)).')');
@@ -492,7 +481,6 @@ final class TestingCleanup
             $counts['medicamentos_prestamos_devoluciones'] += self::deleteByIds($db,'medicamentos_prestamos_devoluciones','id_devolucion',$testDevolucionesMedicamentos);
             $counts['medicamentos_prestamos_detalle'] += self::deleteByIds($db,'medicamentos_prestamos_detalle','id_detalle_prestamo',$testDetallesMedicamentos);
             $counts['medicamentos_prestamos'] += self::deleteByIds($db,'medicamentos_prestamos','id_prestamo',$testPrestamosMedicamentos);
-            $counts['medicamentos_lotes'] += self::deleteByIds($db,'medicamentos_lotes','id_lote',$testLotes);
             $counts['medicamentos'] += self::deleteByIds($db,'medicamentos','id_medicamento',$testMedicamentos);
 
             $testPaymentIds = $testSocios === []
@@ -644,7 +632,6 @@ final class TestingCleanup
                 'contable_egresos' => $testExpenseIds,
                 'contable_opciones' => $testOptions,
                 'medicamentos' => $testMedicamentos,
-                'medicamentos_lotes' => $testLotes,
                 'medicamentos_movimientos' => $testMovimientosMedicamentos,
                 'medicamentos_prestamos' => $testPrestamosMedicamentos,
                 'medicamentos_prestamos_detalle' => $testDetallesMedicamentos,
@@ -866,8 +853,8 @@ final class TestingCleanup
                 ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_solicitudes WHERE clave LIKE 'med-PWE2E-%'") : 0,
             'medicamentos_alertas_descartadas' => self::tableExists($db,'medicamentos_alertas_descartadas')
                 ? self::scalar($db, "SELECT COUNT(*) FROM medicamentos_alertas_descartadas x WHERE
-                    (x.tipo='LOTE' AND EXISTS (SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE l.id_lote=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
-                    OR (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))") : 0,
+                    (x.tipo='MEDICAMENTO' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.id_medicamento=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+                    OR (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))") : 0,
             'contable_ingresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_ingresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %'"),
             'contable_egresos' => self::scalar($db, "SELECT COUNT(*) FROM contable_egresos WHERE detalle LIKE 'PW E2E %' OR detalle LIKE 'PW EE %' OR proveedor LIKE 'PW E2E %' OR proveedor LIKE 'PW EE %' OR categoria LIKE 'PW E2E %' OR categoria LIKE 'PW EE %' OR concepto LIKE 'PW E2E %' OR concepto LIKE 'PW EE %' OR numero_comprobante LIKE 'E2E-%'"),
             'sesiones' => self::scalar($db, "SELECT COUNT(*) FROM sis_sesiones WHERE idSesion <> ? AND user_agent LIKE 'LALCEC-PLAYWRIGHT-E2E%'", [$currentSessionId]),
@@ -941,15 +928,14 @@ final class TestingCleanup
         if (self::tableExists($db,'medicamentos')) {
             $isTestMed="(m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')";
             $queries['medicamentos']="SELECT m.* FROM medicamentos m WHERE NOT {$isTestMed} ORDER BY m.id_medicamento";
-            $queries['medicamentos_lotes']="SELECT l.* FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY l.id_lote";
-            $queries['medicamentos_movimientos']="SELECT x.* FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY x.id_movimiento";
-            $queries['medicamentos_prestamos']="SELECT p.* FROM medicamentos_prestamos p WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=p.id_prestamo AND {$isTestMed}) ORDER BY p.id_prestamo";
-            $queries['medicamentos_prestamos_detalle']="SELECT d.* FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY d.id_detalle_prestamo";
-            $queries['medicamentos_prestamos_devoluciones']="SELECT r.* FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE NOT {$isTestMed} ORDER BY r.id_devolucion";
-            $queries['medicamentos_prestamos_senas_movimientos']="SELECT sm.* FROM medicamentos_prestamos_senas_movimientos sm WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=sm.id_prestamo AND {$isTestMed}) ORDER BY sm.id_movimiento_sena";
+            $queries['medicamentos_movimientos']="SELECT x.* FROM medicamentos_movimientos x JOIN medicamentos m ON m.id_medicamento=x.id_medicamento WHERE NOT {$isTestMed} ORDER BY x.id_movimiento";
+            $queries['medicamentos_prestamos']="SELECT p.* FROM medicamentos_prestamos p WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=p.id_prestamo AND {$isTestMed}) ORDER BY p.id_prestamo";
+            $queries['medicamentos_prestamos_detalle']="SELECT d.* FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE NOT {$isTestMed} ORDER BY d.id_detalle_prestamo";
+            $queries['medicamentos_prestamos_devoluciones']="SELECT r.* FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE NOT {$isTestMed} ORDER BY r.id_devolucion";
+            $queries['medicamentos_prestamos_senas_movimientos']="SELECT sm.* FROM medicamentos_prestamos_senas_movimientos sm WHERE NOT EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=sm.id_prestamo AND {$isTestMed}) ORDER BY sm.id_movimiento_sena";
             // Los asientos de medicamentos E2E no llevan necesariamente una
             // etiqueta en el texto: se identifican por sus FK de stock/señas.
-            $testIncome = "(EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE x.id_ingreso_contable=i.id_ingreso AND {$isTestMed}) OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm JOIN medicamentos_prestamos_detalle d ON d.id_prestamo=sm.id_prestamo JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE sm.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";
+            $testIncome = "(EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos m ON m.id_medicamento=x.id_medicamento WHERE x.id_ingreso_contable=i.id_ingreso AND {$isTestMed}) OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm JOIN medicamentos_prestamos_detalle d ON d.id_prestamo=sm.id_prestamo JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE sm.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";
             $testExpense = str_replace(['i.id_ingreso','id_ingreso_contable'],['e.id_egreso','id_egreso_contable'],$testIncome);
             $queries['contable_ingresos']=preg_replace('/ ORDER BY i\\.id_ingreso$/'," AND NOT {$testIncome} ORDER BY i.id_ingreso",$queries['contable_ingresos']);
             $queries['contable_egresos']=preg_replace('/ ORDER BY e\\.id_egreso$/'," AND NOT {$testExpense} ORDER BY e.id_egreso",$queries['contable_egresos']);
@@ -962,8 +948,8 @@ final class TestingCleanup
         }
         if (self::tableExists($db, 'medicamentos_alertas_descartadas')) {
             $queries['medicamentos_alertas_descartadas'] = "SELECT x.* FROM medicamentos_alertas_descartadas x
-              WHERE NOT (x.tipo='LOTE' AND EXISTS (SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE l.id_lote=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
-                AND NOT (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos_lotes l ON l.id_lote=d.id_lote JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+              WHERE NOT (x.tipo='MEDICAMENTO' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.id_medicamento=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
+                AND NOT (x.tipo='PRESTAMO' AND EXISTS (SELECT 1 FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=x.id_referencia AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %')))
               ORDER BY x.id_alerta";
         }
         if (self::tableExists($db, 'pagos_inscripciones')) {

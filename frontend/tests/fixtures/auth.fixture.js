@@ -16,7 +16,7 @@ const test = base.test.extend({
       const action = new URL(req.url()).searchParams.get('action');
       if (!new Set(['medicamentos_guardar','medicamentos_cambiar_estado',
         'medicamentos_ingresar','medicamentos_salida','medicamentos_anular',
-        'medicamentos_revisar_lote','medicamentos_prestar','medicamentos_devolver',
+        'medicamentos_prestar','medicamentos_devolver',
         'medicamentos_cerrar','medicamentos_sena']).has(action)) return route.fallback();
       let data;
       try { data = req.postDataJSON(); } catch (_error) { return route.fallback(); }

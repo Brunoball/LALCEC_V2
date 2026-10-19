@@ -24,8 +24,8 @@ const buscarSocios = async buscar => {
     tipo: 'SOCIO', detalle: p.documento || 'SIN DOCUMENTO', id_socio: p.id_socio,
   }));
 };
-const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '0', id_medio_pago: '', observaciones: '', items: [{ id_lote: '', cantidad: '1' }] });
-const newReturn = (idDetalle = '') => ({ id_detalle_prestamo: idDetalle, cantidad: '1', numero_lote: '', fecha_vencimiento: '', observaciones: '' });
+const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '0', id_medio_pago: '', observaciones: '', items: [{ id_medicamento: '', cantidad: '1' }] });
+const newReturn = (idDetalle = '') => ({ id_detalle_prestamo: idDetalle, cantidad: '1', observaciones: '' });
 const newMoney = () => ({ monto: '', id_medio_pago: '', observaciones: '' });
 const tituloAccion = (icon, text) => <span className="med-modal-icon-title"><FontAwesomeIcon icon={icon} aria-hidden="true" />{text}</span>;
 
@@ -57,7 +57,7 @@ export default function Prestamos() {
   const loader = useCallback(() => api.prestamos({ buscar: queryAplicada, estado: status, pagina: page }), [queryAplicada, status, page]);
   const { registros, loading, error, cargar, total, pagina, por_pagina } = useMedicamentos(loader);
   const [medios, setMedios] = useState([]);
-  const [lots, setLots] = useState([]);
+  const [medicamentos, setMedicamentos] = useState([]);
   const [modal, setModal] = useState('');
   const [form, setForm] = useState(newLoan);
   const [returnForm, setReturnForm] = useState(newReturn);
@@ -68,8 +68,8 @@ export default function Prestamos() {
   const [saving, setSaving] = useState(false);
   const guardandoRef = useRef(false);
   const consultaEnCurso = useRef(false);
-  const solicitudLotes = useRef(0);
-  const [cargandoLotes, setCargandoLotes] = useState(false);
+  const solicitudMedicamentos = useRef(0);
+  const [cargandoMedicamentos, setCargandoLotes] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [alertRevision, setAlertRevision] = useState(0);
   const write = canWrite();
@@ -83,21 +83,21 @@ export default function Prestamos() {
   }, []);
 
   const openLoan = async () => {
-    const token = ++solicitudLotes.current;
-    setForm(newLoan()); setChosenPerson(null); setLots([]); setModal('prestamo');
+    const token = ++solicitudMedicamentos.current;
+    setForm(newLoan()); setChosenPerson(null); setMedicamentos([]); setModal('prestamo');
     setCargandoLotes(true);
     try {
-      const response = await api.lotes({ disponibles: 1 });
-      if (token === solicitudLotes.current) setLots(response.registros || []);
+      const response = await api.catalogo();
+      if (token === solicitudMedicamentos.current) setMedicamentos(response.registros || []);
     } catch (e) {
-      if (token === solicitudLotes.current) notify('error', e.message || 'No se pudieron consultar los lotes disponibles.');
+      if (token === solicitudMedicamentos.current) notify('error', e.message || 'No se pudieron consultar los medicamentos disponibles.');
     } finally {
-      if (token === solicitudLotes.current) setCargandoLotes(false);
+      if (token === solicitudMedicamentos.current) setCargandoLotes(false);
     }
   };
   const cerrarPrestamoNuevo = () => {
     if (guardandoRef.current) return;
-    ++solicitudLotes.current;
+    ++solicitudMedicamentos.current;
     setCargandoLotes(false);
     setModal('');
   };
@@ -133,11 +133,7 @@ export default function Prestamos() {
       const resultado = await method(payload);
       // Cerrar primero: una falla en la recarga no debe ofrecer repetir una escritura exitosa.
       setModal(''); setDetail(null);
-      if (method === api.devolver && resultado?.estado_lote === 'BLOQUEADO') {
-        notify('success', 'Devolución registrada. El lote recibido quedó BLOQUEADO porque el lote de origen no está habilitado; revisalo en Stock > Lotes y vencimientos antes de utilizarlo.');
-      } else {
-        notify('success', 'Operación registrada correctamente.');
-      }
+      notify('success', 'Operación registrada correctamente.');
       await cargar({ silencioso: true });
       setAlertRevision(v => v + 1);
     } catch (e) { notify('error', e.message || 'No se pudo registrar la operación.'); }
@@ -162,8 +158,8 @@ export default function Prestamos() {
   const cerrarConfirmacion = () => { setModal(''); setDetail(null); };
   const toastConfirmacion = (tipo, mensaje, duracion) => setFeedback({ type: tipo, message: mensaje, duration: duracion });
 
-  const available = lots.filter(l => num(l.medicamento_activo) === 1 && l.estado === 'ACTIVO' && l.fecha_vencimiento >= fechaHoy() && num(l.cantidad_disponible) > 0);
-  const opts = [op('', 'Seleccionar lote'), ...available.map(l => op(l.id_lote, `${l.nombre_comercial} · ${l.dosis} · Lote ${l.numero_lote || l.id_lote} · ${l.cantidad_disponible} disponibles`))];
+  const available = medicamentos.filter(m => num(m.activo) === 1 && num(m.stock_actual) > 0);
+  const opts = [op('', 'Seleccionar medicamento'), ...available.map(m => op(m.id_medicamento, `${m.nombre_comercial} · ${m.dosis} · ${m.stock_actual} disponibles`))];
   const paymentOpts = [op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))];
   const shown = registros;
   const pages = Math.max(1, Math.ceil((total || 0) / (por_pagina || 20)));
@@ -226,8 +222,8 @@ export default function Prestamos() {
     <AlertasVencimientos tipo="PRESTAMO" actualizacion={alertRevision}
       onSelect={aviso => openAction(aviso.id_referencia, write ? 'cierre' : 'detalle')} />
 
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoLotes} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
-      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoLotes || available.length === 0}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoMedicamentos} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
+      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoMedicamentos || available.length === 0}
       onSubmit={e => run(e, api.prestar, form)}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Socio y seña', icon: faMoneyBillTransfer }, { label: 'Medicamentos', icon: faPills }]}>
         <div><Campos>
@@ -239,13 +235,13 @@ export default function Prestamos() {
         <Campo label="Seña cobrada ($)" type="number" min="0" step="0.01" value={form.sena} onChange={v => setForm(f => ({ ...f, sena: v }))} />
         {num(form.sena) > 0 ? <Campo label="Medio de pago de seña" required value={form.id_medio_pago} options={paymentOpts} onChange={v => setForm(f => ({ ...f, id_medio_pago: v }))} /> : null}
 </Campos></div>
-        <div><Campos>        <div className="entity-field entity-field--wide med-loan-items"><MedSection icon={faPills}>Medicamentos y lotes entregados</MedSection>
-          {form.items.map((item, i) => <div className="med-box med-lot-editor" key={i}>
-            <Campo className="med-lot-editor__select" label={`Lote ${i + 1}`} required value={item.id_lote} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_lote: v } : r) }))} />
-              <Campo className="med-lot-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
-            {form.items.length > 1 ? <button className="med-mini med-mini--danger med-lot-editor__remove" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar lote</button> : null}
+        <div><Campos>        <div className="entity-field entity-field--wide med-loan-items"><MedSection icon={faPills}>Medicamentos entregados</MedSection>
+          {form.items.map((item, i) => <div className="med-box med-med-editor" key={i}>
+            <Campo className="med-med-editor__select" label={`Medicamento ${i + 1}`} required value={item.id_medicamento} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_medicamento: v } : r) }))} />
+              <Campo className="med-med-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
+            {form.items.length > 1 ? <button className="med-mini med-mini--danger med-med-editor__remove" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar medicamento</button> : null}
           </div>)}
-          <button type="button" className="med-mini med-loan-items__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_lote: '', cantidad: '1' }] }))}>+ Agregar otro lote</button>
+          <button type="button" className="med-mini med-loan-items__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '1' }] }))}>+ Agregar otro medicamento</button>
         </div>
         <Campo label="Observaciones" wide textarea value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
 </Campos>
@@ -296,7 +292,7 @@ export default function Prestamos() {
                 <strong>{r.cantidad} {num(r.cantidad) === 1 ? 'unidad devuelta' : 'unidades devueltas'}</strong>
                 <span className="med-loan-detail-date">{fecha(r.fecha_recepcion)}</span>
               </div>
-              <div className="med-loan-detail-description">Lote {r.numero_lote || r.id_lote_recibido || '—'}{r.estado === 'PENDIENTE_REVISION' ? ' · Registro anterior pendiente de incorporar' : r.estado === 'RECHAZADA' ? ' · No incorporado al stock' : r.estado_lote_recibido === 'BLOQUEADO' ? ' · Lote bloqueado (sin habilitar para uso)' : r.estado_lote_recibido === 'DESCARTADO' ? ' · Lote descartado' : ''}</div>
+              <div className="med-loan-detail-description">{r.observaciones || 'Stock devuelto al medicamento'}</div>
             </div>)}
           </div>
         </section> : null}
@@ -324,17 +320,13 @@ export default function Prestamos() {
       submitDisabled={!chosenReturn || returnMax < 1 || !Number.isInteger(Number(returnForm.cantidad)) || num(returnForm.cantidad) < 1 || num(returnForm.cantidad) > returnMax}
       onSubmit={e => run(e, api.devolver, returnForm)}>
       <MedSection icon={faRotateLeft}>Medicamentos recibidos</MedSection>
-      <p className="med-loan-muted">Registrá lo que devuelve el socio. El stock se actualiza al guardar, sin pasos de aprobación. Si el lote de origen está bloqueado, descartado o vencido, el recibido quedará bloqueado hasta su revisión.</p>
+      <p className="med-loan-muted">Registrá lo que devuelve el socio. El stock se actualiza al guardar, sin pasos de aprobación.</p>
       <Campos>
         <Campo label="Medicamento devuelto" required value={returnForm.id_detalle_prestamo}
           options={returnable.map(d => op(d.id_detalle_prestamo, `${d.nombre_comercial} · ${d.dosis} · ${Math.max(0, num(d.cantidad_entregada) - num(d.cantidad_recibida))} pendientes`))}
           onChange={v => setReturnForm(f => ({ ...f, id_detalle_prestamo: v, cantidad: '1' }))} />
         <Campo label={`Cantidad recibida (máximo ${returnMax})`} type="number" min="1" step="1" required
           value={returnForm.cantidad} onChange={v => setReturnForm(f => ({ ...f, cantidad: v }))} />
-        <Campo label="Vencimiento del medicamento recibido" type="date" min={fechaHoy()} required value={returnForm.fecha_vencimiento}
-          onChange={v => setReturnForm(f => ({ ...f, fecha_vencimiento: v }))} />
-        <Campo label="Número de lote (opcional)" value={returnForm.numero_lote}
-          onChange={v => setReturnForm(f => ({ ...f, numero_lote: v }))} />
         <Campo label="Observaciones" wide textarea value={returnForm.observaciones}
           onChange={v => setReturnForm(f => ({ ...f, observaciones: v }))} />
       </Campos>

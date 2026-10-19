@@ -18,7 +18,6 @@ describe('Medicamentos: protección de escrituras ante reintentos', () => {
     ['ingresar', 'medicamentos_ingresar'],
     ['salida', 'medicamentos_salida'],
     ['anular', 'medicamentos_anular'],
-    ['revisarLote', 'medicamentos_revisar_lote'],
     ['prestar', 'medicamentos_prestar'],
     ['devolver', 'medicamentos_devolver'],
     ['cerrar', 'medicamentos_cerrar'],
@@ -57,9 +56,9 @@ describe('Medicamentos: protección de escrituras ante reintentos', () => {
   });
 
   test('descartar alertas mantiene su API y los GET no escriben', async () => {
-    await medicamentosApi.descartarAlerta({ tipo: 'LOTE', id_referencia: 10 });
-    expect(apiPost).toHaveBeenCalledWith('medicamentos_descartar_alerta', { tipo: 'LOTE', id_referencia: 10 });
-    await medicamentosApi.alertas({ tipo: 'LOTE' });
-    expect(apiGet).toHaveBeenCalledWith('medicamentos_alertas', { tipo: 'LOTE' });
+    await medicamentosApi.descartarAlerta({ tipo: 'PRESTAMO', id_referencia: 10 });
+    expect(apiPost).toHaveBeenCalledWith('medicamentos_descartar_alerta', { tipo: 'PRESTAMO', id_referencia: 10 });
+    await medicamentosApi.alertas({ tipo: 'PRESTAMO' });
+    expect(apiGet).toHaveBeenCalledWith('medicamentos_alertas', { tipo: 'PRESTAMO' });
   });
 });

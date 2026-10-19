@@ -17,35 +17,29 @@ trait MedicamentosSoporte {
         if(!$d||$d->format('Y-m-d')!==$s) api_error('La '.$label.' no es válida.'); return $s;
     }
     private static function enum(mixed $v,array $values,string $label): string { $s=(string)$v; if(!in_array($s,$values,true)) api_error('Valor inválido para '.$label.'.'); return $s; }
-    /** Todas las operaciones de inventario bloquean medicamento ANTES que lote.
-     * Se evita así un interbloqueo entre salidas, préstamos y bajas concurrentes.
-     */
+    /** Bloqueos del inventario por medicamento, siempre en orden estable. */
     private static function bloquearMedicamentos(PDO $db,array $ids): void {
         $ids=array_values(array_unique(array_map('intval',$ids)));
         sort($ids,SORT_NUMERIC);
         $q=$db->prepare('SELECT id_medicamento FROM medicamentos WHERE id_medicamento=? FOR UPDATE');
-        foreach($ids as $id) {
-            $q->execute([$id]);
-            if(!$q->fetchColumn()) api_error('Un medicamento del préstamo ya no existe.');
-            $q->closeCursor();
-        }
+        foreach($ids as $id){$q->execute([$id]);if(!$q->fetchColumn())api_error('Medicamento inexistente.');$q->closeCursor();}
     }
-    private static function lockedLote(PDO $db,int $id,bool $usable=false): array {
-        // Consulta sin bloqueo para averiguar el padre; id_medicamento nunca se
-        // reasigna por la API. Se vuelve a verificar tras obtener ambos bloqueos.
-        $q=$db->prepare('SELECT id_medicamento FROM medicamentos_lotes WHERE id_lote=?');
-        $q->execute([$id]); $med=(int)$q->fetchColumn();
-        if($med<1) api_error('El lote ya no existe.');
-        self::bloquearMedicamentos($db,[$med]);
-        $st=$db->prepare('SELECT l.*,m.activo AS medicamento_activo,m.nombre_comercial FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento WHERE l.id_lote=? FOR UPDATE');
-        $st->execute([$id]); $r=$st->fetch();
-        if(!$r || (int)$r['id_medicamento']!==$med) api_error('El lote ya no está disponible. Volvé a cargar la pantalla.');
-        if($usable && (!(bool)$r['medicamento_activo'] || $r['estado']!=='ACTIVO' || $r['fecha_vencimiento']<date('Y-m-d'))) api_error('El medicamento o lote está inactivo, bloqueado o vencido.');
-        return $r;
+    private static function medicamentoBloqueado(PDO $db,int $id,bool $activo=true): array {
+        $q=$db->prepare('SELECT * FROM medicamentos WHERE id_medicamento=? FOR UPDATE');
+        $q->execute([$id]);$m=$q->fetch(PDO::FETCH_ASSOC);
+        if(!$m)api_error('Medicamento no encontrado.');
+        if($activo && (int)$m['activo']!==1)api_error('El medicamento está dado de baja.');
+        return $m;
     }
     private static function medio(PDO $db,mixed $id): int {
         $id=positive_id($id,'medio de pago'); $s=$db->prepare('SELECT id_medio_pago FROM medios_pago WHERE id_medio_pago=? AND activo=1 FOR UPDATE'); $s->execute([$id]);
         if(!$s->fetchColumn()) api_error('Seleccioná un medio de pago activo.'); return $id;
+    }
+    private static function exigirVigente(array $med): void {
+        $v=(string)($med['fecha_vencimiento']??'');
+        if($v==='')api_error('Indicá la fecha de vencimiento antes de entregar, vender o prestar el medicamento.','VENCIMIENTO_FALTANTE',422);
+        if($v<date('Y-m-d'))
+            api_error('El medicamento está vencido. Solo se permiten ajustes o descartes, no entregas, ventas ni préstamos.','MEDICAMENTO_VENCIDO',422);
     }
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.
@@ -110,12 +104,20 @@ trait MedicamentosSoporte {
         }
         throw new LogicException('La transacción de medicamentos no pudo completarse.');
     }
-    private static function inventory(PDO $db,int $lote,string $tipo,int $quantity,int $deltaDisp,int $deltaQuar,?int $detalle=null,?int $devolucion=null,?int $socio=null,?int $ingreso=null,?int $egreso=null,?string $nota=null): int {
-        if($quantity<=0||($deltaDisp===0&&$deltaQuar===0)) api_error('Movimiento de stock inválido.');
-        $q=$db->prepare('UPDATE medicamentos_lotes SET cantidad_disponible=cantidad_disponible+?,cantidad_cuarentena=cantidad_cuarentena+? WHERE id_lote=? AND cantidad_disponible>=? AND cantidad_cuarentena>=? AND cantidad_disponible+?<=4294967295 AND cantidad_cuarentena+?<=4294967295');
-        $q->execute([$deltaDisp,$deltaQuar,$lote,max(0,-$deltaDisp),max(0,-$deltaQuar),$deltaDisp,$deltaQuar]); if($q->rowCount()!==1) api_error('Stock insuficiente o concurrentemente modificado.');
-        $q=$db->prepare('INSERT INTO medicamentos_movimientos (id_lote,fecha_movimiento,tipo,cantidad,variacion_disponible,variacion_cuarentena,id_detalle_prestamo,id_devolucion,id_socio,id_ingreso_contable,id_egreso_contable,detalle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-        $q->execute([$lote,date('Y-m-d H:i:s'),$tipo,$quantity,$deltaDisp,$deltaQuar,$detalle,$devolucion,$socio,$ingreso,$egreso,$nota]); return (int)$db->lastInsertId();
+    /** Cada variación se aplica y registra atómicamente, nunca genera stock negativo. */
+    private static function inventory(PDO $db,int $med,string $tipo,int $quantity,int $delta,
+      ?int $detalle=null,?int $devolucion=null,?int $socio=null,?int $ingreso=null,?int $egreso=null,
+      ?string $nota=null,?string $origen=null,?string $procedencia=null,?string $costo=null,
+      ?int $anulado=null): int {
+        if($quantity<1 || $delta===0 || abs($delta)!==$quantity)api_error('Movimiento de stock inválido.');
+        $q=$db->prepare('UPDATE medicamentos SET stock_actual=stock_actual+? WHERE id_medicamento=? AND stock_actual>=? AND stock_actual+?<=4294967295');
+        $q->execute([$delta,$med,max(0,-$delta),$delta]);
+        if($q->rowCount()!==1)api_error('Stock insuficiente o concurrentemente modificado.');
+        $q=$db->prepare('INSERT INTO medicamentos_movimientos
+          (id_medicamento,fecha_movimiento,tipo,cantidad,variacion_disponible,id_detalle_prestamo,id_devolucion,id_socio,id_ingreso_contable,id_egreso_contable,detalle,origen,procedencia,costo_unitario,id_movimiento_anulado)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $q->execute([$med,date('Y-m-d H:i:s'),$tipo,$quantity,$delta,$detalle,$devolucion,$socio,$ingreso,$egreso,$nota,$origen,$procedencia,$costo,$anulado]);
+        return (int)$db->lastInsertId();
     }
     /** Asegura que los movimientos automáticos aparezcan en los filtros y
      * selectores de Contabilidad. Idempotente gracias al índice UNIQUE(tipo,nombre).

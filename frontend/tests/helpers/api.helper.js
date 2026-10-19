@@ -112,7 +112,7 @@ async function apiResult(requestContext, action, options = {}) {
   // Playwright, sin tocar las operaciones de usuarios reales.
   const transactionalMedicationActions = new Set([
     'medicamentos_guardar', 'medicamentos_cambiar_estado', 'medicamentos_ingresar',
-    'medicamentos_salida', 'medicamentos_anular', 'medicamentos_revisar_lote',
+    'medicamentos_salida', 'medicamentos_anular',
     'medicamentos_prestar', 'medicamentos_devolver', 'medicamentos_cerrar',
     'medicamentos_sena',
   ]);

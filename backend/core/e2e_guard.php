@@ -270,25 +270,17 @@ function e2e_medicamento(PDO $db, int $id): bool
          AND (nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %') LIMIT 1", [$id]);
 }
 
-function e2e_lote(PDO $db, int $id): bool
-{
-    return e2e_exists($db,
-        "SELECT 1 FROM medicamentos_lotes l JOIN medicamentos m ON m.id_medicamento=l.id_medicamento
-         WHERE l.id_lote=? AND (m.nombre_comercial LIKE 'PW E2E %' OR m.nombre_comercial LIKE 'PW EE %') LIMIT 1", [$id]);
-}
-
 function e2e_prestamo(PDO $db, int $id): bool
 {
-    $s=$db->prepare('SELECT id_socio FROM medicamentos_prestamos WHERE id_prestamo=?');
-    $s->execute([$id]); $socio=$s->fetchColumn();
-    if ($socio===false || !e2e_socio($db,(int)$socio)) return false;
+    $q=$db->prepare('SELECT id_socio FROM medicamentos_prestamos WHERE id_prestamo=?');
+    $q->execute([$id]);$socio=$q->fetchColumn();
+    if($socio===false || !e2e_socio($db,(int)$socio)) return false;
     return !e2e_exists($db,
         "SELECT 1 FROM medicamentos_prestamos_detalle d
-         JOIN medicamentos_lotes l ON l.id_lote=d.id_lote
-         JOIN medicamentos m ON m.id_medicamento=l.id_medicamento
+         JOIN medicamentos m ON m.id_medicamento=d.id_medicamento
          WHERE d.id_prestamo=?
-         AND m.nombre_comercial NOT LIKE 'PW E2E %'
-         AND m.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1", [$id]);
+           AND m.nombre_comercial NOT LIKE 'PW E2E %'
+           AND m.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1",[$id]);
 }
 
 function e2e_detalle_medicamento(PDO $db,int $id): bool
@@ -298,19 +290,17 @@ function e2e_detalle_medicamento(PDO $db,int $id): bool
     return $loan!==false && e2e_prestamo($db,(int)$loan);
 }
 
-function e2e_movimiento_medicamento(PDO $db, int $id): bool
+function e2e_movimiento_medicamento(PDO $db,int $id): bool
 {
-    $s=$db->prepare('SELECT m.id_lote,m.tipo,m.id_ingreso_contable FROM medicamentos_movimientos m WHERE m.id_movimiento=?');
-    $s->execute([$id]);$mov=$s->fetch();
-    if (!$mov || !e2e_lote($db,(int)$mov['id_lote'])) return false;
-    if ($mov['tipo']==='SALIDA_VENTA' && $mov['id_ingreso_contable']!==null) {
-        // Una venta puede contener diversos medicamentos en un único asiento.
+    $q=$db->prepare('SELECT id_medicamento,tipo,id_ingreso_contable FROM medicamentos_movimientos WHERE id_movimiento=?');
+    $q->execute([$id]);$mov=$q->fetch();
+    if(!$mov || !e2e_medicamento($db,(int)$mov['id_medicamento'])) return false;
+    if($mov['tipo']==='SALIDA_VENTA' && $mov['id_ingreso_contable']!==null){
         return !e2e_exists($db,
-            "SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos_lotes l ON l.id_lote=x.id_lote
-             JOIN medicamentos md ON md.id_medicamento=l.id_medicamento
+            "SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos md ON md.id_medicamento=x.id_medicamento
              WHERE x.id_ingreso_contable=? AND x.tipo='SALIDA_VENTA'
-             AND md.nombre_comercial NOT LIKE 'PW E2E %'
-             AND md.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1", [$mov['id_ingreso_contable']]);
+               AND md.nombre_comercial NOT LIKE 'PW E2E %'
+               AND md.nombre_comercial NOT LIKE 'PW EE %' LIMIT 1",[$mov['id_ingreso_contable']]);
     }
     return true;
 }
@@ -386,12 +376,12 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
         case 'medicamentos_descartar_alerta': {
             $tipo=strtoupper(trim((string)($body['tipo']??'')));
             $id=$body['id_referencia']??null;
-            if ($tipo==='LOTE') {
-                e2e_require_target_or_missing($db,$action,$id,'e2e_lote','medicamentos_lotes','id_lote');
+            if ($tipo==='MEDICAMENTO') {
+                e2e_require_target_or_missing($db,$action,$id,'e2e_medicamento','medicamentos','id_medicamento');
             } elseif ($tipo==='PRESTAMO') {
                 e2e_require_target_or_missing($db,$action,$id,'e2e_prestamo','medicamentos_prestamos','id_prestamo');
             } else {
-                e2e_scope_error($action,'El tipo de alerta E2E debe ser LOTE o PRESTAMO.');
+                e2e_scope_error($action,'El tipo de alerta E2E debe ser MEDICAMENTO o PRESTAMO.');
             }
             return;
         }
@@ -414,29 +404,21 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
             e2e_require_target_or_missing($db,$action,$body['id_medicamento']??null,
                 'e2e_medicamento','medicamentos','id_medicamento');
             return;
-        case 'medicamentos_salida': {
-            $med=e2e_positive_int($body['id_medicamento']??null);
-            $lot=e2e_positive_int($body['id_lote']??null);
-            if ($med!==null) e2e_require_target_or_missing($db,$action,$med,'e2e_medicamento','medicamentos','id_medicamento');
-            if ($lot!==null) e2e_require_target_or_missing($db,$action,$lot,'e2e_lote','medicamentos_lotes','id_lote');
-            if ($med===null && $lot===null) e2e_scope_error($action,'Elegí un lote o medicamento exclusivo de E2E.');
-            return;
-        }
-        case 'medicamentos_revisar_lote':
-            e2e_require_target_or_missing($db,$action,$body['id_lote']??null,
-                'e2e_lote','medicamentos_lotes','id_lote');
+        case 'medicamentos_salida':
+            e2e_require_target_or_missing($db,$action,$body['id_medicamento']??null,
+                'e2e_medicamento','medicamentos','id_medicamento');
             return;
         case 'medicamentos_prestar': {
             $socio=e2e_positive_int($body['id_socio']??null);
             if ($socio===null || !e2e_socio($db,$socio))
                 e2e_scope_error($action,'El préstamo requiere un socio E2E.');
             if (!is_array($body['items']??null) || $body['items']===[])
-                e2e_scope_error($action,'El préstamo requiere lotes E2E.');
+                e2e_scope_error($action,'El préstamo requiere medicamentos E2E.');
             foreach ($body['items'] as $item) {
                 if (!is_array($item)) e2e_scope_error($action,'Detalle de préstamo inválido.');
-                $lot=e2e_positive_int($item['id_lote']??null);
-                if ($lot===null || !e2e_lote($db,$lot))
-                    e2e_scope_error($action,'El préstamo incluye un lote que no es E2E.');
+                $med=e2e_positive_int($item['id_medicamento']??null);
+                if ($med===null || !e2e_medicamento($db,$med))
+                    e2e_scope_error($action,'El préstamo incluye un medicamento que no es E2E.');
             }
             return;
         }

@@ -18,6 +18,7 @@ const mensajeDias = valor => {
  * persiste por usuario y fecha en la base de datos.
  */
 export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 }) {
+  const esMedicamento = tipo === 'MEDICAMENTO';
   const [alertas, setAlertas] = useState([]);
   const [desplegado, setDesplegado] = useState(true);
   const [aDescartar, setADescartar] = useState(null);
@@ -84,22 +85,22 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
 
   if (!alertas.length && !error && !aDescartar) return null;
   return <>
-    <aside className={`med-alertas ${desplegado ? 'med-alertas--abiertas' : 'med-alertas--minimizadas'}`} aria-label={`Alertas de ${tipo === 'LOTE' ? 'medicamentos' : 'préstamos'}`}>
+    <aside className={`med-alertas ${desplegado ? 'med-alertas--abiertas' : 'med-alertas--minimizadas'}`} aria-label={esMedicamento ? "Alertas de vencimiento de medicamentos" : "Alertas de préstamos"}>
       {<button className="med-alertas__tab" tabIndex={desplegado ? -1 : 0} aria-hidden={desplegado} type="button" onClick={() => setDesplegado(true)} aria-expanded={false}>
         <FontAwesomeIcon icon={faBell} /> Alertas {alertas.length ? `(${alertas.length})` : ''} <FontAwesomeIcon icon={faChevronUp} />
       </button>}
       <div className="med-alertas__panel" aria-hidden={!desplegado} inert={!desplegado ? "" : undefined}>
         <div className="med-alertas__head">
-          <div className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>Alertas de vencimiento</strong><span>{alertas.length}</span></div>
+          <div className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>{esMedicamento ? "Alertas de vencimiento" : "Alertas de devolución"}</strong><span>{alertas.length}</span></div>
           <button type="button" className="med-alertas__minimizar" aria-label="Ocultar tarjetas de alertas temporalmente" title="Ocultar tarjetas" onClick={() => setDesplegado(false)}><FontAwesomeIcon icon={faChevronDown} /></button>
         </div>
         {alertas.length ? <div className="med-alertas__scroll">
           {alertas.map(a => <div className={`med-alertas__item ${Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo'}`} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
             <button type="button" className="med-alertas__contenido" onClick={() => void verAlerta(a)}
-              title={tipo === 'LOTE' ? 'Abrir lotes y vencimientos' : 'Abrir préstamo para gestionarlo'}>
-              <span className="med-alertas__nombre">{a.titulo}{a.tipo === 'LOTE' ? ` · lote ${a.numero_lote || `#${a.id_referencia}`}` : ''}</span>
+              title={esMedicamento ? "Abrir medicamento para gestionarlo" : "Abrir préstamo para gestionarlo"}>
+              <span className="med-alertas__nombre">{a.titulo}</span>
               <strong>{mensajeDias(a.dias_restantes)}</strong>
-              <small>{fecha(a.fecha_objetivo)} · {a.tipo === 'LOTE' ? `${a.cantidad_disponible} unidades · Ver lote` : 'Ver / finalizar préstamo'}</small>
+              <small>{fecha(a.fecha_objetivo)} · {esMedicamento ? "Ver / editar medicamento" : "Ver / finalizar préstamo"}</small>
             </button>
             <button type="button" className="med-alertas__descartar" aria-label={`Descartar permanentemente alerta de ${a.titulo}`} title="Descartar esta alerta (requiere confirmación)" onClick={() => setADescartar(a)}>
               <FontAwesomeIcon icon={faXmark} />
@@ -116,8 +117,8 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
       tone="danger"
       icon={faTriangleExclamation}
       title="Descartar alerta definitivamente"
-      message="¿Querés dejar de ver este aviso de vencimiento? No volverá a mostrarse para este usuario y esta fecha."
-      warning="No elimina el medicamento ni cierra el préstamo; solo descarta el recordatorio. Si se registra una nueva fecha de vencimiento, aparecerá una alerta nueva."
+      message={esMedicamento ? "¿Querés dejar de ver este aviso de vencimiento?" : "¿Querés dejar de ver este aviso de devolución?"}
+      warning={esMedicamento ? "No modifica el medicamento ni su stock. Solo descarta la alerta para esta fecha y usuario; si se cambia la fecha, puede volver a aparecer." : "No modifica el préstamo, solo descarta el recordatorio. Si cambia la fecha prevista, puede volver a aparecer."}
       details={aDescartar ? [
         { label: 'Registro', value: aDescartar.titulo },
         { label: 'Fecha', value: fecha(aDescartar.fecha_objetivo) },
