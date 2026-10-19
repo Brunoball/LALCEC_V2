@@ -1,3 +1,4 @@
+import useWideSelectWidths from './components/Global/hooks/useWideSelectWidths';
 import React, { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Inicio from "./components/Login/Inicio";
@@ -82,6 +83,7 @@ function ProtectedPage({ children }) {
 }
 
 export default function App() {
+  useWideSelectWidths();
   const [, setAuthRevision] = useState(0);
 
   useEffect(() => {

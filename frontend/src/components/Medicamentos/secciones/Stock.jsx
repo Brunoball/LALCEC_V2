@@ -200,15 +200,17 @@ export default function Stock() {
       </div>
     </ModulePage>
 
-    <CrudModal modalClassName="med-modal" open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}
+    <CrudModal modalClassName={`med-modal ${med.id_medicamento ? 'med-stock-edit-modal' : ''}`} open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}
       title={med.id_medicamento ? `Editar medicamento · ${selected?.nombre_comercial || ''}` : 'Nuevo medicamento'}
       subtitle={med.id_medicamento ? 'Los datos y los movimientos de stock se gestionan desde Editar.' : 'Completá los datos. El stock inicial es opcional.'}
       onClose={close} submitLabel={tab==='DATOS' ? 'Guardar medicamento' : 'Registrar movimiento'}
       onSubmit={run} submitDisabled={tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (!entrada && num(movement.cantidad) > num(selected?.stock_actual)))}>
+      <div className={med.id_medicamento ? 'med-tabbed-form' : undefined}>
       {med.id_medicamento ? <div className="entity-form-tabs med-simple-tabs" role="tablist" aria-label="Editar medicamento">
         <button type="button" className={`entity-form-tab ${tab==='DATOS'?'is-active':''}`} role="tab" aria-selected={tab==='DATOS'} disabled={saving} onClick={() => setTab('DATOS')}><FontAwesomeIcon icon={faPills} /> Datos</button>
         <button type="button" className={`entity-form-tab ${tab==='STOCK'?'is-active':''}`} role="tab" aria-selected={tab==='STOCK'} disabled={saving || num(selected?.activo) !== 1} onClick={() => setTab('STOCK')}><FontAwesomeIcon icon={faBoxesStacked} /> Stock</button>
       </div> : null}
+      <div className={med.id_medicamento ? 'med-tab-panel' : undefined}>
       {tab === 'DATOS' ? <>
         <Campos>
           <Campo label="Nombre comercial" required value={med.nombre_comercial} onChange={v => updateMed('nombre_comercial',v)} />
@@ -244,6 +246,8 @@ export default function Stock() {
         {fieldsMovement}
         {!entrada && num(movement.cantidad)>num(selected?.stock_actual) ? <p className="med-inline-danger">No hay stock suficiente.</p> : null}
       </>}
+      </div>
+      </div>
     </CrudModal>
 
     <CrudModal modalClassName="med-modal med-history-modal" open={modal==='historial'} wide hideSubmit closeOnBackdrop={false} loading={detailLoading}
@@ -263,11 +267,11 @@ export default function Stock() {
       </div>)}</div> : <div className="med-empty"><FontAwesomeIcon icon={faInbox} /><span>No hay movimientos registrados.</span></div>}
     </CrudModal>
 
-    <ModalEliminarGlobal open={confirmation==='estado'} operacion={num(selected?.activo)===1?'baja':'alta'} row={selected}
+    <ModalEliminarGlobal modalClassName="med-stock-status-modal" open={confirmation==='estado'} operacion={num(selected?.activo)===1?'baja':'alta'} row={selected}
       title={num(selected?.activo)===1?'Dar de baja medicamento':'Reactivar medicamento'}
       message={num(selected?.activo)===1?'Este medicamento no podrá utilizarse en nuevos movimientos ni préstamos hasta reactivarlo.':'El medicamento volverá a estar disponible.'}
       details={selected ? [{label:'Medicamento',value:selected.nombre_comercial},{label:'Stock actual',value:selected.stock_actual}] : []}
-      showReason={num(selected?.activo)===1} reasonRequired={num(selected?.activo)===1} reasonLabel="Motivo de baja" reasonMaxLength={500}
+      showReason={num(selected?.activo)===1} reasonRequired={num(selected?.activo)===1} reasonLabel="Motivo de baja" reasonPlaceholder=" " reasonMaxLength={500}
       confirmLabel={num(selected?.activo)===1?'Dar de baja':'Reactivar'} loading={saving}
       onClose={closeConfirmation}
       onConfirm={({ motivo }) => confirmarOperacion(api.cambiarEstado, { id_medicamento:selected?.id_medicamento, activo:num(selected?.activo)===1?0:1, motivo_baja:motivo })}

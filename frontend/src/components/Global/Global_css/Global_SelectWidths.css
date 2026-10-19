@@ -1,0 +1,44 @@
+/* En escritorio amplio, la opción más larga define el ancho IDEAL del select.
+   No es un tamaño mínimo: si el sidebar se expande y el contenido se estrecha,
+   el campo y su contenedor pueden contraerse sin desbordarse. Por debajo de
+   1500 px CSS se preservan las reglas responsive originales del sistema. */
+@media (min-width: 1500px) {
+  html[data-wide-selects-active] body [data-wide-select-width] {
+    box-sizing: border-box;
+    width: var(--global-select-option-width) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex-grow: 0 !important;
+    flex-shrink: 1 !important;
+    flex-basis: auto !important;
+    justify-self: start;
+  }
+
+  /* El select se adapta al espacio que le dé su padre, sin perder de vista
+     el ancho natural calculado por las opciones del desplegable. */
+  html[data-wide-selects-active] body select[data-wide-select-width] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* El mismo límite flexible se aplica al select y al label calculados por
+     el hook, para que nunca queden con anchos distintos. */
+
+  /* Cuotas: las columnas ya no son rígidas (max-content). Usan el ancho
+     ideal de las opciones mientras haya espacio, pero pueden cederle lugar
+     al sidebar y al buscador cuando el área visible se reduce. */
+  html[data-wide-selects-active] body .cuotas-head-filters:not(.cuotas-head-filters--balance) {
+    grid-template-columns:
+      max-content
+      minmax(128px, 250px)
+      minmax(72px, max-content)
+      minmax(82px, max-content)
+      minmax(100px, max-content);
+  }
+
+  html[data-wide-selects-active] body .cuotas-head-filters .cuotas-year-filter,
+  html[data-wide-selects-active] body .cuotas-head-filters .cuotas-month-filter,
+  html[data-wide-selects-active] body .cuotas-head-filters .cuotas-payment-method-filter {
+    justify-self: start;
+  }
+}
