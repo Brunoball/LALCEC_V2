@@ -171,6 +171,12 @@ function e2e_contable_option(PDO $db, int $id): bool
     );
 }
 
+function e2e_medicamento_option(PDO $db, int $id): bool
+{
+    return e2e_exists($db,
+        "SELECT 1 FROM medicamentos_opciones WHERE id_opcion=? AND (nombre LIKE 'PW E2E %' OR nombre LIKE 'PW EE %') LIMIT 1", [$id]);
+}
+
 function e2e_income(PDO $db, int $id): bool
 {
     return e2e_exists(
@@ -373,6 +379,16 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
     if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture', 'e2e_medicamentos_contable_fixture'], true)) return;
 
     switch ($action) {
+        case 'medicamentos_opcion_guardar': {
+            $id=e2e_positive_int($body['id_opcion']??null);
+            if ($id!==null) e2e_require_target_or_missing($db,$action,$id,'e2e_medicamento_option','medicamentos_opciones','id_opcion');
+            if (!e2e_marker_text($body['nombre']??'')) e2e_scope_error($action,'La opción debe mantener el nombre E2E.');
+            return;
+        }
+        case 'medicamentos_opcion_estado':
+        case 'medicamentos_opcion_eliminar':
+            e2e_require_target_or_missing($db,$action,$body['id_opcion']??null,'e2e_medicamento_option','medicamentos_opciones','id_opcion');
+            return;
         case 'medicamentos_descartar_alerta': {
             $tipo=strtoupper(trim((string)($body['tipo']??'')));
             $id=$body['id_referencia']??null;

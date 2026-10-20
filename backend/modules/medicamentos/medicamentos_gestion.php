@@ -9,6 +9,8 @@ trait MedicamentosGestion {
             $fields=[self::req($b,'droga'),self::req($b,'nombre_comercial'),self::str($b,'laboratorio',160),self::req($b,'presentacion',100),self::req($b,'dosis',100),self::req($b,'unidad_stock',40),self::str($b,'observaciones',3000)];
             // Un vencimiento por medicamento (no por lote). El cambio de fecha afecta
             // a todo el stock existente, y queda trazado por la auditoría general.
+            // Los selectores editables provienen de la tabla centralizada.
+            require_once __DIR__ . '/medicamentos_opciones.php';
             $vencimiento=isset($b['fecha_vencimiento']) && trim((string)$b['fecha_vencimiento'])!==''
                 ? self::date($b['fecha_vencimiento'],'fecha de vencimiento') : null;
             if($id>0){
@@ -20,12 +22,16 @@ trait MedicamentosGestion {
                     foreach(['droga'=>0,'presentacion'=>3,'dosis'=>4,'unidad_stock'=>5] as $campo=>$pos)
                         if((string)$before[$campo]!==$fields[$pos])api_error('No podés cambiar droga, presentación, dosis o unidad con movimientos históricos. Creá un medicamento nuevo para otra presentación.');
                 }
+                MedicamentosOpciones::validar($db,'PRESENTACION',$fields[3],(string)$before['presentacion']);
+                MedicamentosOpciones::validar($db,'UNIDAD_STOCK',$fields[5],(string)$before['unidad_stock']);
                 if($vencimiento===null && (int)$before['stock_actual']>0)
                     api_error('Indicá la fecha de vencimiento del stock actual.');
                 $db->prepare('UPDATE medicamentos SET droga=?,nombre_comercial=?,laboratorio=?,presentacion=?,dosis=?,unidad_stock=?,observaciones=?,fecha_vencimiento=? WHERE id_medicamento=?')
                     ->execute([...$fields,$vencimiento,$id]);
             } else {
-                $before=null;
+                 $before=null;
+                MedicamentosOpciones::validar($db,'PRESENTACION',$fields[3]);
+                MedicamentosOpciones::validar($db,'UNIDAD_STOCK',$fields[5]);
                 if((int)($b['ingreso_inicial']['cantidad']??0)>0 && $vencimiento===null)
                     api_error('Indicá la fecha de vencimiento del medicamento para cargar stock.');
                 $db->prepare('INSERT INTO medicamentos (droga,nombre_comercial,laboratorio,presentacion,dosis,unidad_stock,observaciones,fecha_vencimiento) VALUES (?,?,?,?,?,?,?,?)')
@@ -99,12 +105,24 @@ trait MedicamentosGestion {
         return ['id_movimiento'=>$mov];
     }
 
+    /**
+     * Control de vencimiento de entregas, ventas y préstamos.
+     * Declarado en Gestión para que Intelephense resuelva ambas llamadas
+     * sin depender del análisis de métodos importados desde otro trait.
+     */
+    private static function verificarVigenciaParaEntrega(array $med): void {
+        $v=(string)($med['fecha_vencimiento']??'');
+        if($v==='')api_error('Indicá la fecha de vencimiento antes de entregar, vender o prestar el medicamento.','VENCIMIENTO_FALTANTE',422);
+        if($v<date('Y-m-d'))
+            api_error('El medicamento está vencido. Solo se permiten ajustes o descartes, no entregas, ventas ni préstamos.','MEDICAMENTO_VENCIDO',422);
+    }
+
     protected static function salidaStock(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_medicamento']??null,'medicamento');
             $m=self::medicamentoBloqueado($db,$id);
             $tipo=self::enum($b['tipo']??'',['ENTREGA_DONACION','SALIDA_VENTA','AJUSTE_SALIDA','BAJA_DESCARTE'],'tipo de salida');
-            if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::exigirVigente($m);
+            if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::verificarVigenciaParaEntrega($m);
             $cantidad=self::qty($b['cantidad']??null);
             $nota=self::str($b,'detalle',500);
             $ingreso=null;
@@ -137,7 +155,7 @@ trait MedicamentosGestion {
             $q->execute([$socio]);if($q->fetchColumn()!=='ACTIVO')api_error('Elegí un socio activo.');
             foreach($parsed as $id=>$cantidad){
                 $m=self::medicamentoBloqueado($db,$id);
-                self::exigirVigente($m);
+                self::verificarVigenciaParaEntrega($m);
                 if((int)$m['stock_actual']<$cantidad)api_error('Stock insuficiente de '.$m['nombre_comercial'].'.');
             }
             $vence=($b['fecha_devolucion_prevista']??'')!==''?self::date($b['fecha_devolucion_prevista'],'fecha prevista'):null;

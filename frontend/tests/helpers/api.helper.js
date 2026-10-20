@@ -106,7 +106,7 @@ async function apiResult(requestContext, action, options = {}) {
     headers,
     failOnStatusCode: false,
   };
-  // Solo las diez escrituras transaccionales necesitan clave. Cada invocación
+  // Solo las nueve escrituras transaccionales necesitan clave. Cada invocación
   // independiente genera una clave E2E; los reintentos explícitos conservan la suya.
   // El prefijo controlado permite que el backend limpie únicamente solicitudes
   // Playwright, sin tocar las operaciones de usuarios reales.

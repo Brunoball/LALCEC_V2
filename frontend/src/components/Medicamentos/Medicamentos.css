@@ -841,3 +841,7 @@ html[data-theme="oscuro"] .med-alertas__item--vencido .med-alertas__contenido st
   background:var(--surface-color,#fff);
   color:var(--text-primary,#111827);
 }
+
+/* Alta rápida de opciones desde el formulario de datos. */
+.med-quick-option-modal { max-width: 450px; }
+.med-quick-option-modal .med-fields { margin: 10px 0; }

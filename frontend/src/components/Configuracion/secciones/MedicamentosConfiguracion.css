@@ -1,0 +1,6 @@
+.med-config { margin-top: 12px; }
+.med-config__help { margin: 0; padding: 12px 18px; color: var(--mov-muted,#64748b); font-size: 12px; line-height: 1.5; }
+.med-config__empty { padding: 32px 16px; text-align: center; color: #64748b; font-size: 13px; }
+.med-config__table .config-contableTable__body { min-height: 110px; }
+.med-config__modal { max-width: 480px; }
+.med-config__modal .entity-form { margin-top: 8px; }

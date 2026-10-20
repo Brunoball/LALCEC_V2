@@ -9,6 +9,7 @@ import {
   faFileInvoiceDollar,
   faGear,
   faMoneyBillTransfer,
+  faCapsules,
   faPen,
   faPowerOff,
   faSliders,
@@ -132,6 +133,16 @@ function ConfigurationHome() {
       path: "/configuracion/catalogos",
     },
     {
+      id: "medicamentos",
+      title: "Medicamentos",
+      description: "Administrá las opciones de presentación y unidad de stock que aparecen en Medicamentos.",
+      icon: faCapsules,
+      status: "2 pestañas",
+      area: "Medicamentos",
+      detail: "Presentaciones y unidades de stock",
+      path: "/configuracion/medicamentos",
+    },
+    {
       id: "contable",
       title: "Contable",
       description:
@@ -155,7 +166,7 @@ function ConfigurationHome() {
           <strong>Administración y configuración general</strong>
           <p>
             Gestioná usuarios, roles y los catálogos vinculados con socios,
-            pagos y Contabilidad.
+            pagos, Medicamentos y Contabilidad.
           </p>
         </div>
       </header>

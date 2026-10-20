@@ -1,0 +1,136 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowLeft, faCapsules, faBoxOpen, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { ModulePage } from '../../Global/ModulePage';
+import CrudModal from '../../Global/Modales/CrudModal';
+import ModalEliminarGlobal from '../../Global/Modales/ModalEliminarGlobal';
+import ModuleFeedback from '../../Global/ModuleFeedback';
+import { FloatingField } from '../../Global/Formularios/TabbedForm';
+import { canWrite } from '../../_shared/auth/session';
+import { medicamentosApi } from '../../Medicamentos/api/medicamentosApi';
+import '../configuracion.css';
+import './ContableConfiguracion.css';
+import './MedicamentosConfiguracion.css';
+
+const LISTAS = {
+  PRESENTACION: { nombre: 'Presentaciones', singular: 'presentación', icon: faCapsules, ayuda: 'Comprimidos, jarabe, cápsulas, gotas, etcétera.' },
+  UNIDAD_STOCK: { nombre: 'Unidades de stock', singular: 'unidad de stock', icon: faBoxOpen, ayuda: 'Caja, frasco, ampolla, unidad, blíster, etcétera.' },
+};
+const MAYUS = v => String(v || '').toLocaleUpperCase('es-AR');
+
+export default function MedicamentosConfiguracion() {
+  const navigate = useNavigate();
+  const editable = canWrite();
+  const [tipo, setTipo] = useState('PRESENTACION');
+  const [datos, setDatos] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [form, setForm] = useState(null);
+  const [estado, setEstado] = useState(null);
+  const [eliminar, setEliminar] = useState(null);
+  const meta = LISTAS[tipo];
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await medicamentosApi.opciones();
+      setDatos(r.registros || []);
+    } catch (e) { setFeedback({ type: 'error', message: e.message }); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void cargar(); }, [cargar]);
+  const opciones = useMemo(() => datos.filter(x => x.tipo === tipo && MAYUS(x.nombre).includes(MAYUS(busqueda))), [datos, tipo, busqueda]);
+  const avisar = (type, message) => setFeedback({ type, message });
+
+  const guardar = async e => {
+    e.preventDefault();
+    if (!form || saving) return;
+    setSaving(true);
+    try {
+      const r = await medicamentosApi.guardarOpcion({ tipo: form.tipo, id_opcion: form.id_opcion || null, nombre: MAYUS(form.nombre.trim()) });
+      setForm(null);
+      avisar('success', r.mensaje || 'Opción guardada.');
+      await cargar();
+    } catch (e) { avisar('error', e.message); }
+    finally { setSaving(false); }
+  };
+  const aplicarEstado = async () => {
+    setSaving(true);
+    try {
+      const r = await medicamentosApi.estadoOpcion(estado.id_opcion, Number(estado.activo) === 1 ? 0 : 1);
+      await cargar();
+      return r;
+    } finally { setSaving(false); }
+  };
+  const eliminarOpcion = async () => {
+    setSaving(true);
+    try {
+      const r = await medicamentosApi.eliminarOpcion(eliminar.id_opcion);
+      await cargar();
+      return r;
+    } finally { setSaving(false); }
+  };
+  const toast = (type, message) => avisar(type, message);
+
+  return <>
+    <ModulePage
+      title="Configuración de medicamentos"
+      description="Administrá las opciones que aparecen en los selectores de los datos de medicamentos."
+      className="config-sectionPage"
+      filters={[{ key: 'med-opciones-search', type: 'search', label: 'Buscar', placeholder: '', value: busqueda, onChange: setBusqueda }]}
+      primaryActionLabel={`Nueva ${meta.singular}`}
+      onPrimaryAction={editable ? () => { setFeedback(null); setForm({ tipo, nombre: '', id_opcion: '' }); } : undefined}
+      canCreate={editable}
+      secondaryActions={[{ key: 'volver', label: 'Volver a configuración', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
+      notice={!editable ? 'Tu usuario solo tiene permiso de consulta.' : null}>
+      <ModuleFeedback type={feedback?.type || 'error'} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
+      <section className="config-detailPanel config-detailPanel--list config-contablePanel med-config">
+        <div className="config-contableToolbar">
+          <div className="config-contableTabs" role="tablist" aria-label="Selectores de medicamentos">
+            {Object.entries(LISTAS).map(([clave, lista]) => <button key={clave} type="button" role="tab" aria-selected={tipo === clave} className={tipo === clave ? 'is-active' : ''}
+              onClick={() => { setTipo(clave); setBusqueda(''); setFeedback(null); }}>
+              <FontAwesomeIcon icon={lista.icon} /><span>{lista.nombre}</span>
+            </button>)}
+          </div>
+        </div>
+        <p className="med-config__help">{meta.ayuda} Las opciones dadas de baja dejan de ofrecerse para nuevos medicamentos. Los registros anteriores conservan su valor.</p>
+        <div className="config-contableTable med-config__table">
+          <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
+          <div className="config-contableTable__body">
+            {loading ? <div className="med-config__empty">Cargando opciones...</div> : opciones.length === 0 ? <div className="med-config__empty">No hay opciones para mostrar.</div> : opciones.map(item => <article key={item.id_opcion} className={`config-contableTable__row ${Number(item.activo) === 1 ? '' : 'is-inactive'}`}>
+              <div className="config-contableIdentity"><span className="config-contableIdentity__icon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{meta.singular}</small></div></div>
+              <span className={`config-contableStatus ${Number(item.activo) === 1 ? 'is-active' : 'is-inactive'}`}>{Number(item.activo) === 1 ? 'Disponible' : 'Baja'}</span>
+              <span className="config-contableUsage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? 'medicamento' : 'medicamentos'}</span>
+              <div className="config-contableActions mov-actionsInline">
+                {editable ? <>
+                  <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo })}><FontAwesomeIcon icon={faPen} /></button>
+                  <button type="button" className={`mov-iconBtn ${Number(item.activo) === 1 ? 'mov-iconBtn--danger' : ''}`} aria-label={`${Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} ${item.nombre}`} title={Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} onClick={() => setEstado(item)}><FontAwesomeIcon icon={Number(item.activo) === 1 ? faPowerOff : faRotateLeft} /></button>
+                  <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>
+                </> : '—'}
+              </div>
+            </article>)}
+          </div>
+        </div>
+      </section>
+    </ModulePage>
+    <CrudModal modalClassName="med-config__modal" open={Boolean(form)} title={form?.id_opcion ? `Editar ${meta.singular}` : `Nueva ${meta.singular}`}
+      onClose={() => { if (!saving) setForm(null); }} onSubmit={guardar} saving={saving} closeOnBackdrop={false} submitLabel="Guardar">
+      <div className="entity-form"><div className="entity-form__grid entity-form__grid--single">
+        <FloatingField label="Nombre *" active={Boolean(form?.nombre)}>
+          <input required autoFocus maxLength={form?.tipo === 'PRESENTACION' ? 100 : 40} placeholder=" " value={form?.nombre || ''}
+            onChange={e => setForm(f => ({ ...f, nombre: MAYUS(e.target.value) }))} />
+        </FloatingField>
+      </div></div>
+      {Boolean(form?.id_opcion) ? <p className="med-config__help">Si una opción ya está utilizada, conservala como dato histórico: podés darla de baja y crear otra con el nuevo nombre.</p> : null}
+    </CrudModal>
+    <ModalEliminarGlobal open={Boolean(estado)} row={estado} operacion={Number(estado?.activo) === 1 ? 'baja' : 'alta'}
+      title={Number(estado?.activo) === 1 ? 'Dar de baja opción' : 'Reactivar opción'} message={Number(estado?.activo) === 1 ? 'Dejará de estar disponible para nuevos medicamentos. Los medicamentos existentes no se modifican.' : 'La opción volverá a aparecer en los selectores.'}
+      details={estado ? [{ label: 'Opción', value: estado.nombre }] : []} loading={saving} onClose={() => setEstado(null)} onConfirm={aplicarEstado} onToast={toast} />
+    <ModalEliminarGlobal open={Boolean(eliminar)} row={eliminar} operacion="eliminar" title="Eliminar opción"
+      message="Esta opción no está utilizada en ningún medicamento. Se eliminará definitivamente." loading={saving}
+      details={eliminar ? [{ label: 'Opción', value: eliminar.nombre }] : []} onClose={() => setEliminar(null)} onConfirm={eliminarOpcion} onToast={toast} />
+  </>;
+}

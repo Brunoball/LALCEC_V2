@@ -7,10 +7,10 @@ const backend=path.resolve(frontend,'..','backend');
 const read=(base,p)=>fs.readFileSync(path.join(base,p),'utf8');
 
 test.describe('Medicamentos: invariantes del módulo simplificado',()=>{
-  test('diez acciones con idempotencia y transacción',()=>{
+  test('nueve operaciones transaccionales de medicamentos con idempotencia',()=>{
     const gestion=read(backend,'modules/medicamentos/medicamentos_gestion.php');
     const soporte=read(backend,'modules/medicamentos/medicamentos_soporte.php');
-    expect((gestion.match(/self::transaccionMed\(/g)||[]).length).toBe(10);
+    expect((gestion.match(/self::transaccionMed\(/g)||[]).length).toBe(9);
     for(const fragment of ['medicamentos_solicitudes','_idempotency_key','hash_solicitud','respuesta_json','FOR UPDATE','IDEMPOTENCY_CONFLICT'])expect(soporte).toContain(fragment);
     expect(soporte).not.toContain('id_lote');
   });

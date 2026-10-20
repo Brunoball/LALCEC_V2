@@ -19,6 +19,8 @@ function medFixture(overrides = {}) {
     presentacion: 'COMPRIMIDOS',
     dosis: '500 MG',
     unidad_stock: 'UNIDAD',
+    // El backend actual exige vencimiento cuando el alta incluye stock.
+    fecha_vencimiento: futureIso(365),
     observaciones: 'MEDICAMENTO EXCLUSIVO DE PLAYWRIGHT',
     ...overrides,
   };

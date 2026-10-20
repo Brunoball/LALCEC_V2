@@ -30,6 +30,11 @@ export default function Stock() {
   const loader = useCallback(() => api.catalogo(), []);
   const { registros, loading, error, cargar } = useMedicamentos(loader);
   const [medios, setMedios] = useState([]);
+  const [catalogos, setCatalogos] = useState([]);
+  const [quickOption, setQuickOption] = useState(null);
+  const [quickName, setQuickName] = useState('');
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState('');
   const [query, setQuery] = useState('');
   const [section, setSection] = useState('ACTIVOS');
   const [page, setPage] = useState(1);
@@ -63,10 +68,28 @@ export default function Stock() {
     return () => { active = false; };
   }, []);
 
+  const cargarOpciones = useCallback(async () => {
+    const resultado = await api.opciones();
+    setCatalogos(resultado.registros || []);
+    return resultado.registros || [];
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.opciones().then(r => { if (active) setCatalogos(r.registros || []); })
+      .catch(e => { if (active) notify('error', e.message); });
+    return () => { active = false; };
+  }, []);
+
   const openMed = (medicine = null) => {
     ++requestRef.current;
     setSelected(medicine);
-    setMed(medicine ? { ...newMedicine(), ...Object.fromEntries(Object.keys(newMedicine()).map(k => [k, medicine[k] ?? ''])), id_medicamento: medicine.id_medicamento } : newMedicine());
+    const inicial = newMedicine();
+    for (const [tipo, campo] of [['PRESENTACION','presentacion'], ['UNIDAD_STOCK','unidad_stock']]) {
+      const existentes = catalogos.filter(item => item.tipo === tipo && Number(item.activo) === 1);
+      if (existentes.length && !existentes.some(item => item.nombre === inicial[campo])) inicial[campo] = existentes[0].nombre;
+    }
+    setMed(medicine ? { ...inicial, ...Object.fromEntries(Object.keys(inicial).map(k => [k, medicine[k] ?? ''])), id_medicamento: medicine.id_medicamento } : inicial);
     setMovement({ ...newMovement(), fecha_vencimiento: medicine?.fecha_vencimiento || '' });
     setStockInicial('0');
     setTab('DATOS');
@@ -135,6 +158,26 @@ export default function Stock() {
   const shown = filtered.slice((Math.min(page, pages) - 1) * 20, Math.min(page, pages) * 20);
   useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
   const updateMed = (key, value) => setMed(v => ({ ...v, [key]: value }));
+  const opcionesSelector = (tipo, actual) => {
+    const activas = catalogos.filter(o => o.tipo === tipo && Number(o.activo) === 1).map(o => o.nombre);
+    return [...new Set([actual, ...activas].filter(Boolean))].map(v => op(v, v));
+  };
+  const nuevaOpcion = tipo => { setQuickOption(tipo); setQuickName(''); setQuickError(''); };
+  const guardarOpcionRapida = async event => {
+    event.preventDefault();
+    if (quickSaving || !quickOption) return;
+    setQuickSaving(true); setQuickError('');
+    try {
+      const result = await api.guardarOpcion({ tipo: quickOption, nombre: quickName.trim().toLocaleUpperCase('es-AR') });
+      const lista = await cargarOpciones();
+      const nueva = lista.find(item => Number(item.id_opcion) === Number(result.id_opcion));
+      if (!nueva) throw new Error('La opción se guardó, pero no se pudo actualizar el selector.');
+      updateMed(quickOption === 'PRESENTACION' ? 'presentacion' : 'unidad_stock', nueva.nombre);
+      setQuickOption(null); setQuickName('');
+      notify('success', 'Opción agregada y seleccionada.');
+    } catch (e) { setQuickError(e.message || 'No se pudo agregar la opción.'); }
+    finally { setQuickSaving(false); }
+  };
   const updateMovement = (key, value) => setMovement(v => ({ ...v, [key]: value }));
   const payments = [op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))];
   const entrada = movement.direccion === 'INGRESO';
@@ -216,10 +259,10 @@ export default function Stock() {
           <Campo label="Nombre comercial" required value={med.nombre_comercial} onChange={v => updateMed('nombre_comercial',v)} />
           <Campo label="Droga" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.droga} onChange={v => updateMed('droga',v)} />
           <Campo label="Laboratorio" value={med.laboratorio} onChange={v => updateMed('laboratorio',v)} />
-          <Campo label="Presentación" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} options={[...new Set([med.presentacion,'COMPRIMIDOS','INYECTABLES','JARABE','CÁPSULAS','GOTAS','CREMA','SOBRES','OTRA'].filter(Boolean))].map(x => op(x,x))}
+          <Campo label="Presentación" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} options={opcionesSelector('PRESENTACION', med.presentacion)} onAddOption={write ? () => nuevaOpcion('PRESENTACION') : undefined}
             value={med.presentacion} onChange={v => updateMed('presentacion',v)} />
           <Campo label="Dosis" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.dosis} onChange={v => updateMed('dosis',v)} />
-          <Campo label="Unidad de stock" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.unidad_stock} options={[...new Set([med.unidad_stock,'UNIDAD','CAJA','FRASCO','AMPOLLA','BLÍSTER'].filter(Boolean))].map(x=>op(x,x))} onChange={v => updateMed('unidad_stock',v)} />
+          <Campo label="Unidad de stock" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.unidad_stock} options={opcionesSelector('UNIDAD_STOCK', med.unidad_stock)} onAddOption={write ? () => nuevaOpcion('UNIDAD_STOCK') : undefined} onChange={v => updateMed('unidad_stock',v)} />
           <Campo label="Fecha de vencimiento" type="date" required={Boolean(num(med.id_medicamento ? selected?.stock_actual : stockInicial) > 0)} value={med.fecha_vencimiento} onChange={v => { updateMed('fecha_vencimiento',v); if(!med.id_medicamento) updateMovement('fecha_vencimiento',v); }} />
           <Campo label="Observaciones del medicamento" wide textarea value={med.observaciones} onChange={v => updateMed('observaciones',v)} />
           {!med.id_medicamento ? <>
@@ -248,6 +291,13 @@ export default function Stock() {
       </>}
       </div>
       </div>
+    </CrudModal>
+
+    <CrudModal open={Boolean(quickOption)} modalClassName="med-quick-option-modal" title={quickOption === 'PRESENTACION' ? 'Agregar presentación' : 'Agregar unidad de stock'}
+      subtitle="La nueva opción estará disponible también para los demás medicamentos." saving={quickSaving}
+      onClose={() => { if (!quickSaving) setQuickOption(null); }} onSubmit={guardarOpcionRapida} submitLabel="Agregar" closeOnBackdrop={false}>
+      <Campos><Campo label="Nombre de la opción" required value={quickName} onChange={v => setQuickName(v.toLocaleUpperCase('es-AR'))} /></Campos>
+      {quickError ? <p className="med-inline-danger" role="alert">{quickError}</p> : null}
     </CrudModal>
 
     <CrudModal modalClassName="med-modal med-history-modal" open={modal==='historial'} wide hideSubmit closeOnBackdrop={false} loading={detailLoading}

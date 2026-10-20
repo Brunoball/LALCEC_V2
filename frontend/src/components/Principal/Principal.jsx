@@ -474,6 +474,7 @@ export default function Principal() {
       "/configuracion/usuarios": "Usuarios y roles",
       "/configuracion/catalogos": "Catálogos generales",
       "/configuracion/contable": "Configuración contable",
+      "/configuracion/medicamentos": "Configuración de medicamentos",
     };
     if (configurationLabels[location.pathname]) {
       return configurationLabels[location.pathname];

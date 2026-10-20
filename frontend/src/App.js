@@ -17,6 +17,7 @@ import Configuracion from "./components/Configuracion/Configuracion";
 import Usuarios from "./components/Configuracion/secciones/Usuarios";
 import CatalogosConfiguracion from "./components/Configuracion/secciones/CatalogosConfiguracion";
 import ContableConfiguracion from "./components/Configuracion/secciones/ContableConfiguracion";
+import MedicamentosConfiguracion from "./components/Configuracion/secciones/MedicamentosConfiguracion";
 import BotPanel from "./components/BotPanel/BotPanel";
 import { BOT_PANEL_ROUTE, isLocalFrontendRuntime } from "./config/config";
 import {
@@ -145,6 +146,7 @@ export default function App() {
             path="/configuracion/catalogos"
             element={<CatalogosConfiguracion />}
           />
+          <Route path="/configuracion/medicamentos" element={<MedicamentosConfiguracion />} />
           <Route
             path="/configuracion/contable"
             element={<ContableConfiguracion />}

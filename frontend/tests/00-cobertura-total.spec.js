@@ -233,21 +233,19 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Paginación de egresos',
   'Detalle mensual contable',
   'health',
-  // Acciones visibles incorporadas con Medicamentos.
+  // Marcadores SOLO de acciones efectivamente ejercitadas por escenarios UI.
+  // Préstamos/anulaciones/alertas se prueban por API en otros specs; sus botones
+  // no deben figurar aquí sin un escenario UI que los accione.
   'Nuevo medicamento',
-  'Lotes y vencimientos',
-  'Ingresar stock',
-  'Egresar stock',
-  'Anular operación',
+  'Agregar stock',
+  'Restar stock',
+  'Motivo de baja',
+  'AGREGAR OPCIÓN',
+  'Agregar presentación',
+  'Agregar unidad de stock',
+  'Configuración de medicamentos',
+  'Unidades de stock',
   'Nuevo préstamo',
-  'Registrar devolución de medicamentos',
-  'Reintegrar seña',
-  'Información del préstamo',
-  'Finalizar préstamo',
-  'Seña por resolver',
-  'Referencias de vencimiento',
-  'Descartar alerta definitivamente',
-  'Ocultar tarjetas de alertas temporalmente',
 ];
 
 
@@ -571,6 +569,14 @@ test.describe('Contrato de cobertura total del sistema administrativo', () => {
     }
 
     const contableUiSpec = read(path.join(__dirname, '12-contabilidad-ui-completa.spec.js'));
+    const contableListSource = read(path.join(SRC_ROOT, 'components', 'Contable', 'Contable.jsx'));
+    expect(contableListSource).toMatch(/const PAGE_SIZE\s*=\s*20\s*;/);
+    expect(contableUiSpec).toContain('1–20 de 21');
+    expect(contableUiSpec).toContain('21–21 de 21');
+    const medicationOptionsSpec = read(path.join(__dirname, '51-medicamentos-opciones.spec.js'));
+    expect(medicationOptionsSpec).toContain('/configuracion/medicamentos');
+    expect(medicationOptionsSpec).toContain('medicamentos_catalogo');
+    expect(medicationOptionsSpec).toContain('Agregar unidad de stock');
     expect(contableUiSpec).toContain('Monto personalizado');
     expect(contableUiSpec).toContain('Desc. familiar 12,5%');
 
