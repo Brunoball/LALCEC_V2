@@ -1,4 +1,4 @@
-import { medicamentosApi } from './medicamentosApi';
+import { medicamentosApi, VENTANA_REINTENTO_MS } from './medicamentosApi';
 import { apiGet, apiPost } from '../../_shared/api/apiClient';
 
 jest.mock('../../_shared/api/apiClient', () => ({
@@ -40,6 +40,20 @@ describe('Medicamentos: protección de escrituras ante reintentos', () => {
     expect(apiPost.mock.calls[0][1]._idempotency_key).toBe(apiPost.mock.calls[1][1]._idempotency_key);
     await medicamentosApi.prestar({ id_socio: 10, sena: '500.00' });
     expect(apiPost.mock.calls[2][1]._idempotency_key).not.toBe(apiPost.mock.calls[1][1]._idempotency_key);
+  });
+
+  test('pasada la ventana de reintento, una operación idéntica usa una clave nueva', async () => {
+    const ahora = jest.spyOn(Date, 'now');
+    try {
+      ahora.mockReturnValue(1_000_000);
+      apiPost.mockRejectedValueOnce(new Error('Se perdió la conexión')).mockResolvedValue({ exito: true });
+      await expect(medicamentosApi.salida({ id_medicamento: 7, cantidad: 1 })).rejects.toThrow();
+      ahora.mockReturnValue(1_000_000 + VENTANA_REINTENTO_MS + 1);
+      await medicamentosApi.salida({ id_medicamento: 7, cantidad: 1 });
+      expect(apiPost.mock.calls[1][1]._idempotency_key).not.toBe(apiPost.mock.calls[0][1]._idempotency_key);
+    } finally {
+      ahora.mockRestore();
+    }
   });
 
   test('si cambian los datos, la clave cambia también', async () => {

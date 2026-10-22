@@ -11,13 +11,19 @@ const nuevaClave = () => {
   return `med-${uuid}`;
 };
 
+// Ventana de reintento: un reintento legítimo tras perder la respuesta ocurre en
+// segundos. Pasado este tiempo, una operación idéntica se considera NUEVA; así no
+// se "absorbe" una entrega o venta real igual a otra anterior cuya respuesta se perdió.
+export const VENTANA_REINTENTO_MS = 120_000;
+
 async function escritura(accion, datos = {}) {
   const { _idempotency_key: claveExplicita, ...contenido } = datos;
   const huella = JSON.stringify(contenido);
   const anterior = pendientes.get(accion);
-  const clave = claveExplicita || (anterior?.huella === huella ? anterior.clave : nuevaClave());
+  const reutilizable = anterior?.huella === huella && Date.now() - anterior.creada < VENTANA_REINTENTO_MS;
+  const clave = claveExplicita || (reutilizable ? anterior.clave : nuevaClave());
   // Se conserva la clave mientras la petición no haya recibido una respuesta exitosa.
-  pendientes.set(accion, { huella, clave });
+  pendientes.set(accion, { huella, clave, creada: reutilizable ? anterior.creada : Date.now() });
   const resultado = await apiPost(accion, { ...contenido, _idempotency_key: clave });
   if (pendientes.get(accion)?.clave === clave) pendientes.delete(accion);
   return resultado;

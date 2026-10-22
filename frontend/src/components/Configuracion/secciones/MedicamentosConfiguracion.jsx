@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faCapsules, faBoxOpen, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faCapsules, faBoxOpen, faHandHoldingMedical, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import CrudModal from '../../Global/Modales/CrudModal';
 import ModalEliminarGlobal from '../../Global/Modales/ModalEliminarGlobal';
@@ -14,8 +14,12 @@ import './ContableConfiguracion.css';
 import './MedicamentosConfiguracion.css';
 
 const LISTAS = {
-  PRESENTACION: { nombre: 'Presentaciones', singular: 'presentación', icon: faCapsules, ayuda: 'Comprimidos, jarabe, cápsulas, gotas, etcétera.' },
-  UNIDAD_STOCK: { nombre: 'Unidades de stock', singular: 'unidad de stock', icon: faBoxOpen, ayuda: 'Caja, frasco, ampolla, unidad, blíster, etcétera.' },
+  PRESENTACION: { nombre: 'Presentaciones', singular: 'presentación', nueva: 'Nueva presentación', icon: faCapsules, max: 100,
+    uso: ['medicamento', 'medicamentos'], destino: 'nuevos medicamentos' },
+  UNIDAD_STOCK: { nombre: 'Unidades de stock', singular: 'unidad de stock', nueva: 'Nueva unidad de stock', icon: faBoxOpen, max: 40,
+    uso: ['medicamento', 'medicamentos'], destino: 'nuevos medicamentos' },
+  ORIGEN_INGRESO: { nombre: 'Orígenes de ingreso', singular: 'origen de ingreso', nueva: 'Nuevo origen de ingreso', icon: faHandHoldingMedical, max: 60,
+    uso: ['ingreso', 'ingresos'], destino: 'nuevos ingresos de stock' },
 };
 const MAYUS = v => String(v || '').toLocaleUpperCase('es-AR');
 
@@ -78,10 +82,10 @@ export default function MedicamentosConfiguracion() {
   return <>
     <ModulePage
       title="Configuración de medicamentos"
-      description="Administrá las opciones que aparecen en los selectores de los datos de medicamentos."
+      description="Administrá las opciones que aparecen en los selectores de medicamentos y de ingresos de stock."
       className="config-sectionPage"
       filters={[{ key: 'med-opciones-search', type: 'search', label: 'Buscar', placeholder: '', value: busqueda, onChange: setBusqueda }]}
-      primaryActionLabel={`Nueva ${meta.singular}`}
+      primaryActionLabel={meta.nueva}
       onPrimaryAction={editable ? () => { setFeedback(null); setForm({ tipo, nombre: '', id_opcion: '' }); } : undefined}
       canCreate={editable}
       secondaryActions={[{ key: 'volver', label: 'Volver a configuración', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
@@ -96,19 +100,18 @@ export default function MedicamentosConfiguracion() {
             </button>)}
           </div>
         </div>
-        <p className="med-config__help">{meta.ayuda} Las opciones dadas de baja dejan de ofrecerse para nuevos medicamentos. Los registros anteriores conservan su valor.</p>
         <div className="config-contableTable med-config__table">
           <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
           <div className="config-contableTable__body">
             {loading ? <div className="med-config__empty">Cargando opciones...</div> : opciones.length === 0 ? <div className="med-config__empty">No hay opciones para mostrar.</div> : opciones.map(item => <article key={item.id_opcion} className={`config-contableTable__row ${Number(item.activo) === 1 ? '' : 'is-inactive'}`}>
-              <div className="config-contableIdentity"><span className="config-contableIdentity__icon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{meta.singular}</small></div></div>
+              <div className="config-contableIdentity"><span className="config-contableIdentity__icon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{item.codigo_sistema ? `${meta.singular} · del sistema` : meta.singular}</small></div></div>
               <span className={`config-contableStatus ${Number(item.activo) === 1 ? 'is-active' : 'is-inactive'}`}>{Number(item.activo) === 1 ? 'Disponible' : 'Baja'}</span>
-              <span className="config-contableUsage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? 'medicamento' : 'medicamentos'}</span>
+              <span className="config-contableUsage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? meta.uso[0] : meta.uso[1]}</span>
               <div className="config-contableActions mov-actionsInline">
                 {editable ? <>
-                  <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo })}><FontAwesomeIcon icon={faPen} /></button>
+                  <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo, codigo_sistema: item.codigo_sistema || null })}><FontAwesomeIcon icon={faPen} /></button>
                   <button type="button" className={`mov-iconBtn ${Number(item.activo) === 1 ? 'mov-iconBtn--danger' : ''}`} aria-label={`${Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} ${item.nombre}`} title={Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} onClick={() => setEstado(item)}><FontAwesomeIcon icon={Number(item.activo) === 1 ? faPowerOff : faRotateLeft} /></button>
-                  <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>
+                  <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={item.codigo_sistema ? 'Origen del sistema: se puede renombrar o dar de baja, no eliminar' : Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Boolean(item.codigo_sistema) || Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>
                 </> : '—'}
               </div>
             </article>)}
@@ -116,21 +119,23 @@ export default function MedicamentosConfiguracion() {
         </div>
       </section>
     </ModulePage>
-    <CrudModal modalClassName="med-config__modal" open={Boolean(form)} title={form?.id_opcion ? `Editar ${meta.singular}` : `Nueva ${meta.singular}`}
+    <CrudModal modalClassName="med-config__modal" open={Boolean(form)} title={form?.id_opcion ? `Editar ${meta.singular}` : meta.nueva}
       onClose={() => { if (!saving) setForm(null); }} onSubmit={guardar} saving={saving} closeOnBackdrop={false} submitLabel="Guardar">
       <div className="entity-form"><div className="entity-form__grid entity-form__grid--single">
         <FloatingField label="Nombre *" active={Boolean(form?.nombre)}>
-          <input required autoFocus maxLength={form?.tipo === 'PRESENTACION' ? 100 : 40} placeholder=" " value={form?.nombre || ''}
+          <input required autoFocus maxLength={LISTAS[form?.tipo]?.max || 40} placeholder=" " value={form?.nombre || ''}
             onChange={e => setForm(f => ({ ...f, nombre: MAYUS(e.target.value) }))} />
         </FloatingField>
       </div></div>
-      {Boolean(form?.id_opcion) ? <p className="med-config__help">Si una opción ya está utilizada, conservala como dato histórico: podés darla de baja y crear otra con el nuevo nombre.</p> : null}
+      {Boolean(form?.id_opcion) ? <p className="med-config__help">{form?.codigo_sistema
+        ? 'Es un origen del sistema: el nuevo nombre se mostrará en los selectores y en el historial, sin cambiar su comportamiento.'
+        : 'Si una opción ya está utilizada, conservala como dato histórico: podés darla de baja y crear otra con el nuevo nombre.'}</p> : null}
     </CrudModal>
     <ModalEliminarGlobal open={Boolean(estado)} row={estado} operacion={Number(estado?.activo) === 1 ? 'baja' : 'alta'}
-      title={Number(estado?.activo) === 1 ? 'Dar de baja opción' : 'Reactivar opción'} message={Number(estado?.activo) === 1 ? 'Dejará de estar disponible para nuevos medicamentos. Los medicamentos existentes no se modifican.' : 'La opción volverá a aparecer en los selectores.'}
+      title={Number(estado?.activo) === 1 ? 'Dar de baja opción' : 'Reactivar opción'} message={Number(estado?.activo) === 1 ? `Dejará de estar disponible para ${meta.destino}. Los registros existentes no se modifican.` : 'La opción volverá a aparecer en los selectores.'}
       details={estado ? [{ label: 'Opción', value: estado.nombre }] : []} loading={saving} onClose={() => setEstado(null)} onConfirm={aplicarEstado} onToast={toast} />
     <ModalEliminarGlobal open={Boolean(eliminar)} row={eliminar} operacion="eliminar" title="Eliminar opción"
-      message="Esta opción no está utilizada en ningún medicamento. Se eliminará definitivamente." loading={saving}
+      message="Esta opción no está utilizada en ningún registro. Se eliminará definitivamente." loading={saving}
       details={eliminar ? [{ label: 'Opción', value: eliminar.nombre }] : []} onClose={() => setEliminar(null)} onConfirm={eliminarOpcion} onToast={toast} />
   </>;
 }

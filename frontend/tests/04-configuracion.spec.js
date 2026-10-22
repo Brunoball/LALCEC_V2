@@ -181,10 +181,20 @@ test.describe('Configuración general', () => {
     ).toBeVisible();
 
     const sections = page.getByRole('navigation', { name: 'Secciones de configuración' });
-    await expect(sections.getByRole('button')).toHaveCount(3);
+    await expect(sections.getByRole('button')).toHaveCount(4);
     await expect(sections.getByRole('button', { name: /Usuarios y roles/i })).toBeVisible();
     await expect(sections.getByRole('button', { name: /Catálogos generales/i })).toBeVisible();
+    await expect(sections.getByRole('button', { name: /^Medicamentos/i })).toBeVisible();
     await expect(sections.getByRole('button', { name: /^Contable/i })).toBeVisible();
+
+    await sections.getByRole('button', { name: /^Medicamentos/i }).click();
+    await expect(page).toHaveURL(/\/configuracion\/medicamentos$/);
+    await expect(page.getByRole('heading', { name: 'Configuración de medicamentos' })).toBeVisible();
+    const medicamentosTabs = page.getByRole('tablist', { name: 'Selectores de medicamentos' });
+    await expect(medicamentosTabs.getByRole('tab', { name: 'Presentaciones' })).toBeVisible();
+    await expect(medicamentosTabs.getByRole('tab', { name: 'Unidades de stock' })).toBeVisible();
+    await page.getByRole('button', { name: 'Volver a configuración' }).click();
+    await expect(page).toHaveURL(/\/configuracion$/);
 
     await sections.getByRole('button', { name: /Catálogos generales/i }).click();
     await expect(page).toHaveURL(/\/configuracion\/catalogos$/);

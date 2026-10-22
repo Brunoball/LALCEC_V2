@@ -28,9 +28,17 @@ test.describe('Medicamentos: seguridad y protección de datos',()=>{
     const routes=fs.readFileSync(path.join(backend,'modules/medicamentos/routes.php'),'utf8');
     const guard=fs.readFileSync(path.join(backend,'core/e2e_guard.php'),'utf8');
     const cleanup=fs.readFileSync(path.join(backend,'modules/testing_cleanup/testing_cleanup.php'),'utf8');
-    const actions=[...routes.matchAll(/'([^']+)'=>'[^']+'/g)].map(x=>`medicamentos_${x[1]}`);
-    expect(actions).toHaveLength(19);
-    const reads=['medicamentos_alertas','medicamentos_catalogo','medicamentos_historial','medicamentos_prestamos','medicamentos_prestamo_detalle','medicamentos_socios','medicamentos_procedencias','medicamentos_medios'];
+    // Hay rutas registradas directamente (opciones) y rutas declaradas en los dos foreach.
+    // Revisar ambas evita ignorar endpoints nuevos al verificar la protección E2E.
+    const direct=[...routes.matchAll(/\$router->register\(\s*'(medicamentos_[^']+)'\s*,/g)].map(x=>x[1]);
+    const mapped=[...routes.matchAll(/'([^']+)'\s*=>\s*'[^']+'/g)].map(x=>`medicamentos_${x[1]}`);
+    const actions=[...new Set([...direct,...mapped])];
+    expect(actions).toHaveLength(22); // 4 rutas de opciones y 18 rutas del módulo principal.
+    expect(direct).toEqual(expect.arrayContaining([
+      'medicamentos_opciones', 'medicamentos_opcion_guardar',
+      'medicamentos_opcion_estado', 'medicamentos_opcion_eliminar',
+    ]));
+    const reads=['medicamentos_opciones','medicamentos_alertas','medicamentos_catalogo','medicamentos_historial','medicamentos_prestamos','medicamentos_prestamo_detalle','medicamentos_socios','medicamentos_procedencias','medicamentos_medios'];
     for(const action of actions.filter(a=>!reads.includes(a)))expect(guard).toContain(`case '${action}'`);
     for(const table of ['medicamentos','medicamentos_movimientos','medicamentos_prestamos','medicamentos_prestamos_detalle','medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos','medicamentos_solicitudes','medicamentos_alertas_descartadas'])expect(cleanup).toContain(`'${table}'`);
     expect(cleanup).not.toContain("'medicamentos_lotes'");

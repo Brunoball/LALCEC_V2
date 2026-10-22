@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 /** Buscador en un solo campo: buscar, desplegar y seleccionar sin un segundo <select>. */
 export default function BuscadorEntidad({
   label, value, selectedLabel = '', onSelect, buscar,
-  manual = false, required = false, disabled = false, wide = false,
+  manual = false, required = false, disabled = false, wide = false, maxLength = 180,
 }) {
   const listId = useId();
   const inputRef = useRef(null);
@@ -183,7 +183,7 @@ export default function BuscadorEntidad({
       <input ref={inputRef} type="text" role="combobox" aria-autocomplete="list"
         aria-expanded={abierto} aria-controls={listId}
         aria-activedescendant={activo >= 0 && abierto ? `${listId}-option-${activo}` : undefined}
-        placeholder=" " aria-label={label} autoComplete="off" maxLength={180} value={texto} disabled={disabled} required={required}
+        placeholder=" " aria-label={label} autoComplete="off" maxLength={maxLength} value={texto} disabled={disabled} required={required}
         onFocus={() => setAbierto(true)}
         onClick={() => setAbierto(true)}
         onKeyDown={onKeyDown}

@@ -30,8 +30,13 @@ test.describe('Medicamentos sin lotes: stock y bajas', () => {
   });
 
   test('motivo de baja obligatorio, visible y limpieza al reactivar', async ({request}) => {
-    const fx=await createMedicine(request);
+    const fx=await createMedicine(request,{first:entryFixture({cantidad:2})});
     await assertError(request,'medicamentos_cambiar_estado',{id_medicamento:fx.id,activo:0},/motivo/i);
+    // Un medicamento con stock no puede darse de baja: primero se descarta.
+    const conStock=await assertError(request,'medicamentos_cambiar_estado',{id_medicamento:fx.id,activo:0,motivo_baja:'PW E2E SUSPENDIDO POR DECISIÓN ADMINISTRATIVA'},/stock/i);
+    expect(conStock.body.codigo).toBe('BAJA_CON_STOCK');
+    expect(Number((await stockOf(request,fx.id)).activo)).toBe(1);
+    await apiCall(request,'medicamentos_salida',{method:'POST',data:{id_medicamento:fx.id,tipo:'BAJA_DESCARTE',cantidad:2,detalle:'PW E2E DESCARTE PREVIO A LA BAJA'}});
     await apiCall(request,'medicamentos_cambiar_estado',{method:'POST',data:{id_medicamento:fx.id,activo:0,motivo_baja:'PW E2E SUSPENDIDO POR DECISIÓN ADMINISTRATIVA'}});
     const low=await stockOf(request,fx.id);
     expect(Number(low.activo)).toBe(0);

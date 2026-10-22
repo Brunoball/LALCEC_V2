@@ -2,7 +2,8 @@ const { test, expect } = require('./fixtures/auth.fixture');
 const fs = require('node:fs');
 const path = require('node:path');
 const { apiCall, apiResult } = require('./helpers/api.helper');
-const { uniqueSuffix } = require('./helpers/data.helper');
+const { uniqueSuffix, todayIso } = require('./helpers/data.helper');
+const { createMedicine, createBorrower, entryFixture, stockOf, movementsOf } = require('./helpers/medicamentos.helper');
 
 const frontend = process.cwd();
 const backend = path.resolve(frontend, '..', 'backend');
@@ -30,7 +31,7 @@ test.describe('Medicamentos: catálogos configurables', () => {
     const items = optionsResponse.registros;
     expect(Array.isArray(items)).toBe(true);
     for (const option of items) {
-      expect(['PRESENTACION', 'UNIDAD_STOCK']).toContain(option.tipo);
+      expect(['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO']).toContain(option.tipo);
       expect(String(option.nombre).trim()).not.toBe('');
       expect([0, 1]).toContain(Number(option.activo));
     }
@@ -65,8 +66,8 @@ test.describe('Medicamentos: catálogos configurables', () => {
     }
   });
 
-  test('API: alta, edición, baja, reactivación, duplicados y eliminación en ambos selectores', async ({ request }) => {
-    for (const tipo of ['PRESENTACION', 'UNIDAD_STOCK']) {
+  test('API: alta, edición, baja, reactivación, duplicados y eliminación en los tres selectores', async ({ request }) => {
+    for (const tipo of ['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO']) {
       const name = `PW E2E OPCION ${uniqueSuffix()}`;
       const changed = `PW E2E EDITADA ${uniqueSuffix()}`;
       let id = null;
@@ -101,6 +102,70 @@ test.describe('Medicamentos: catálogos configurables', () => {
         });
       }
     }
+  });
+
+  test('API: los orígenes del sistema vienen de la base con su código y están disponibles', async ({ request }) => {
+    const origenes = (await apiCall(request, 'medicamentos_opciones')).registros.filter(o => o.tipo === 'ORIGEN_INGRESO');
+    const sistema = Object.fromEntries(origenes.filter(o => o.codigo_sistema).map(o => [o.codigo_sistema, o]));
+    for (const codigo of ['DONACION', 'COMPRA', 'AJUSTE', 'INICIAL']) {
+      expect(sistema[codigo], `Falta el origen del sistema ${codigo}: ejecutar 2026-10-22_medicamentos_origenes_sistema.sql`).toBeTruthy();
+      expect(String(sistema[codigo].nombre).trim()).not.toBe('');
+    }
+  });
+
+  test('API: un origen del catálogo registra un ingreso sin costo y queda protegido mientras se usa', async ({ request }) => {
+    const origen = `PW E2E ORIGEN ${uniqueSuffix()}`;
+    const creado = await apiCall(request, 'medicamentos_opcion_guardar', { method: 'POST', data: { tipo: 'ORIGEN_INGRESO', nombre: origen } });
+    const idOrigen = Number(creado.id_opcion);
+    try {
+      const fx = await createMedicine(request, { first: entryFixture({ cantidad: 2 }) });
+      const ingreso = await apiCall(request, 'medicamentos_ingresar', {
+        method: 'POST', data: { id_medicamento: fx.id, ...entryFixture({ origen, cantidad: 3 }) },
+      });
+      const mov = (await movementsOf(request, fx.id)).find(m => Number(m.id_movimiento) === Number(ingreso.id_movimiento));
+      expect(mov).toMatchObject({ tipo: 'INGRESO_OTRO', origen });
+      expect(mov.id_egreso_contable).toBeNull();
+      expect(mov.id_ingreso_contable).toBeNull();
+      expect(mov.motivo_no_anulable).toMatch(/no admite anulación/i);
+      const row = await stockOf(request, fx.id);
+      expect(Number(row.stock_actual)).toBe(5);
+      expect(row.ultimo_origen).toBe(origen);
+
+      const listado = (await apiCall(request, 'medicamentos_opciones')).registros;
+      expect(Number(listado.find(o => Number(o.id_opcion) === idOrigen).cantidad_usos)).toBe(1);
+      const enUso = await apiResult(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: idOrigen } });
+      expect(enUso.status).toBe(409);
+      expect(enUso.body.codigo).toBe('OPTION_IN_USE');
+      const renombre = await apiResult(request, 'medicamentos_opcion_guardar', { method: 'POST', data: { id_opcion: idOrigen, tipo: 'ORIGEN_INGRESO', nombre: `${origen} X` } });
+      expect(renombre.body.codigo).toBe('OPTION_IN_USE');
+
+      await apiCall(request, 'medicamentos_opcion_estado', { method: 'POST', data: { id_opcion: idOrigen, activo: 0 } });
+      const inactivo = await apiResult(request, 'medicamentos_ingresar', {
+        method: 'POST', data: { id_medicamento: fx.id, ...entryFixture({ origen, cantidad: 1 }) },
+      });
+      expect(inactivo.status).toBe(422);
+      expect(inactivo.body.codigo).toBe('OPTION_INACTIVE');
+      const inexistente = await apiResult(request, 'medicamentos_ingresar', {
+        method: 'POST', data: { id_medicamento: fx.id, ...entryFixture({ origen: `PW E2E NO EXISTE ${uniqueSuffix()}`, cantidad: 1 }) },
+      });
+      expect(inexistente.status).toBe(422);
+      expect(Number((await stockOf(request, fx.id)).stock_actual)).toBe(5);
+    } finally {
+      // En uso no puede eliminarse: la limpieza E2E final la borra cuando ya no la usa ningún movimiento.
+      await apiResult(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: idOrigen } });
+    }
+  });
+
+  test('API: el buscador de donante/proveedor ofrece solo socios activos', async ({ request }) => {
+    const socio = await createBorrower(request);
+    const buscar = async () => (await apiCall(request, 'medicamentos_procedencias', { params: { buscar: socio.person.dni } })).registros || [];
+    expect((await buscar()).some(x => x.clave === `SOCIO:${socio.id}`)).toBe(true);
+    await apiCall(request, 'socios_eliminar', {
+      method: 'POST', data: { id: socio.id, fecha_baja: todayIso(), motivo_baja: 'PW E2E SOCIO INACTIVO PARA PROCEDENCIAS' },
+    });
+    const despues = await buscar();
+    expect(despues.some(x => x.clave === `SOCIO:${socio.id}`)).toBe(false);
+    expect(despues.every(x => !String(x.detalle || '').includes('INACTIVO'))).toBe(true);
   });
 
   test('UI: opción AGREGAR abre modal pequeño y agrega al selector sin cerrar el medicamento', async ({ page, request }) => {
@@ -169,6 +234,68 @@ test.describe('Medicamentos: catálogos configurables', () => {
       if (id) await apiCall(request, 'medicamentos_opcion_eliminar', {
         method: 'POST', data: { id_opcion: id },
       });
+    }
+  });
+
+  test('UI: el selector Origen permite agregar un origen sin cerrar el medicamento', async ({ page, request }) => {
+    await page.goto('/medicamentos/stock');
+    await page.getByRole('button', { name: 'Nuevo medicamento' }).click();
+    const editor = page.getByRole('dialog', { name: 'Nuevo medicamento' });
+    await editor.getByLabel('Stock inicial (opcional)').fill('2');
+    const origenSelect = editor.getByLabel(/^Origen/);
+    await expect(origenSelect.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
+    await origenSelect.selectOption('__MED_AGREGAR__');
+    const modal = page.getByRole('dialog', { name: 'Agregar origen de ingreso' });
+    await expect(modal).toBeVisible();
+    const name = `PW E2E ORIGEN RAP ${uniqueSuffix()}`;
+    let id = null;
+    try {
+      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name);
+      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
+      await expect(modal).not.toBeVisible();
+      await expect(editor).toBeVisible();
+      await expect(origenSelect).toHaveValue(name);
+      const listed = await apiCall(request, 'medicamentos_opciones');
+      id = Number(listed.registros.find(item => item.nombre === name && item.tipo === 'ORIGEN_INGRESO')?.id_opcion);
+      expect(id).toBeGreaterThan(0);
+    } finally {
+      if (await modal.isVisible()) await modal.getByRole('button', { name: 'Cancelar' }).click();
+      if (await editor.isVisible()) await editor.getByRole('button', { name: 'Cerrar' }).click();
+      if (!id) {
+        const listado = (await apiCall(request, 'medicamentos_opciones')).registros || [];
+        id = Number(listado.find(option => option.tipo === 'ORIGEN_INGRESO' && option.nombre === name)?.id_opcion);
+      }
+      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
+    }
+  });
+
+  test('UI: Configuración muestra la pestaña Orígenes de ingreso y permite crear uno', async ({ page, request }) => {
+    await page.goto('/configuracion/medicamentos');
+    const tabs = page.getByRole('tablist', { name: 'Selectores de medicamentos' });
+    await tabs.getByRole('tab', { name: 'Orígenes de ingreso' }).click();
+    await expect(tabs.getByRole('tab', { name: 'Orígenes de ingreso' })).toHaveAttribute('aria-selected', 'true');
+    // El texto explicativo sobre los orígenes se quitó de Configuración.
+    // Validar la tabla real, sin depender de contenido informativo eliminado.
+    await expect(page.locator('.med-config__table .config-contableTable__head')).toContainText('Acciones');
+    await expect(page.getByText(/Opciones del selector Origen \/ Motivo del ingreso/i)).toHaveCount(0);
+    const name = `PW E2E CFG O ${uniqueSuffix()}`;
+    let id = null;
+    try {
+      await page.getByRole('button', { name: 'Nuevo origen de ingreso' }).click();
+      const modal = page.getByRole('dialog', { name: 'Nuevo origen de ingreso' });
+      await modal.getByRole('textbox', { name: 'Nombre *' }).fill(name);
+      await modal.getByRole('button', { name: 'Guardar', exact: true }).click();
+      await expect(modal).not.toBeVisible();
+      await expect(page.getByRole('button', { name: `Editar ${name}` })).toBeVisible();
+      const listed = await apiCall(request, 'medicamentos_opciones');
+      id = Number(listed.registros.find(o => o.tipo === 'ORIGEN_INGRESO' && o.nombre === name)?.id_opcion);
+      expect(id).toBeGreaterThan(0);
+    } finally {
+      if (!id) {
+        const listado = (await apiCall(request, 'medicamentos_opciones')).registros || [];
+        id = Number(listado.find(o => o.tipo === 'ORIGEN_INGRESO' && o.nombre === name)?.id_opcion);
+      }
+      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
     }
   });
 

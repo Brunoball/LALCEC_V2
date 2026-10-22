@@ -46,3 +46,11 @@ npx playwright test --project=chromium --workers=1 --reporter=list
 ## Cobertura UI pendiente de ejecución
 
 El contrato global verifica únicamente los botones que realmente tienen prueba de interfaz. Los escenarios API de anulaciones, señas, devoluciones y alertas no constituyen por sí mismos pruebas visuales de todos sus botones. No se afirma 100 % de cobertura UI hasta completar esas pruebas y ejecutar la suite con éxito.
+
+## Actualización del 22/10/2026 · Cierre definitivo
+
+- **Requiere la migración** `sql/2026-10-22_medicamentos_cierre_vencimientos.sql` antes de ejecutar la suite.
+- `28-medicamentos-cierre-regresiones.spec.js` (nuevo): anulación exitosa de compra con restauración del vencimiento, criterio conservador con ingresos posteriores, fecha de ingreso declarada, textos largos (422 en lugar de 500), edición con formulario desactualizado (409), venta/entrega de vencidos y sin fecha, importes contables exactos (compra, venta y compensación), venta fallida sin asiento huérfano, protección de asientos desde Contabilidad e idempotencia con contenido distinto.
+- `20` y `22`: la baja exige stock 0 y ningún préstamo con unidades pendientes; se ajustaron los escenarios y se agregó "seña vacía equivale a sin seña".
+- `23`: baja con stock muestra el paso previo y deshabilita la confirmación; un medicamento vencido solo ofrece Descarte / Ajuste negativo en Restar stock.
+- Los specs de API (20–22, 24–28, 50, 51) se ejecutaron contra una base local cargada con `lalcec_v2.sql` y la guardia E2E activa: 40/40 aprobados. Los escenarios de interfaz (23 y la parte UI de 51) deben ejecutarse en tu entorno con navegador.

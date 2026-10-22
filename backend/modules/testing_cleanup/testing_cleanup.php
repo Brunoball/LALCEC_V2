@@ -331,6 +331,7 @@ final class TestingCleanup
             'medicamentos_prestamos_senas_movimientos' => 0,
             'medicamentos_solicitudes' => 0,
             'medicamentos_alertas_descartadas' => 0,
+            'medicamentos_opciones' => 0,
             'familias' => 0,
             'socios' => 0,
             'socios_eliminados' => 0,
@@ -482,6 +483,18 @@ final class TestingCleanup
             $counts['medicamentos_prestamos_detalle'] += self::deleteByIds($db,'medicamentos_prestamos_detalle','id_detalle_prestamo',$testDetallesMedicamentos);
             $counts['medicamentos_prestamos'] += self::deleteByIds($db,'medicamentos_prestamos','id_prestamo',$testPrestamosMedicamentos);
             $counts['medicamentos'] += self::deleteByIds($db,'medicamentos','id_medicamento',$testMedicamentos);
+            // Opciones de selectores creadas por Playwright (nombre PW E2E/PW EE) que ya
+            // no usa ningún medicamento ni movimiento. Una opción E2E usada por datos
+            // reales se conserva (fail-safe); las opciones reales nunca se tocan.
+            if (self::tableExists($db,'medicamentos_opciones')) {
+                $q=$db->prepare("DELETE o FROM medicamentos_opciones o
+                    WHERE (o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %')
+                      AND NOT (o.tipo='PRESENTACION' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.presentacion=o.nombre))
+                      AND NOT (o.tipo='UNIDAD_STOCK' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.unidad_stock=o.nombre))
+                      AND NOT (o.tipo='ORIGEN_INGRESO' AND EXISTS (SELECT 1 FROM medicamentos_movimientos mv WHERE mv.tipo='INGRESO_OTRO' AND mv.origen=o.nombre))");
+                $q->execute();
+                $counts['medicamentos_opciones'] += $q->rowCount();
+            }
 
             $testPaymentIds = $testSocios === []
                 ? []

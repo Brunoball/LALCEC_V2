@@ -1,6 +1,36 @@
 <?php
 declare(strict_types=1);
 trait MedicamentosConsultas {
+    /** Regla única para habilitar la anulación, usada por historial Y por la escritura.
+     * Siempre se evalúa de nuevo dentro de la transacción de anulación, bajo bloqueo
+     * del medicamento. Los datos enviados por el navegador no autorizan la operación.
+     */
+    protected static function motivoNoAnulableSql(): string {
+        return "CASE
+            WHEN mov.tipo NOT IN ('INGRESO_COMPRA','SALIDA_VENTA') THEN 'Este tipo de movimiento no admite anulación.'
+            WHEN EXISTS (SELECT 1 FROM medicamentos_movimientos reverso WHERE reverso.id_movimiento_anulado=mov.id_movimiento)
+                THEN 'La operación ya fue anulada.'
+            WHEN mov.tipo='INGRESO_COMPRA' AND (mov.id_egreso_contable IS NULL
+                OR NOT EXISTS (SELECT 1 FROM contable_egresos ce WHERE ce.id_egreso=mov.id_egreso_contable))
+                THEN 'No se encontró el egreso contable original.'
+            WHEN mov.tipo='SALIDA_VENTA' AND (mov.id_ingreso_contable IS NULL
+                OR NOT EXISTS (SELECT 1 FROM contable_ingresos ci WHERE ci.id_ingreso=mov.id_ingreso_contable))
+                THEN 'No se encontró el ingreso contable original.'
+            WHEN mov.tipo='INGRESO_COMPRA' AND EXISTS
+                (SELECT 1 FROM medicamentos_movimientos posterior
+                 WHERE posterior.id_medicamento=mov.id_medicamento
+                   AND posterior.id_movimiento>mov.id_movimiento
+                   AND posterior.variacion_disponible<0)
+                THEN 'La compra ya tuvo consumo de stock posterior. Registrá una corrección supervisada.'
+            WHEN mov.tipo='INGRESO_COMPRA' AND m.stock_actual<mov.cantidad
+                THEN 'No hay stock suficiente para revertir la compra.'
+            WHEN mov.tipo='INGRESO_COMPRA' AND mov.vencimiento_aplicado IS NULL AND m.stock_actual>mov.cantidad
+                THEN 'Compra registrada antes del control de vencimientos: anularla podría dejar una fecha incorrecta en el stock restante. Registrá un ajuste negativo y verificá la fecha en Editar > Datos.'
+            WHEN mov.tipo='SALIDA_VENTA' AND m.stock_actual>4294967295-mov.cantidad
+                THEN 'El reintegro supera el límite de stock del medicamento.'
+            ELSE NULL END";
+    }
+
     protected static function catalogoDatos(PDO $db): array {
         return $db->query('SELECT m.*,m.stock_actual AS stock_utilizable,m.stock_actual AS stock_total,EXISTS(SELECT 1 FROM medicamentos_movimientos a WHERE a.id_medicamento=m.id_medicamento LIMIT 1) AS tiene_movimientos
           FROM medicamentos m ORDER BY m.nombre_comercial,m.droga')->fetchAll();
@@ -8,8 +38,10 @@ trait MedicamentosConsultas {
     protected static function historialDatos(PDO $db,array $filter): array {
         $id=(int)($filter['id_medicamento']??0);
         $from=' FROM medicamentos_movimientos mov JOIN medicamentos m ON m.id_medicamento=mov.id_medicamento';
+        $regla=self::motivoNoAnulableSql();
         $campos="SELECT mov.*,m.nombre_comercial,m.droga,EXISTS(SELECT 1 FROM medicamentos_movimientos inv
-                WHERE inv.id_movimiento_anulado=mov.id_movimiento) AS anulada";
+                WHERE inv.id_movimiento_anulado=mov.id_movimiento) AS anulada,
+                ($regla) AS motivo_no_anulable";
         if($id>0){
             $page=max(1,min(100000,(int)($filter['pagina']??1)));$perPage=50;
             $q=$db->prepare('SELECT COUNT(*)'.$from.' WHERE m.id_medicamento=?');$q->execute([$id]);$total=(int)$q->fetchColumn();
@@ -20,7 +52,8 @@ trait MedicamentosConsultas {
         }
         return ['registros'=>$db->query($campos.$from.' ORDER BY mov.id_movimiento DESC LIMIT 300')->fetchAll()];
     }
-    /** Buscar procedencias sin duplicar registros: opciones de Contable y socios existentes.
+    /** Buscar procedencias sin duplicar registros: proveedores activos de Contable y SOCIOS ACTIVOS.
+     * Los socios inactivos o eliminados no se ofrecen como donantes/proveedores.
      * Se guarda una instantánea del nombre en medicamentos_movimientos.procedencia;
      * los externos se permiten manualmente desde el mismo campo.
      */
@@ -42,7 +75,8 @@ trait MedicamentosConsultas {
             FROM socios s
             LEFT JOIN socios_personas p ON p.id_socio=s.id_socio
             LEFT JOIN socios_empresas e ON e.id_socio=s.id_socio
-            WHERE NOT EXISTS (SELECT 1 FROM socios_eliminados x WHERE x.id_socio=s.id_socio)
+            WHERE s.estado='ACTIVO'
+              AND NOT EXISTS (SELECT 1 FROM socios_eliminados x WHERE x.id_socio=s.id_socio)
               AND (CONCAT_WS(' ',p.apellido,p.nombre) LIKE ? OR CONCAT_WS(' ',p.nombre,p.apellido) LIKE ?
                 OR CONCAT(p.apellido, ', ', p.nombre) LIKE ? OR p.dni LIKE ? OR e.razon_social LIKE ? OR e.cuit LIKE ?)
             ORDER BY denominacion LIMIT 25");
@@ -50,7 +84,6 @@ trait MedicamentosConsultas {
         foreach($socios->fetchAll() as $s) {
             if(trim((string)$s['denominacion'])==='') continue;
             $detalle=trim((string)($s['documento']??''));
-            if($s['estado']!=='ACTIVO') $detalle=trim($detalle.' · INACTIVO');
             $resultado[]=['clave'=>'SOCIO:'.$s['id_socio'],'tipo'=>'SOCIO',
                 'nombre'=>$s['denominacion'],'detalle'=>$detalle];
         }

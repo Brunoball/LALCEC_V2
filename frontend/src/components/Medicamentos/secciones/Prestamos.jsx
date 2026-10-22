@@ -69,7 +69,7 @@ export default function Prestamos() {
   const guardandoRef = useRef(false);
   const consultaEnCurso = useRef(false);
   const solicitudMedicamentos = useRef(0);
-  const [cargandoMedicamentos, setCargandoLotes] = useState(false);
+  const [cargandoMedicamentos, setCargandoMedicamentos] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [alertRevision, setAlertRevision] = useState(0);
   const write = canWrite();
@@ -85,20 +85,20 @@ export default function Prestamos() {
   const openLoan = async () => {
     const token = ++solicitudMedicamentos.current;
     setForm(newLoan()); setChosenPerson(null); setMedicamentos([]); setModal('prestamo');
-    setCargandoLotes(true);
+    setCargandoMedicamentos(true);
     try {
       const response = await api.catalogo();
       if (token === solicitudMedicamentos.current) setMedicamentos(response.registros || []);
     } catch (e) {
       if (token === solicitudMedicamentos.current) notify('error', e.message || 'No se pudieron consultar los medicamentos disponibles.');
     } finally {
-      if (token === solicitudMedicamentos.current) setCargandoLotes(false);
+      if (token === solicitudMedicamentos.current) setCargandoMedicamentos(false);
     }
   };
   const cerrarPrestamoNuevo = () => {
     if (guardandoRef.current) return;
     ++solicitudMedicamentos.current;
-    setCargandoLotes(false);
+    setCargandoMedicamentos(false);
     setModal('');
   };
 
@@ -158,8 +158,19 @@ export default function Prestamos() {
   const cerrarConfirmacion = () => { setModal(''); setDetail(null); };
   const toastConfirmacion = (tipo, mensaje, duracion) => setFeedback({ type: tipo, message: mensaje, duration: duracion });
 
-  const available = medicamentos.filter(m => num(m.activo) === 1 && num(m.stock_actual) > 0);
-  const opts = [op('', 'Seleccionar medicamento'), ...available.map(m => op(m.id_medicamento, `${m.nombre_comercial} · ${m.dosis} · ${m.stock_actual} disponibles`))];
+  // Fecha única del catálogo, nunca solicitada dentro del formulario de préstamo.
+  // El servidor valida otra vez al guardar para evitar cambios concurrentes.
+  const hoy = fechaHoy();
+  const conStock = medicamentos.filter(m => num(m.activo) === 1 && num(m.stock_actual) > 0);
+  const available = conStock.filter(m => m.fecha_vencimiento && m.fecha_vencimiento >= hoy);
+  const noDisponibles = conStock.filter(m => !m.fecha_vencimiento || m.fecha_vencimiento < hoy);
+  const opts = [op('', 'Seleccionar medicamento'), ...available.map(m => op(m.id_medicamento, `${m.nombre_comercial} · ${m.stock_actual} disponibles`))];
+  const cantidadesValidas = form.items.every(item => {
+    const seleccionado = available.find(m => String(m.id_medicamento) === String(item.id_medicamento));
+    const cantidad = Number(item.cantidad);
+    return seleccionado && Number.isInteger(cantidad) && cantidad > 0 && cantidad <= num(seleccionado.stock_actual);
+  });
+  const sinDuplicados = new Set(form.items.map(item => String(item.id_medicamento))).size === form.items.length;
   const paymentOpts = [op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))];
   const shown = registros;
   const pages = Math.max(1, Math.ceil((total || 0) / (por_pagina || 20)));
@@ -223,8 +234,8 @@ export default function Prestamos() {
       onSelect={aviso => openAction(aviso.id_referencia, write ? 'cierre' : 'detalle')} />
 
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoMedicamentos} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
-      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoMedicamentos || available.length === 0}
-      onSubmit={e => run(e, api.prestar, form)}>
+      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoMedicamentos || !form.id_socio || !cantidadesValidas || !sinDuplicados || (num(form.sena) > 0 && !form.id_medio_pago)}
+      onSubmit={e => run(e, api.prestar, { ...form, sena: String(form.sena ?? '').trim() === '' ? '0' : form.sena })}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Socio y seña', icon: faMoneyBillTransfer }, { label: 'Medicamentos', icon: faPills }]}>
         <div><Campos>
         <BuscadorEntidad label="Socio que retira" required wide placeholder="Escribí nombre, apellido o DNI y seleccioná un socio..."
@@ -236,14 +247,20 @@ export default function Prestamos() {
         {num(form.sena) > 0 ? <Campo label="Medio de pago de seña" required value={form.id_medio_pago} options={paymentOpts} onChange={v => setForm(f => ({ ...f, id_medio_pago: v }))} /> : null}
 </Campos></div>
         <div><Campos>        <div className="entity-field entity-field--wide med-loan-items"><MedSection icon={faPills}>Medicamentos entregados</MedSection>
+          {noDisponibles.length > 0 ? <p className="med-inline-note" role="status">
+            No se pueden prestar: {noDisponibles.map(m => `${m.nombre_comercial} (${!m.fecha_vencimiento ? 'sin fecha de vencimiento' : `vencido el ${fecha(m.fecha_vencimiento)}`})`).join('; ')}.
+            Para corregir la fecha, andá a Medicamentos → Stock → Editar → Datos. La fecha no se carga en este préstamo.
+          </p> : null}
+          {!cargandoMedicamentos && available.length === 0 ? <p className="med-inline-danger" role="status">No hay medicamentos con stock y fecha de vencimiento vigente disponibles para prestar.</p> : null}
           {form.items.map((item, i) => <div className="med-box med-med-editor" key={i}>
             <Campo className="med-med-editor__select" label={`Medicamento ${i + 1}`} required value={item.id_medicamento} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_medicamento: v } : r) }))} />
               <Campo className="med-med-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
             {form.items.length > 1 ? <button className="med-mini med-mini--danger med-med-editor__remove" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar medicamento</button> : null}
           </div>)}
+          {!sinDuplicados && form.items.every(item => item.id_medicamento) ? <p className="med-inline-danger" role="status">No repitas el mismo medicamento en el préstamo.</p> : null}
           <button type="button" className="med-mini med-loan-items__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '1' }] }))}>+ Agregar otro medicamento</button>
         </div>
-        <Campo label="Observaciones" wide textarea value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
+        <Campo label="Observaciones" wide textarea maxLength={3000} value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
 </Campos>
       <p className="med-inline-note">El préstamo descuenta los medicamentos del stock y cobra la seña una sola vez.</p></div>
       </MedicamentosTabs>
@@ -327,7 +344,7 @@ export default function Prestamos() {
           onChange={v => setReturnForm(f => ({ ...f, id_detalle_prestamo: v, cantidad: '1' }))} />
         <Campo label={`Cantidad recibida (máximo ${returnMax})`} type="number" min="1" step="1" required
           value={returnForm.cantidad} onChange={v => setReturnForm(f => ({ ...f, cantidad: v }))} />
-        <Campo label="Observaciones" wide textarea value={returnForm.observaciones}
+        <Campo label="Observaciones" wide textarea maxLength={450} value={returnForm.observaciones}
           onChange={v => setReturnForm(f => ({ ...f, observaciones: v }))} />
       </Campos>
       <p className="med-inline-note">La devolución de medicamentos no devuelve dinero automáticamente. La seña tiene sus propias acciones.</p>
@@ -343,7 +360,7 @@ export default function Prestamos() {
           onChange={v => setMoneyForm(f => ({ ...f, monto: v }))} />
         <Campo label="Medio de pago del reintegro" required value={moneyForm.id_medio_pago}
           options={paymentOpts} onChange={v => setMoneyForm(f => ({ ...f, id_medio_pago: v }))} />
-        <Campo label="Observaciones" wide textarea value={moneyForm.observaciones}
+        <Campo label="Observaciones" wide textarea maxLength={500} value={moneyForm.observaciones}
           onChange={v => setMoneyForm(f => ({ ...f, observaciones: v }))} />
       </Campos>
       <p className="med-inline-note">Se registrará un egreso por el dinero que LALCEC devuelve al socio.</p>

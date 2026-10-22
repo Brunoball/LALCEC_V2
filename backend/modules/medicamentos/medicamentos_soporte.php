@@ -3,6 +3,23 @@ declare(strict_types=1);
 trait MedicamentosSoporte {
     private static function req(array $b,string $key,int $max=180): string { return required_text($b,$key,$key,$max); }
     private static function str(array $b,string $key,int $max=500): ?string { $v=clean_text($b[$key]??'',$max,true); return $v!==''?$v:null; }
+    /** Largo en caracteres (UTF-8). */
+    private static function largo(string $v): int { return function_exists('mb_strlen') ? mb_strlen($v,'UTF-8') : strlen($v); }
+    /** Recorte defensivo al largo real de la columna destino. */
+    private static function cortar(?string $v,int $max): ?string {
+        if($v===null) return null;
+        return function_exists('mb_substr') ? mb_substr($v,0,$max,'UTF-8') : substr($v,0,$max);
+    }
+    /**
+     * Texto opcional con límite explícito: si lo supera, se informa al usuario
+     * en lugar de truncar en silencio o provocar un error de columna en MySQL.
+     */
+    private static function textoLimitado(array $b,string $key,int $max,string $etiqueta): ?string {
+        $v=clean_text($b[$key]??'',100000,true);
+        if($v==='') return null;
+        if(self::largo($v)>$max) api_error('El campo '.$etiqueta.' admite hasta '.$max.' caracteres.','VALIDATION_ERROR',422,['campo'=>$key]);
+        return $v;
+    }
     private static function qty(mixed $v): int { $n=filter_var($v,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>100000000]]); if($n===false) api_error('La cantidad debe ser un entero positivo.'); return (int)$n; }
     private static function money(mixed $v,bool $allowZero=false): string {
         if(!is_string($v)&&!is_int($v)&&!is_float($v)) api_error('Importe inválido.');
@@ -34,12 +51,6 @@ trait MedicamentosSoporte {
     private static function medio(PDO $db,mixed $id): int {
         $id=positive_id($id,'medio de pago'); $s=$db->prepare('SELECT id_medio_pago FROM medios_pago WHERE id_medio_pago=? AND activo=1 FOR UPDATE'); $s->execute([$id]);
         if(!$s->fetchColumn()) api_error('Seleccioná un medio de pago activo.'); return $id;
-    }
-    private static function exigirVigente(array $med): void {
-        $v=(string)($med['fecha_vencimiento']??'');
-        if($v==='')api_error('Indicá la fecha de vencimiento antes de entregar, vender o prestar el medicamento.','VENCIMIENTO_FALTANTE',422);
-        if($v<date('Y-m-d'))
-            api_error('El medicamento está vencido. Solo se permiten ajustes o descartes, no entregas, ventas ni préstamos.','MEDICAMENTO_VENCIDO',422);
     }
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.
@@ -104,19 +115,26 @@ trait MedicamentosSoporte {
         }
         throw new LogicException('La transacción de medicamentos no pudo completarse.');
     }
-    /** Cada variación se aplica y registra atómicamente, nunca genera stock negativo. */
+    /**
+     * Cada variación se aplica y registra atómicamente, nunca genera stock negativo.
+     * $fecha: fecha declarada del ingreso (Y-m-d); si es null se usa el momento actual.
+     * $vencAnterior/$vencAplicado: fecha única del medicamento antes y después de un
+     * ingreso. Permiten que la anulación de una compra restaure el vencimiento.
+     */
     private static function inventory(PDO $db,int $med,string $tipo,int $quantity,int $delta,
       ?int $detalle=null,?int $devolucion=null,?int $socio=null,?int $ingreso=null,?int $egreso=null,
       ?string $nota=null,?string $origen=null,?string $procedencia=null,?string $costo=null,
-      ?int $anulado=null): int {
+      ?int $anulado=null,?string $fecha=null,?string $vencAnterior=null,?string $vencAplicado=null): int {
         if($quantity<1 || $delta===0 || abs($delta)!==$quantity)api_error('Movimiento de stock inválido.');
         $q=$db->prepare('UPDATE medicamentos SET stock_actual=stock_actual+? WHERE id_medicamento=? AND stock_actual>=? AND stock_actual+?<=4294967295');
         $q->execute([$delta,$med,max(0,-$delta),$delta]);
         if($q->rowCount()!==1)api_error('Stock insuficiente o concurrentemente modificado.');
+        $momento=$fecha!==null ? $fecha.' '.date('H:i:s') : date('Y-m-d H:i:s');
         $q=$db->prepare('INSERT INTO medicamentos_movimientos
-          (id_medicamento,fecha_movimiento,tipo,cantidad,variacion_disponible,id_detalle_prestamo,id_devolucion,id_socio,id_ingreso_contable,id_egreso_contable,detalle,origen,procedencia,costo_unitario,id_movimiento_anulado)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-        $q->execute([$med,date('Y-m-d H:i:s'),$tipo,$quantity,$delta,$detalle,$devolucion,$socio,$ingreso,$egreso,$nota,$origen,$procedencia,$costo,$anulado]);
+          (id_medicamento,fecha_movimiento,tipo,cantidad,variacion_disponible,id_detalle_prestamo,id_devolucion,id_socio,id_ingreso_contable,id_egreso_contable,detalle,origen,procedencia,costo_unitario,vencimiento_anterior,vencimiento_aplicado,id_movimiento_anulado)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+        $q->execute([$med,$momento,$tipo,$quantity,$delta,$detalle,$devolucion,$socio,$ingreso,$egreso,
+            self::cortar($nota,500),$origen,self::cortar($procedencia,180),$costo,$vencAnterior,$vencAplicado,$anulado]);
         return (int)$db->lastInsertId();
     }
     /** Asegura que los movimientos automáticos aparezcan en los filtros y
@@ -149,14 +167,14 @@ trait MedicamentosSoporte {
         self::opcionContableAutomatica($db,'CATEGORIA_INGRESO',$categoria);
         self::opcionContableAutomatica($db,'CONCEPTO_INGRESO',$concepto);
         $s=$db->prepare('INSERT INTO contable_ingresos (fecha,id_medio_pago,categoria,concepto,importe,detalle,proveedor) VALUES (?,?,?,?,?,?,?)');
-        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,$detalle,$proveedor]); return (int)$db->lastInsertId();
+        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,self::cortar($detalle,500),self::cortar($proveedor,160)]); return (int)$db->lastInsertId();
     }
     private static function egresoContable(PDO $db,string $fecha,int $medio,string $categoria,string $concepto,string $monto,?string $detalle=null,?string $proveedor=null): int {
         if((float)$monto>9999999999.99) api_error('El importe supera el máximo permitido por Contabilidad.');
         self::opcionContableAutomatica($db,'CATEGORIA_EGRESO',$categoria);
         self::opcionContableAutomatica($db,'CONCEPTO_EGRESO',$concepto);
         $s=$db->prepare('INSERT INTO contable_egresos (fecha,id_medio_pago,categoria,concepto,importe,detalle,proveedor) VALUES (?,?,?,?,?,?,?)');
-        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,$detalle,$proveedor]); return (int)$db->lastInsertId();
+        $s->execute([$fecha,$medio,$categoria,$concepto,$monto,self::cortar($detalle,500),self::cortar($proveedor,160)]); return (int)$db->lastInsertId();
     }
     private static function audit(PDO $db,array $auth,string $action,string $table,int $id,mixed $old,mixed $new): void {
         audit_change($db,$auth,'MEDICAMENTOS',$action,$table,$id,'Operación de medicamentos: '.$action,$old,$new);
