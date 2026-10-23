@@ -54,3 +54,19 @@ El contrato global verifica únicamente los botones que realmente tienen prueba 
 - `20` y `22`: la baja exige stock 0 y ningún préstamo con unidades pendientes; se ajustaron los escenarios y se agregó "seña vacía equivale a sin seña".
 - `23`: baja con stock muestra el paso previo y deshabilita la confirmación; un medicamento vencido solo ofrece Descarte / Ajuste negativo en Restar stock.
 - Los specs de API (20–22, 24–28, 50, 51) se ejecutaron contra una base local cargada con `lalcec_v2.sql` y la guardia E2E activa: 40/40 aprobados. Los escenarios de interfaz (23 y la parte UI de 51) deben ejecutarse en tu entorno con navegador.
+
+## Sincronización del 23/10/2026 · UI de Medicamentos
+
+- `23-medicamentos-ui-flujos.spec.js`: ajusta el nombre accesible del botón de minimizar las alertas; valida el texto exacto del selector de medicamentos para préstamos (nombre comercial y stock, sin descripción), tolerando únicamente la transformación a mayúsculas aplicada por el componente.
+- `23-medicamentos-ui-flujos.spec.js`: incorpora regresiones **de interfaz** para el historial: una venta anulable permite abrir la confirmación, exige medio de pago, motivo y confirmación física, ejecuta la anulación y bloquea la segunda; una compra inicialmente anulable se deshabilita después de un consumo posterior y exhibe el motivo del bloqueo. Las operaciones utilizan datos `PW E2E` y la limpieza segura existente.
+- `51-medicamentos-opciones.spec.js`: usa el encabezado real `.med-config__head` de Configuración → Medicamentos.
+- **No se agregan pruebas para WhatsApp ni para BotPanel**. Se mantiene su exclusión explícita del contrato administrativo.
+- Solo se modifican estos dos specs y esta nota de instalación; no hay cambios en `src/`, `backend/` ni SQL.
+
+Para probar los archivos corregidos:
+
+```powershell
+npx playwright test tests/23-medicamentos-ui-flujos.spec.js tests/51-medicamentos-opciones.spec.js --project=chromium --workers=1 --reporter=list
+```
+
+Para cerrar el testing hay que ejecutar luego la suite completa y confirmar que aprueban los escenarios E2E y la verificación de integridad. **Esta actualización fue validada estáticamente, pero no ejecutada contra la aplicación/DB** desde el entorno de entrega.

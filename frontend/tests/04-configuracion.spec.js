@@ -193,7 +193,7 @@ test.describe('Configuración general', () => {
     const medicamentosTabs = page.getByRole('tablist', { name: 'Selectores de medicamentos' });
     await expect(medicamentosTabs.getByRole('tab', { name: 'Presentaciones' })).toBeVisible();
     await expect(medicamentosTabs.getByRole('tab', { name: 'Unidades de stock' })).toBeVisible();
-    await page.getByRole('button', { name: 'Volver a configuración' }).click();
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page).toHaveURL(/\/configuracion$/);
 
     await sections.getByRole('button', { name: /Catálogos generales/i }).click();
@@ -208,7 +208,7 @@ test.describe('Configuración general', () => {
       .click();
     await expect(page).toHaveURL(/\/configuracion\/contable$/);
     await expect(page.getByRole('heading', { name: 'Configuración contable' })).toBeVisible();
-    await page.getByRole('button', { name: 'Volver a configuración' }).click();
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
 
     await page
       .getByRole('navigation', { name: 'Secciones de configuración' })

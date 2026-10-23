@@ -276,7 +276,7 @@ test.describe('Medicamentos: catálogos configurables', () => {
     await expect(tabs.getByRole('tab', { name: 'Orígenes de ingreso' })).toHaveAttribute('aria-selected', 'true');
     // El texto explicativo sobre los orígenes se quitó de Configuración.
     // Validar la tabla real, sin depender de contenido informativo eliminado.
-    await expect(page.locator('.med-config__table .config-contableTable__head')).toContainText('Acciones');
+    await expect(page.locator('.med-config__table .med-config__head')).toContainText('Acciones');
     await expect(page.getByText(/Opciones del selector Origen \/ Motivo del ingreso/i)).toHaveCount(0);
     const name = `PW E2E CFG O ${uniqueSuffix()}`;
     let id = null;
