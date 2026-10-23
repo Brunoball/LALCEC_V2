@@ -519,10 +519,12 @@
   }
 }
 
-/* LALCEC V2: accesos principales de configuración. */
+/* Accesos de configuración: las tarjetas ocupan el ancho realmente disponible.
+   auto-fit permite reacomodarlas cuando cambia el ancho de la navegación lateral,
+   sin un número de columnas ni anchos máximos rígidos. */
 .config-accessGrid--compact {
-  grid-template-columns: repeat(3, minmax(260px, 390px));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  justify-content: stretch;
   align-content: start;
 }
 
@@ -639,10 +641,6 @@
 }
 
 @media (max-width: 900px) {
-  .config-accessGrid--compact {
-    grid-template-columns: 1fr;
-  }
-
   .config-catalogHeader {
     align-items: stretch;
     flex-direction: column;
@@ -684,10 +682,6 @@
 }
 
 @media (min-width: 901px) and (max-width: 1180px) {
-  .config-accessGrid--compact {
-    grid-template-columns: repeat(2, minmax(280px, 430px));
-  }
-
   .config-catalogHeader--contable {
     align-items: stretch;
     flex-direction: column;

@@ -386,7 +386,7 @@ export default function ContableConfiguracion() {
         canCreate={writable}
         secondaryActions={[{
           key: "volver",
-          label: "Volver a configuración",
+          label: "Volver",
           icon: faArrowLeft,
           onClick: () => navigate("/configuracion"),
         }]}

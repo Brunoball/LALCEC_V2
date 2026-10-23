@@ -90,10 +90,10 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
         <FontAwesomeIcon icon={faBell} /> Alertas {alertas.length ? `(${alertas.length})` : ''} <FontAwesomeIcon icon={faChevronUp} />
       </button>}
       <div className="med-alertas__panel" aria-hidden={!desplegado} inert={!desplegado ? "" : undefined}>
-        <div className="med-alertas__head">
-          <div className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>{esMedicamento ? "Alertas de vencimiento" : "Alertas de devolución"}</strong><span>{alertas.length}</span></div>
-          <button type="button" className="med-alertas__minimizar" aria-label="Ocultar tarjetas de alertas temporalmente" title="Ocultar tarjetas" onClick={() => setDesplegado(false)}><FontAwesomeIcon icon={faChevronDown} /></button>
-        </div>
+        <button type="button" className="med-alertas__head" title="Ocultar tarjetas de alertas" aria-label={`Ocultar ${esMedicamento ? 'alertas de vencimiento' : 'alertas de devolución'}`} aria-expanded={desplegado} onClick={() => setDesplegado(false)}>
+          <span className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>{esMedicamento ? "Alertas de vencimiento" : "Alertas de devolución"}</strong><span>{alertas.length}</span></span>
+          <span className="med-alertas__minimizar" aria-hidden="true"><FontAwesomeIcon icon={faChevronDown} /></span>
+        </button>
         {alertas.length ? <div className="med-alertas__scroll">
           {alertas.map(a => <div className={`med-alertas__item ${Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo'}`} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
             <button type="button" className="med-alertas__contenido" onClick={() => void verAlerta(a)}
@@ -108,7 +108,7 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
           </div>)}
         </div> : null}
         {error ? <div className="med-alertas__error" role="alert">{error} <button type="button" onClick={() => void cargar()}>Reintentar</button></div> : null}
-        <p className="med-alertas__hint">Tocá un aviso para gestionarlo. La flecha oculta las tarjetas; la X descarta solo esa alerta.</p>
+        <p className="med-alertas__hint">Tocá un aviso para gestionarlo. Tocá el encabezado para ocultar las tarjetas; la X descarta solo esa alerta.</p>
       </div>
     </aside>
     <ModalEliminarGlobal
@@ -118,7 +118,9 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
       icon={faTriangleExclamation}
       title="Descartar alerta definitivamente"
       message={esMedicamento ? "¿Querés dejar de ver este aviso de vencimiento?" : "¿Querés dejar de ver este aviso de devolución?"}
-      warning={esMedicamento ? "No modifica el medicamento ni su stock. Solo descarta la alerta para esta fecha y usuario; si se cambia la fecha, puede volver a aparecer." : "No modifica el préstamo, solo descarta el recordatorio. Si cambia la fecha prevista, puede volver a aparecer."}
+      warning={esMedicamento
+        ? "El medicamento y su stock no se modifican. La alerta se descarta para esta fecha y usuario; podría reaparecer si cambia la fecha."
+        : "El préstamo no se modifica. El aviso se descarta para esta fecha y usuario; podría reaparecer si cambia la fecha prevista."}
       details={aDescartar ? [
         { label: 'Registro', value: aDescartar.titulo },
         { label: 'Fecha', value: fecha(aDescartar.fecha_objetivo) },

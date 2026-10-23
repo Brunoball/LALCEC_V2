@@ -12,6 +12,7 @@ import { medicamentosApi as api } from '../api/medicamentosApi';
 import { useMedicamentos } from '../hooks/useMedicamentos';
 import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import BuscadorEntidad from '../modales/BuscadorEntidad';
+import MedModalInfo from '../modales/MedModalInfo';
 import AlertasVencimientos from '../alertas/AlertasVencimientos';
 import { fecha, fechaHoy, dinero, num, MED_TIPOS, estadoVencimiento, vigenteParaEntrega } from '../utils/medicamentosUtils';
 import '../Medicamentos.css';
@@ -240,22 +241,17 @@ export default function Stock() {
         onAddOption={write ? () => nuevaOpcion('ORIGEN_INGRESO') : undefined} value={movement.origen} onChange={v => updateMovement('origen',v)} />
       <Campo label="Fecha de ingreso" required type="date" max={fechaHoy()} value={movement.fecha_ingreso} onChange={v => updateMovement('fecha_ingreso',v)} />
       <Campo label="Vencimiento del medicamento" required type="date" value={movement.fecha_vencimiento} onChange={v => updateMovement('fecha_vencimiento',v)} />
-      <p className="med-inline-note entity-field--wide">Una sola fecha para todo el stock: si la cambiás, también aplica a las unidades que ya estaban cargadas.</p>
       <BuscadorEntidad label="Donante / proveedor (opcional)" manual maxLength={160} value={movement.procedencia} selectedLabel={movement.procedencia}
         buscar={buscarProcedencias} onSelect={item => updateMovement('procedencia', item?.nombre || '')} />
       {movement.origen === 'COMPRA' ? <>
-        <Campo label="Costo por unidad ($)" type="number" required min="0.01" step="0.01" value={movement.costo_unitario} onChange={v => updateMovement('costo_unitario',v)} />
+        <Campo label="Costo por unidad ($)" money type="number" required min="0.01" step="0.01" value={movement.costo_unitario} onChange={v => updateMovement('costo_unitario',v)} />
         <Campo label="Medio de pago de la compra" required value={movement.id_medio_pago} options={payments} onChange={v => updateMovement('id_medio_pago',v)} />
-        <div className="entity-field entity-field--wide med-inline-note">La compra registrará un egreso de {dinero(num(movement.cantidad) * num(movement.costo_unitario))} en Contabilidad.</div>
       </> : null}
     </> : <>
       <Campo label="Motivo de salida" required value={movement.tipo} options={tiposSalida}
         onChange={v => updateMovement('tipo',v)} />
-      {!entregable ? <p className="med-inline-note entity-field--wide" role="status">
-        {selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: solo se puede descartar o ajustar. Para vender, entregar o prestar, corregí la fecha en la pestaña Datos.
-      </p> : null}
       {movement.tipo === 'SALIDA_VENTA' ? <>
-        <Campo label="Importe total de venta ($)" required type="number" min="0.01" step="0.01" value={movement.importe} onChange={v => updateMovement('importe',v)} />
+        <Campo label="Importe total de venta ($)" money required type="number" min="0.01" step="0.01" value={movement.importe} onChange={v => updateMovement('importe',v)} />
         <Campo label="Medio de pago" required value={movement.id_medio_pago} options={payments} onChange={v => updateMovement('id_medio_pago',v)} />
       </> : null}
     </>}
@@ -300,7 +296,16 @@ export default function Stock() {
     </ModulePage>
 
     <CrudModal modalClassName={`med-modal ${med.id_medicamento ? 'med-stock-edit-modal' : ''}`} open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}
-      title={med.id_medicamento ? `Editar medicamento · ${selected?.nombre_comercial || ''}` : 'Nuevo medicamento'}
+      title={<MedModalInfo info={tab === 'DATOS'
+        ? (med.id_medicamento ? 'Si el medicamento tiene movimientos registrados, no se puede cambiar su presentación, dosis, droga ni unidad de stock. Podés actualizar el nombre, laboratorio y observaciones.' : null)
+        : [
+          <>Stock disponible: <strong>{selected?.stock_actual} {selected?.unidad_stock}</strong>. Vencimiento actual: <strong>{fecha(selected?.fecha_vencimiento)}</strong>. No se usan lotes; hay una única fecha de vencimiento por medicamento.</>,
+          entrada ? 'Una sola fecha para todo el stock: si la cambiás, también aplica a las unidades que ya estaban cargadas.' : null,
+          entrada && movement.origen === 'COMPRA' ? <>La compra registrará un egreso de <strong>{dinero(num(movement.cantidad) * num(movement.costo_unitario))}</strong> en Contabilidad.</> : null,
+          !entrada && !entregable ? `${selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: solo se puede descartar o ajustar. Para vender, entregar o prestar, corregí la fecha en la pestaña Datos.` : null,
+        ]}>
+        {med.id_medicamento ? `Editar medicamento · ${selected?.nombre_comercial || ''}` : 'Nuevo medicamento'}
+      </MedModalInfo>}
       subtitle={med.id_medicamento ? 'Los datos y los movimientos de stock se gestionan desde Editar.' : 'Completá los datos. El stock inicial es opcional.'}
       onClose={close} submitLabel={tab==='DATOS' ? 'Guardar medicamento' : 'Registrar movimiento'}
       onSubmit={run} submitDisabled={tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (!entrada && num(movement.cantidad) > num(selected?.stock_actual)))}>
@@ -330,15 +335,13 @@ export default function Stock() {
               <BuscadorEntidad label="Donante / proveedor (opcional)" manual maxLength={160} value={movement.procedencia} selectedLabel={movement.procedencia}
                 buscar={buscarProcedencias} onSelect={item => updateMovement('procedencia', item?.nombre || '')} />
               {movement.origen === 'COMPRA' ? <>
-                <Campo label="Costo unitario ($)" required type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
+                <Campo label="Costo unitario ($)" money required type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
                 <Campo label="Medio de pago" required options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
               </> : null}
             </> : null}
           </> : null}
         </Campos>
-        {med.id_medicamento ? <p className="med-inline-note">Si el medicamento tiene movimientos registrados, no se puede cambiar su presentación, dosis, droga ni unidad de stock. Podés actualizar el nombre, laboratorio y observaciones.</p> : null}
       </> : <>
-        <p className="med-inline-note">Stock disponible: <strong>{selected?.stock_actual} {selected?.unidad_stock}</strong>. Vencimiento actual: <strong>{fecha(selected?.fecha_vencimiento)}</strong>. No se usan lotes; hay una única fecha de vencimiento por medicamento.</p>
         <div className="med-direction-switch">
           <button type="button" className={`med-mini ${entrada ? 'is-active' : ''}`} onClick={() => updateMovement('direccion','INGRESO')} disabled={saving}>Agregar stock</button>
           <button type="button" className={`med-mini ${!entrada ? 'is-active' : ''}`} onClick={() => updateMovement('direccion','SALIDA')} disabled={saving}>Restar stock</button>
@@ -381,8 +384,7 @@ export default function Stock() {
       title={num(selected?.activo)===1?'Dar de baja medicamento':'Reactivar medicamento'}
       message={num(selected?.activo)===1?'Este medicamento no podrá utilizarse en nuevos movimientos ni préstamos hasta reactivarlo.':'El medicamento volverá a estar disponible.'}
       warning={num(selected?.activo)===1 && num(selected?.stock_actual)>0
-        ? `Tiene ${selected?.stock_actual} ${selected?.unidad_stock || ''} en stock. Antes de darlo de baja registrá el descarte o ajuste en Editar > Stock > Restar stock. Tampoco puede tener unidades prestadas sin devolver.`
-        : undefined}
+        ? `Tiene ${selected?.stock_actual} ${selected?.unidad_stock || ''} en stock. Registrá el descarte o ajuste desde Editar → Stock → Restar stock antes de darlo de baja. Tampoco puede tener unidades prestadas sin devolver.` : undefined}
       confirmDisabled={num(selected?.activo)===1 && num(selected?.stock_actual)>0}
       details={selected ? [{label:'Medicamento',value:selected.nombre_comercial},{label:'Stock actual',value:selected.stock_actual}] : []}
       showReason={num(selected?.activo)===1} reasonRequired={num(selected?.activo)===1} reasonLabel="Motivo de baja" reasonPlaceholder=" " reasonMaxLength={500}
@@ -404,7 +406,7 @@ export default function Stock() {
       extraContent={<div className="med-global-confirm-fields"><Campos>
         <Campo label="Medio de pago del reintegro" required options={payments} value={reintegroMedio} onChange={setReintegroMedio} disabled={saving} />
         <Campo label="Motivo documentado de anulación (10 a 450 caracteres)" wide textarea required maxLength={450} value={motivoAnulacion} onChange={setMotivoAnulacion} disabled={saving} />
-      </Campos><label className="med-anular-confirmacion"><input type="checkbox" checked={confirmarDevolucion} onChange={e=>setConfirmarDevolucion(e.target.checked)} disabled={saving} /> Confirmo la devolución física de las unidades y el reintegro del dinero.</label></div>}
+      </Campos><label className="med-anular-confirmacion"><input type="checkbox" checked={confirmarDevolucion} onChange={e=>setConfirmarDevolucion(e.target.checked)} disabled={saving} /><span>Confirmo la devolución física de las unidades y el reintegro del dinero.</span></label></div>}
     />
 
     <AlertasVencimientos tipo="MEDICAMENTO" actualizacion={alertRevision}

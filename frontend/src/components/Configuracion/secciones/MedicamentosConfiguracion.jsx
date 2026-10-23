@@ -10,7 +10,6 @@ import { FloatingField } from '../../Global/Formularios/TabbedForm';
 import { canWrite } from '../../_shared/auth/session';
 import { medicamentosApi } from '../../Medicamentos/api/medicamentosApi';
 import '../configuracion.css';
-import './ContableConfiguracion.css';
 import './MedicamentosConfiguracion.css';
 
 const LISTAS = {
@@ -82,32 +81,31 @@ export default function MedicamentosConfiguracion() {
   return <>
     <ModulePage
       title="Configuración de medicamentos"
-      description="Administrá las opciones que aparecen en los selectores de medicamentos y de ingresos de stock."
-      className="config-sectionPage"
+      className="config-sectionPage config-medicamentosPage"
       filters={[{ key: 'med-opciones-search', type: 'search', label: 'Buscar', placeholder: '', value: busqueda, onChange: setBusqueda }]}
       primaryActionLabel={meta.nueva}
       onPrimaryAction={editable ? () => { setFeedback(null); setForm({ tipo, nombre: '', id_opcion: '' }); } : undefined}
       canCreate={editable}
-      secondaryActions={[{ key: 'volver', label: 'Volver a configuración', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
+      secondaryActions={[{ key: 'volver', label: 'Volver', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
       notice={!editable ? 'Tu usuario solo tiene permiso de consulta.' : null}>
       <ModuleFeedback type={feedback?.type || 'error'} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
-      <section className="config-detailPanel config-detailPanel--list config-contablePanel med-config">
-        <div className="config-contableToolbar">
-          <div className="config-contableTabs" role="tablist" aria-label="Selectores de medicamentos">
+      <section className="config-detailPanel config-detailPanel--list med-config">
+        <div className="med-config__toolbar">
+          <div className="med-config__tabs" role="tablist" aria-label="Selectores de medicamentos">
             {Object.entries(LISTAS).map(([clave, lista]) => <button key={clave} type="button" role="tab" aria-selected={tipo === clave} className={tipo === clave ? 'is-active' : ''}
               onClick={() => { setTipo(clave); setBusqueda(''); setFeedback(null); }}>
               <FontAwesomeIcon icon={lista.icon} /><span>{lista.nombre}</span>
             </button>)}
           </div>
         </div>
-        <div className="config-contableTable med-config__table">
-          <div className="config-contableTable__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
-          <div className="config-contableTable__body">
-            {loading ? <div className="med-config__empty">Cargando opciones...</div> : opciones.length === 0 ? <div className="med-config__empty">No hay opciones para mostrar.</div> : opciones.map(item => <article key={item.id_opcion} className={`config-contableTable__row ${Number(item.activo) === 1 ? '' : 'is-inactive'}`}>
-              <div className="config-contableIdentity"><span className="config-contableIdentity__icon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{item.codigo_sistema ? `${meta.singular} · del sistema` : meta.singular}</small></div></div>
-              <span className={`config-contableStatus ${Number(item.activo) === 1 ? 'is-active' : 'is-inactive'}`}>{Number(item.activo) === 1 ? 'Disponible' : 'Baja'}</span>
-              <span className="config-contableUsage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? meta.uso[0] : meta.uso[1]}</span>
-              <div className="config-contableActions mov-actionsInline">
+        <div className="med-config__table" role="region" aria-label={`Listado de ${meta.nombre.toLowerCase()}`} tabIndex={0}>
+          <div className="med-config__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
+          <div className="med-config__body">
+            {loading ? <div className="med-config__empty">Cargando opciones...</div> : opciones.length === 0 ? <div className="med-config__empty">No hay opciones para mostrar.</div> : opciones.map(item => <article key={item.id_opcion} className={`med-config__row ${Number(item.activo) === 1 ? '' : 'is-inactive'}`}>
+              <div className="med-config__identity"><span className="med-config__identityIcon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{item.codigo_sistema ? `${meta.singular} · del sistema` : meta.singular}</small></div></div>
+              <span className={`med-config__status ${Number(item.activo) === 1 ? 'is-active' : 'is-inactive'}`}>{Number(item.activo) === 1 ? 'Disponible' : 'Baja'}</span>
+              <span className="med-config__usage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? meta.uso[0] : meta.uso[1]}</span>
+              <div className="med-config__actions mov-actionsInline">
                 {editable ? <>
                   <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo, codigo_sistema: item.codigo_sistema || null })}><FontAwesomeIcon icon={faPen} /></button>
                   <button type="button" className={`mov-iconBtn ${Number(item.activo) === 1 ? 'mov-iconBtn--danger' : ''}`} aria-label={`${Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} ${item.nombre}`} title={Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} onClick={() => setEstado(item)}><FontAwesomeIcon icon={Number(item.activo) === 1 ? faPowerOff : faRotateLeft} /></button>

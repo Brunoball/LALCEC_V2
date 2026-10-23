@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCircleInfo, faRotateLeft, faLock, faMoneyBillTransfer, faPills, faInbox } from '@fortawesome/free-solid-svg-icons';
+import { faCircleInfo, faRotateLeft, faLock, faMoneyBillTransfer, faPills, faInbox, faXmark, faPlus, faClipboardList, faCommentDots } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import GlobalDivTable from '../../Global/GlobalDivTable';
 import GlobalPagination from '../../Global/GlobalPagination';
@@ -14,6 +14,7 @@ import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import BuscadorEntidad from '../modales/BuscadorEntidad';
 import { fecha, fechaHoy, dinero, num } from '../utils/medicamentosUtils';
 import MedicamentosTabs, { MedSection } from '../modales/MedicamentosTabs';
+import MedModalInfo from '../modales/MedModalInfo';
 import AlertasVencimientos from '../alertas/AlertasVencimientos';
 import '../Medicamentos.css';
 
@@ -24,10 +25,10 @@ const buscarSocios = async buscar => {
     tipo: 'SOCIO', detalle: p.documento || 'SIN DOCUMENTO', id_socio: p.id_socio,
   }));
 };
-const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '0', id_medio_pago: '', observaciones: '', items: [{ id_medicamento: '', cantidad: '1' }] });
+const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '', id_medio_pago: '', observaciones: '', items: [{ id_medicamento: '', cantidad: '1' }] });
 const newReturn = (idDetalle = '') => ({ id_detalle_prestamo: idDetalle, cantidad: '1', observaciones: '' });
 const newMoney = () => ({ monto: '', id_medio_pago: '', observaciones: '' });
-const tituloAccion = (icon, text) => <span className="med-modal-icon-title"><FontAwesomeIcon icon={icon} aria-hidden="true" />{text}</span>;
+const tituloAccion = (icon, text, info) => <MedModalInfo icon={icon} info={info}>{text}</MedModalInfo>;
 
 function IconAction({ icon, label, onClick, danger = false, disabled = false }) {
   return <button type="button" className={`med-mini med-icon-action${danger ? ' med-mini--danger' : ''}`}
@@ -118,7 +119,7 @@ export default function Prestamos() {
       if (action === 'reintegrar' && balance < 0.01) throw new Error('No queda seña pendiente de resolver.');
       setDetail(data);
       if (action === 'devolucion') setReturnForm(newReturn(remaining[0].id_detalle_prestamo));
-      if (action === 'reintegrar') setMoneyForm({ ...newMoney(), monto: balance.toFixed(2) });
+      if (action === 'reintegrar') setMoneyForm(newMoney());
       setModal(action);
     } catch (e) { notify('error', e.message || 'No se pudo abrir la operación.'); }
     finally { consultaEnCurso.current = false; setFetchingId(null); }
@@ -172,6 +173,7 @@ export default function Prestamos() {
   });
   const sinDuplicados = new Set(form.items.map(item => String(item.id_medicamento))).size === form.items.length;
   const paymentOpts = [op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))];
+  const haySena = num(form.sena) > 0;
   const shown = registros;
   const pages = Math.max(1, Math.ceil((total || 0) / (por_pagina || 20)));
   useEffect(() => {
@@ -233,36 +235,72 @@ export default function Prestamos() {
     <AlertasVencimientos tipo="PRESTAMO" actualizacion={alertRevision}
       onSelect={aviso => openAction(aviso.id_referencia, write ? 'cierre' : 'detalle')} />
 
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoMedicamentos} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos')}
-      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoMedicamentos || !form.id_socio || !cantidadesValidas || !sinDuplicados || (num(form.sena) > 0 && !form.id_medio_pago)}
+    <CrudModal modalClassName="med-modal med-loan-create-modal" closeOnBackdrop={false} open={modal === 'prestamo'} wide saving={saving} loading={cargandoMedicamentos} title={tituloAccion(faPills, 'Registrar préstamo de medicamentos', [
+        'El préstamo descuenta los medicamentos del stock y cobra la seña una sola vez.',
+        noDisponibles.length > 0 ? <>No se pueden prestar: {noDisponibles.map(m => `${m.nombre_comercial} (${!m.fecha_vencimiento ? 'sin fecha de vencimiento' : `vencido el ${fecha(m.fecha_vencimiento)}`})`).join('; ')}. Para corregir la fecha, andá a Medicamentos → Stock → Editar → Datos. La fecha no se carga en este préstamo.</> : null,
+      ])}
+      onClose={cerrarPrestamoNuevo} submitDisabled={cargandoMedicamentos || !form.id_socio || !cantidadesValidas || !sinDuplicados || (haySena && !form.id_medio_pago)}
       onSubmit={e => run(e, api.prestar, { ...form, sena: String(form.sena ?? '').trim() === '' ? '0' : form.sena })}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Socio y seña', icon: faMoneyBillTransfer }, { label: 'Medicamentos', icon: faPills }]}>
-        <div><Campos>
-        <BuscadorEntidad label="Socio que retira" required wide placeholder="Escribí nombre, apellido o DNI y seleccioná un socio..."
-          value={form.id_socio} selectedLabel={chosenPerson?.nombre || ''} buscar={buscarSocios} onSelect={item => {
-            setChosenPerson(item); setForm(f => ({ ...f, id_socio: item?.id_socio || '' }));
-          }} />
-        <Campo label="Fecha prevista de devolución (opcional)" type="date" min={fechaHoy()} value={form.fecha_devolucion_prevista} onChange={v => setForm(f => ({ ...f, fecha_devolucion_prevista: v }))} />
-        <Campo label="Seña cobrada ($)" type="number" min="0" step="0.01" value={form.sena} onChange={v => setForm(f => ({ ...f, sena: v }))} />
-        {num(form.sena) > 0 ? <Campo label="Medio de pago de seña" required value={form.id_medio_pago} options={paymentOpts} onChange={v => setForm(f => ({ ...f, id_medio_pago: v }))} /> : null}
-</Campos></div>
-        <div><Campos>        <div className="entity-field entity-field--wide med-loan-items"><MedSection icon={faPills}>Medicamentos entregados</MedSection>
-          {noDisponibles.length > 0 ? <p className="med-inline-note" role="status">
-            No se pueden prestar: {noDisponibles.map(m => `${m.nombre_comercial} (${!m.fecha_vencimiento ? 'sin fecha de vencimiento' : `vencido el ${fecha(m.fecha_vencimiento)}`})`).join('; ')}.
-            Para corregir la fecha, andá a Medicamentos → Stock → Editar → Datos. La fecha no se carga en este préstamo.
-          </p> : null}
-          {!cargandoMedicamentos && available.length === 0 ? <p className="med-inline-danger" role="status">No hay medicamentos con stock y fecha de vencimiento vigente disponibles para prestar.</p> : null}
-          {form.items.map((item, i) => <div className="med-box med-med-editor" key={i}>
-            <Campo className="med-med-editor__select" label={`Medicamento ${i + 1}`} required value={item.id_medicamento} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_medicamento: v } : r) }))} />
-              <Campo className="med-med-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
-            {form.items.length > 1 ? <button className="med-mini med-mini--danger med-med-editor__remove" type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}>Quitar medicamento</button> : null}
-          </div>)}
-          {!sinDuplicados && form.items.every(item => item.id_medicamento) ? <p className="med-inline-danger" role="status">No repitas el mismo medicamento en el préstamo.</p> : null}
-          <button type="button" className="med-mini med-loan-items__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '1' }] }))}>+ Agregar otro medicamento</button>
+        <div className="med-loan-create__content">
+          <section className="med-loan-create__card">
+            <div className="med-loan-create__card-heading">
+              <span className="med-loan-create__heading-icon"><FontAwesomeIcon icon={faClipboardList} aria-hidden="true" /></span>
+              <div className="med-loan-create__heading-text">
+                <h3>Datos del préstamo</h3>
+                <p>Identificá al socio y registrá los datos de la seña.</p>
+              </div>
+              <span className="med-loan-create__step">01 / 02</span>
+            </div>
+            <div className="med-loan-create__card-body">
+              <div className="med-loan-form-grid"><Campos>
+                <BuscadorEntidad label="Socio que retira" required placeholder="Escribí nombre, apellido o DNI y seleccioná un socio..."
+                  value={form.id_socio} selectedLabel={chosenPerson?.nombre || ''} buscar={buscarSocios} onSelect={item => {
+                    setChosenPerson(item); setForm(f => ({ ...f, id_socio: item?.id_socio || '' }));
+                  }} />
+                <Campo label="Fecha prevista de devolución (opcional)" type="date" min={fechaHoy()} value={form.fecha_devolucion_prevista} onChange={v => setForm(f => ({ ...f, fecha_devolucion_prevista: v }))} />
+                <Campo label="Seña cobrada ($)" type="number" money min="0" step="0.01" value={form.sena}
+                  onChange={v => setForm(f => ({ ...f, sena: v, id_medio_pago: num(v) > 0 ? f.id_medio_pago : '' }))} />
+                <Campo label="Medio de pago de seña" required={haySena} disabled={!haySena || saving}
+                  value={form.id_medio_pago} options={paymentOpts} onChange={v => setForm(f => ({ ...f, id_medio_pago: v }))} />
+              </Campos></div>
+            </div>
+          </section>
         </div>
-        <Campo label="Observaciones" wide textarea maxLength={3000} value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
-</Campos>
-      <p className="med-inline-note">El préstamo descuenta los medicamentos del stock y cobra la seña una sola vez.</p></div>
+        <div className="med-loan-create__content">
+          <section className="med-loan-create__card med-loan-create__card--medicines">
+            <div className="med-loan-create__card-heading">
+              <span className="med-loan-create__heading-icon"><FontAwesomeIcon icon={faPills} aria-hidden="true" /></span>
+              <div className="med-loan-create__heading-text">
+                <h3>Medicamentos entregados</h3>
+                <p>Elegí cada medicamento e indicá la cantidad.</p>
+              </div>
+              <span className="med-loan-create__count">{form.items.length} {form.items.length === 1 ? 'medicamento' : 'medicamentos'}</span>
+            </div>
+            <div className="med-loan-create__card-body med-loan-create__card-body--medicines">
+              {!cargandoMedicamentos && available.length === 0 ? <p className="med-inline-danger" role="status">No hay medicamentos con stock y fecha de vencimiento vigente disponibles para prestar.</p> : null}
+              <div className="med-loan-create__items">
+                {form.items.map((item, i) => <div className={`med-loan-create__medicine-row${form.items.length > 1 ? ' has-remove' : ''}`} key={i}>
+                  <span className="med-loan-create__medicine-number" aria-hidden="true">{i + 1}</span>
+                  <Campo className="med-med-editor__select" label={`Medicamento ${i + 1}`} required value={item.id_medicamento} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_medicamento: v } : r) }))} />
+                  <Campo className="med-med-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
+                  {form.items.length > 1 ? <button className="med-med-editor__remove" type="button" title={`Quitar medicamento ${i + 1}`} aria-label={`Quitar medicamento ${i + 1}`} onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}><FontAwesomeIcon icon={faXmark} aria-hidden="true" /></button> : null}
+                </div>)}
+              </div>
+              {!sinDuplicados && form.items.every(item => item.id_medicamento) ? <p className="med-inline-danger" role="status">No repitas el mismo medicamento en el préstamo.</p> : null}
+              <button type="button" className="med-loan-create__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '1' }] }))}>
+                <FontAwesomeIcon icon={faPlus} aria-hidden="true" /> Agregar otro medicamento
+              </button>
+            </div>
+          </section>
+          <section className="med-loan-create__notes">
+            <div className="med-loan-create__notes-heading">
+              <span><FontAwesomeIcon icon={faCommentDots} aria-hidden="true" /> Información adicional</span>
+              <small>Opcional</small>
+            </div>
+            <Campo label="Observaciones" wide textarea maxLength={3000} value={form.observaciones} onChange={v => setForm(f => ({ ...f, observaciones: v }))} />
+          </section>
+        </div>
       </MedicamentosTabs>
     </CrudModal>
 
@@ -332,7 +370,7 @@ export default function Prestamos() {
       </div></MedicamentosTabs> : null}
     </CrudModal>
 
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'devolucion'} saving={saving} title={tituloAccion(faRotateLeft, 'Registrar devolución de medicamentos')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'devolucion'} saving={saving} title={tituloAccion(faRotateLeft, 'Registrar devolución de medicamentos', 'La devolución de medicamentos no devuelve dinero automáticamente. La seña tiene sus propias acciones.')}
       onClose={() => setModal('')} submitLabel="Registrar devolución"
       submitDisabled={!chosenReturn || returnMax < 1 || !Number.isInteger(Number(returnForm.cantidad)) || num(returnForm.cantidad) < 1 || num(returnForm.cantidad) > returnMax}
       onSubmit={e => run(e, api.devolver, returnForm)}>
@@ -347,23 +385,23 @@ export default function Prestamos() {
         <Campo label="Observaciones" wide textarea maxLength={450} value={returnForm.observaciones}
           onChange={v => setReturnForm(f => ({ ...f, observaciones: v }))} />
       </Campos>
-      <p className="med-inline-note">La devolución de medicamentos no devuelve dinero automáticamente. La seña tiene sus propias acciones.</p>
+
     </CrudModal>
 
-    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'reintegrar'} saving={saving} title={tituloAccion(faMoneyBillTransfer, 'Reintegrar seña')}
+    <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'reintegrar'} saving={saving} title={tituloAccion(faMoneyBillTransfer, 'Reintegrar seña', 'Se registrará un egreso por el dinero que LALCEC devuelve al socio.')}
       onClose={() => setModal('')} submitLabel="Confirmar reintegro"
       onSubmit={e => run(e, api.sena, { ...moneyForm, tipo: 'DEVOLUCION_SENA', id_prestamo: loanId })}>
       <MedSection icon={faMoneyBillTransfer}>Datos del reintegro</MedSection>
       <p className="med-loan-muted">Seña disponible para reintegrar: <strong>{dinero(balance)}</strong></p>
       <Campos>
-        <Campo label="Monto a reintegrar ($)" type="number" min="0.01" step="0.01" required value={moneyForm.monto}
+        <Campo label="Monto a reintegrar ($)" type="number" money min="0.01" step="0.01" required value={moneyForm.monto}
           onChange={v => setMoneyForm(f => ({ ...f, monto: v }))} />
         <Campo label="Medio de pago del reintegro" required value={moneyForm.id_medio_pago}
           options={paymentOpts} onChange={v => setMoneyForm(f => ({ ...f, id_medio_pago: v }))} />
         <Campo label="Observaciones" wide textarea maxLength={500} value={moneyForm.observaciones}
           onChange={v => setMoneyForm(f => ({ ...f, observaciones: v }))} />
       </Campos>
-      <p className="med-inline-note">Se registrará un egreso por el dinero que LALCEC devuelve al socio.</p>
+
     </CrudModal>
 
     <ModalEliminarGlobal
@@ -374,7 +412,6 @@ export default function Prestamos() {
       row={detail?.prestamo}
       title="Finalizar préstamo"
       message="Confirmá la finalización del préstamo. Después no se podrán registrar devoluciones de medicamentos ni reintegros de seña."
-      warning="Las unidades no se descuentan nuevamente del stock. Si queda seña pendiente, LALCEC la conservará como donación, sin cobrarla otra vez."
       details={detail ? [
         { label: 'Préstamo', value: `#${loanId}` },
         { label: 'Socio', value: detail.prestamo?.socio || '—' },

@@ -205,8 +205,64 @@
 .med-anular-link {display:block;margin-top:5px;border:1px solid #fca5a5;background:#fff7f7;border-radius:6px;padding:5px 8px;color:#991b1b;cursor:pointer;font-size:11px;}
 .med-anular-link:hover {background:#fee2e2;}
 .med-anular-link:disabled {background:#f1f5f9;border-color:#e2e8f0;color:#94a3b8;cursor:not-allowed;opacity:.8;}
-.med-anular-confirmacion {display:flex;align-items:flex-start;gap:9px;margin-top:14px;font-size:12px;line-height:1.5;color:#334155;}
-.med-anular-confirmacion input {margin-top:2px;flex-shrink:0;}
+/* Confirmación de anulación: checklist integrado al modal, no checkbox suelto. */
+.med-global-confirm-fields .med-anular-confirmacion {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:14px;
+  padding:12px 13px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  background:#f8fafc;
+  color:#334155;
+  font-size:12px;
+  font-weight:500;
+  line-height:1.5;
+  cursor:pointer;
+  transition:border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease;
+}
+.med-global-confirm-fields .med-anular-confirmacion:hover,
+.med-global-confirm-fields .med-anular-confirmacion:has(input:checked) {
+  border-color:color-mix(in srgb,var(--primary-color,#f97316) 38%,#e2e8f0);
+  background:color-mix(in srgb,var(--primary-color,#f97316) 6%,#fff);
+}
+.med-global-confirm-fields .med-anular-confirmacion:focus-within {
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary-color,#f97316) 17%,transparent);
+}
+.med-global-confirm-fields .med-anular-confirmacion:has(input:disabled) {opacity:.6;cursor:not-allowed;}
+.med-global-confirm-fields .med-anular-confirmacion input[type="checkbox"] {
+  appearance:none;
+  -webkit-appearance:none;
+  position:relative;
+  display:grid;
+  place-items:center;
+  flex:0 0 19px;
+  width:19px;
+  height:19px;
+  margin:0;
+  padding:0;
+  border:1.5px solid #94a3b8;
+  border-radius:5px;
+  background:#fff;
+  cursor:inherit;
+  transition:background-color 160ms ease,border-color 160ms ease;
+}
+.med-global-confirm-fields .med-anular-confirmacion input[type="checkbox"]:checked {
+  background:var(--primary-color,#f97316);
+  border-color:var(--primary-color,#f97316);
+}
+.med-global-confirm-fields .med-anular-confirmacion input[type="checkbox"]:checked::after {
+  content:"";
+  display:block;
+  width:5px;
+  height:9px;
+  border:solid #fff;
+  border-width:0 2px 2px 0;
+  transform:translateY(-1px) rotate(45deg);
+}
+.med-global-confirm-fields .med-anular-confirmacion input:focus-visible {outline:2px solid var(--primary-color,#f97316);outline-offset:3px;}
+.med-global-confirm-fields .med-anular-confirmacion span {flex:1;min-width:0;}
 
 /* Ajustes de las tablas y filtros de Medicamentos. */
 .med-table .mov-gridCell.med-actions {
@@ -331,6 +387,29 @@
   width: 100%;
   box-sizing: border-box;
 }
+/* Préstamo: dos filas y dos columnas estables (socio/fecha, seña/medio).
+   La grilla solo se aplica a la primera pestaña de este modal. */
+.med-loan-form-grid .med-fields > .med-fields__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px 16px;
+}
+.med-loan-form-grid .med-fields__row > * {
+  width: 100%;
+  min-width: 0;
+}
+/* El label de importes flota desde el inicio y el 0,00 nunca es un valor. */
+.med-modal .med-field--money > input::placeholder,
+.med-global-confirm-fields .med-field--money > input::placeholder {
+  color: var(--text-secondary, #94a3b8);
+  opacity: .75;
+}
+@media (max-width: 720px) {
+  .med-loan-form-grid .med-fields > .med-fields__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .med-fields + .med-fields { margin-top: 20px; }
 .med-modal .med-loan-muted { margin: 0 0 20px; }
 .med-modal .med-inline-note { margin: 18px 0 0; }
@@ -347,12 +426,28 @@
 }
 .med-med-editor > .med-med-editor__select { flex: 1 1 280px; width: auto; }
 .med-med-editor > .med-med-editor__quantity { flex: 0 1 120px; width: 120px; }
-.med-med-editor__remove {
-  flex: 0 0 auto;
-  min-height: 38px;
-  padding: 8px 12px;
-  font-weight: 500;
+/* Cruz compacta: se integra a cada fila sin ocupar una columna completa. */
+.med-modal .med-med-editor--removable { position: relative; padding-right: 60px; }
+.med-modal .med-med-editor__remove {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--danger-500, #dc2626) 32%, var(--border-color, #e2e8f0));
+  border-radius: 9px;
+  color: var(--danger-500, #dc2626);
+  background: color-mix(in srgb, var(--danger-500, #dc2626) 7%, var(--surface-color, #fff));
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
 }
+.med-modal .med-med-editor__remove:hover { background: color-mix(in srgb, var(--danger-500, #dc2626) 15%, var(--surface-color, #fff)); border-color: var(--danger-500, #dc2626); }
+.med-modal .med-med-editor__remove:focus-visible { outline: 2px solid var(--danger-500, #dc2626); outline-offset: 2px; }
 .med-loan-items__add {
   align-self: flex-start;
   min-height: 38px;
@@ -365,7 +460,7 @@
   .med-fields__row > * { flex-basis: 100%; }
   .med-med-editor > .med-med-editor__select { flex-basis: 100%; }
   .med-med-editor > .med-med-editor__quantity { flex: 1 1 110px; }
-  .med-med-editor__remove { margin-left: auto; }
+
   .med-modal:not(.med-history-modal) .entity-modal__footer > .mov-btn {
     flex: 1 1 0;
     min-width: 0;
@@ -657,11 +752,18 @@ html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { backgro
   opacity:0; transform:translateY(8px) scale(.985); visibility:hidden; pointer-events:none;
   transition:opacity 160ms ease, transform 200ms ease, visibility 0s 200ms;
 }
+/* Todo el encabezado contrae el panel, también con teclado. */
 .med-alertas__head {
-  padding:11px 12px 10px 15px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  box-sizing:border-box;
+  width:100%; padding:11px 12px 10px 15px;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
   background:color-mix(in srgb, var(--primary-color) 7%, var(--surface-color));
-  border-bottom:1px solid color-mix(in srgb, var(--primary-color) 16%, var(--border-color));
+  border:0; border-bottom:1px solid color-mix(in srgb, var(--primary-color) 16%, var(--border-color));
+  color:inherit; font:inherit; text-align:left; cursor:pointer;
+  transition:background-color 160ms ease;
 }
+.med-alertas__head:hover { background:color-mix(in srgb,var(--primary-color) 12%,var(--surface-color)); }
+.med-alertas__head:focus-visible { outline:2px solid var(--primary-color);outline-offset:-3px; }
 .med-alertas__heading { display:flex; align-items:center; gap:9px; color:var(--primary-color); font-size:13px; min-width:0; }
 .med-alertas__heading strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:650; }
 .med-alertas__heading > span { color:var(--text-on-primary); background:var(--primary-color); font-weight:700; border-radius:999px; min-width:20px; padding:2px 5px; text-align:center; }
@@ -669,7 +771,7 @@ html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { backgro
   flex:none; background:transparent; border:0; border-radius:6px; cursor:pointer; color:var(--text-secondary); padding:7px;
   transition:background-color 160ms ease, color 160ms ease;
 }
-.med-alertas__minimizar:hover { background:color-mix(in srgb, var(--primary-color) 10%, transparent); color:var(--primary-color); }
+.med-alertas__head:hover .med-alertas__minimizar { background:color-mix(in srgb, var(--primary-color) 10%, transparent); color:var(--primary-color); }
 .med-alertas__descartar:hover { background:color-mix(in srgb, var(--danger-500) 12%, transparent); color:var(--danger-500); }
 .med-alertas__scroll { padding:8px; max-height:min(48vh,365px); overflow-y:auto; display:flex; flex-direction:column; gap:7px; overscroll-behavior:contain; }
 .med-alertas__item {
@@ -703,7 +805,7 @@ html[data-theme="oscuro"] .med-loan-detail-modal .med-loan-detail-date { backgro
 .med-alertas--abiertas .med-alertas__tab { opacity:0; visibility:hidden; pointer-events:none; transform:translateY(5px); }
 .med-alertas--minimizadas .med-alertas__tab { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
 .med-alertas__tab:hover { background:color-mix(in srgb, var(--primary-color) 7%, var(--surface-color)); }
-.med-alertas__contenido:focus-visible,.med-alertas__descartar:focus-visible,.med-alertas__tab:focus-visible,.med-alertas__minimizar:focus-visible { outline:2px solid var(--primary-color); outline-offset:-2px; }
+.med-alertas__contenido:focus-visible,.med-alertas__descartar:focus-visible,.med-alertas__tab:focus-visible { outline:2px solid var(--primary-color); outline-offset:-2px; }
 @media(max-width:680px) { .med-alertas { bottom:12px; right:12px; } .med-alertas__scroll { max-height:36vh; } .med-expiry-legend { gap:6px 12px; } }
 html[data-theme="oscuro"] .med-alertas__contenido strong { color:var(--warning-400); }
 html[data-theme="oscuro"] .med-alertas__item--vencido .med-alertas__contenido strong { color:var(--danger-400); }
@@ -846,3 +948,304 @@ html[data-theme="oscuro"] .med-alertas__item--vencido .med-alertas__contenido st
 /* Alta rápida de opciones desde el formulario de datos. */
 .med-quick-option-modal { max-width: 450px; }
 .med-quick-option-modal .med-fields { margin: 10px 0; }
+
+/* Ayuda contextual de Medicamentos (sin cambios en los modales globales).
+   El contenido aparece en un portal para no ser cortado por overflow:hidden. */
+.med-modal-title-with-info {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: inherit;
+  gap: 7px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.med-modal-title-with-info > .med-modal-title-label { min-width: 0; overflow-wrap: anywhere; }
+.med-modal-title-icon { flex: none; margin-right: 2px; }
+.med-modal-info-trigger-wrap { display: inline-flex; align-items: center; position: relative; flex: none; }
+.med-modal-info-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+  font-size: 13px;
+  opacity: .8;
+  cursor: help;
+  vertical-align: middle;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+.med-modal-info-trigger:hover, .med-modal-info-trigger:focus-visible,
+.med-modal-info-trigger[aria-expanded="true"] { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+.med-modal-info-trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.med-modal-info-popover {
+  position: fixed;
+  z-index: 1000005;
+  max-height: min(52vh, 270px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 11px;
+  color: var(--text-primary, #1e293b);
+  background: var(--surface-color, #fff);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, .24);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.55;
+  text-align: left;
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.med-modal-info-popover__text + .med-modal-info-popover__text {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+html[data-theme="oscuro"] .med-modal-info-popover {
+  background: var(--surface-color, #1e293b);
+  color: var(--text-primary, #f1f5f9);
+}
+@media (prefers-reduced-motion: reduce) {
+  .med-modal-info-trigger, .med-modal .med-med-editor__remove { transition: none; }
+}
+
+/* Alta de préstamo: presentación independiente del resto de modales de Medicamentos. */
+.med-loan-create-modal.entity-modal--wide {
+  width: min(980px, 100%);
+}
+.med-loan-create-modal .med-tabbed-form > .med-tab-panel {
+  padding: 22px 24px 24px;
+}
+.med-loan-create__content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 16px;
+}
+.med-loan-create__card,
+.med-loan-create__notes {
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid var(--entity-modal-border, #e2e8f0);
+  border-radius: 14px;
+  background: var(--surface-color, #fff);
+  box-shadow: 0 3px 14px -13px rgba(15, 23, 42, .32);
+}
+.med-loan-create__card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--entity-modal-border, #e2e8f0);
+  border-radius: 14px 14px 0 0;
+  background: color-mix(in srgb, var(--primary-color, #f97316) 3%, var(--surface-color, #fff));
+}
+.med-loan-create__heading-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 37px;
+  width: 37px;
+  height: 37px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary-color, #f97316) 12%, var(--surface-color, #fff));
+  color: var(--primary-color, #f97316);
+  font-size: 15px;
+}
+.med-loan-create__heading-text { flex: 1 1 auto; min-width: 0; }
+.med-loan-create__heading-text h3 {
+  margin: 0;
+  color: var(--text-primary, #17243a);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.med-loan-create__heading-text p {
+  margin: 3px 0 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.med-loan-create__count,
+.med-loan-create__step,
+.med-loan-create__notes-heading small {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #f97316) 16%, var(--entity-modal-border, #e2e8f0));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #f97316) 7%, var(--surface-color, #fff));
+  color: var(--primary-color, #c45b0b);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.med-loan-create__card-body { padding: 20px 19px 22px; }
+.med-loan-create-modal .med-loan-form-grid .med-fields > .med-fields__row {
+  gap: 23px 17px;
+}
+.med-loan-create__card-body--medicines { display: flex; flex-direction: column; gap: 12px; }
+.med-loan-create__card-body--medicines > .med-inline-danger {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger-500, #dc2626) 20%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--danger-500, #dc2626) 5%, var(--surface-color, #fff));
+}
+.med-loan-create__items {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 10px;
+}
+.med-loan-create__medicine-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(104px, 136px);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--entity-modal-border, #e2e8f0);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--entity-modal-bg, #f8fafc) 57%, var(--surface-color, #fff));
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.med-loan-create__medicine-row.has-remove {
+  grid-template-columns: 28px minmax(0, 1fr) minmax(104px, 136px) 34px;
+}
+.med-loan-create__medicine-row:focus-within {
+  border-color: color-mix(in srgb, var(--primary-color, #f97316) 38%, var(--entity-modal-border, #e2e8f0));
+}
+.med-loan-create__medicine-number {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  height: 28px;
+  width: 28px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary-color, #f97316) 11%, var(--surface-color, #fff));
+  color: var(--primary-color, #ea580c);
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.med-loan-create__medicine-row .med-field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.med-loan-create__medicine-row .med-field > input,
+.med-loan-create__medicine-row .med-field > select {
+  min-width: 0;
+  width: 100%;
+  background: var(--surface-color, #fff);
+}
+.med-loan-create-modal .med-loan-create__medicine-row .med-med-editor__remove {
+  position: static;
+  display: inline-grid;
+  transform: none;
+  place-self: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.med-loan-create__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 9px;
+  min-height: 38px;
+  padding: 9px 13px;
+  border: 1px dashed color-mix(in srgb, var(--primary-color, #f97316) 45%, var(--entity-modal-border, #e2e8f0));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color, #f97316) 5%, var(--surface-color, #fff));
+  color: var(--primary-color, #c45b0b);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.med-loan-create__add:hover:not(:disabled) {
+  border-color: var(--primary-color, #f97316);
+  background: color-mix(in srgb, var(--primary-color, #f97316) 11%, var(--surface-color, #fff));
+}
+.med-loan-create__add:focus-visible { outline: 2px solid var(--primary-color, #f97316); outline-offset: 2px; }
+.med-loan-create__add:disabled { opacity: .48; cursor: not-allowed; }
+.med-loan-create__notes { padding: 16px 18px 18px; }
+.med-loan-create__notes-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.med-loan-create__notes-heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary, #1e293b);
+  font-size: 13px;
+  font-weight: 700;
+}
+.med-loan-create__notes-heading svg { color: var(--primary-color, #f97316); }
+.med-loan-create__notes-heading small {
+  padding: 4px 9px;
+  background: color-mix(in srgb, var(--text-secondary, #64748b) 7%, var(--surface-color, #fff));
+  color: var(--text-secondary, #64748b);
+  border-color: var(--entity-modal-border, #e2e8f0);
+}
+.med-loan-create-modal .med-loan-create__notes .med-field > textarea {
+  min-height: 78px;
+  max-height: 180px;
+  resize: vertical;
+}
+.med-loan-create-modal .entity-modal__footer {
+  padding-block: 13px;
+}
+html[data-theme="oscuro"] .med-loan-create__card,
+html[data-theme="oscuro"] .med-loan-create__notes {
+  background: var(--surface-color, #202b3c);
+  border-color: var(--entity-modal-border, #455369);
+}
+html[data-theme="oscuro"] .med-loan-create__card-heading,
+html[data-theme="oscuro"] .med-loan-create__medicine-row {
+  border-color: var(--entity-modal-border, #455369);
+}
+html[data-theme="oscuro"] .med-loan-create__medicine-row .med-field > input,
+html[data-theme="oscuro"] .med-loan-create__medicine-row .med-field > select {
+  color: var(--text-primary, #f1f5f9);
+}
+@media (max-width: 720px) {
+  .med-loan-create-modal .med-tabbed-form > .med-tab-panel { padding: 16px 14px 20px; }
+  .med-loan-create__card-heading { padding: 13px 14px; }
+  .med-loan-create__card-body { padding: 16px 13px 18px; }
+  .med-loan-create-modal .med-loan-form-grid .med-fields > .med-fields__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 19px;
+  }
+  .med-loan-create__medicine-row,
+  .med-loan-create__medicine-row.has-remove {
+    grid-template-columns: 28px minmax(0, 1fr) 34px;
+    gap: 12px 10px;
+    padding: 12px;
+  }
+  .med-loan-create__medicine-number { grid-column: 1; grid-row: 1; }
+  .med-loan-create__medicine-row .med-med-editor__select { grid-column: 2 / -1; grid-row: 1; }
+  .med-loan-create__medicine-row .med-med-editor__quantity { grid-column: 2; grid-row: 2; }
+  .med-loan-create-modal .med-loan-create__medicine-row .med-med-editor__remove { grid-column: 3; grid-row: 2; }
+  .med-loan-create__notes { padding: 14px; }
+}
+@media (max-width: 420px) {
+  .med-loan-create__heading-text p { font-size: 11px; }
+  .med-loan-create__count,
+  .med-loan-create__step { padding: 5px 7px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .med-loan-create__medicine-row, .med-loan-create__add { transition: none; }
+}

@@ -44,6 +44,11 @@ export default function useWideSelectWidths() {
       if (!isWide) return;
 
       document.querySelectorAll('select').forEach(select => {
+        // El ancho por la opción más larga es exclusivo de los filtros/selectores
+        // de las secciones. Los modales (CrudModal, ModalEliminarGlobal y otros)
+        // utilizan su distribución responsive original, incluso en >1600 px.
+        // closest() también cubre los modales montados con createPortal.
+        if (select.closest('[role="dialog"], [aria-modal="true"], .entity-modal-overlay, .gdel-overlay')) return;
         if (!select.getClientRects().length) return;
 
         const style = window.getComputedStyle(select);
