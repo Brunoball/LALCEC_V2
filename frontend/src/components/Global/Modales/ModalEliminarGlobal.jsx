@@ -280,6 +280,9 @@ export default function ModalEliminarGlobal({
     showToast,
   ]);
 
+  // Enfocar una sola vez al abrir. Si esto depende de `confirm` o
+  // `confirmDisabled`, el botón Cancelar recupera el foco con cada tecla
+  // escrita en los campos controlados de extraContent.
   useEffect(() => {
     if (!open) return undefined;
     const focusTimer = window.setTimeout(() => {
@@ -287,6 +290,11 @@ export default function ModalEliminarGlobal({
         preventScroll: true,
       });
     }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [open, showReason]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -305,10 +313,9 @@ export default function ModalEliminarGlobal({
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [close, confirm, confirmDisabled, isLoading, open, showReason]);
+  }, [close, confirm, confirmDisabled, isLoading, open]);
 
   if (!open) return null;
 

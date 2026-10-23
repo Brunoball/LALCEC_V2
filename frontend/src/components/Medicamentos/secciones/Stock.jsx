@@ -405,7 +405,7 @@ export default function Stock() {
       onToast={(type,message,duration)=>setFeedback({type,message,duration})}
       extraContent={<div className="med-global-confirm-fields"><Campos>
         <Campo label="Medio de pago del reintegro" required options={payments} value={reintegroMedio} onChange={setReintegroMedio} disabled={saving} />
-        <Campo label="Motivo documentado de anulación (10 a 450 caracteres)" wide textarea required maxLength={450} value={motivoAnulacion} onChange={setMotivoAnulacion} disabled={saving} />
+        <Campo label="Motivo documentado de anulación (10 a 450 caracteres)" wide textarea blurOnEnter required maxLength={450} value={motivoAnulacion} onChange={setMotivoAnulacion} disabled={saving} />
       </Campos><label className="med-anular-confirmacion"><input type="checkbox" checked={confirmarDevolucion} onChange={e=>setConfirmarDevolucion(e.target.checked)} disabled={saving} /><span>Confirmo la devolución física de las unidades y el reintegro del dinero.</span></label></div>}
     />
 
