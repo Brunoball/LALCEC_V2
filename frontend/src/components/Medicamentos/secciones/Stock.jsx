@@ -18,7 +18,7 @@ import { fecha, fechaHoy, dinero, num, MED_TIPOS, estadoVencimiento, vigentePara
 import '../Medicamentos.css';
 
 const newMedicine = () => ({ droga: '', nombre_comercial: '', laboratorio: '', presentacion: 'COMPRIMIDOS', dosis: '', unidad_stock: 'UNIDAD', fecha_vencimiento: '', observaciones: '' });
-const newMovement = () => ({ direccion: 'INGRESO', origen: '', fecha_ingreso: fechaHoy(), fecha_vencimiento: '', cantidad: '1', procedencia: '', costo_unitario: '', id_medio_pago: '', tipo: 'ENTREGA_DONACION', importe: '', detalle: '' });
+const newMovement = () => ({ direccion: 'INGRESO', origen: '', fecha_ingreso: fechaHoy(), fecha_vencimiento: '', cantidad: '', procedencia: '', costo_unitario: '', id_medio_pago: '', tipo: 'ENTREGA_DONACION', importe: '', detalle: '' });
 // Todos los orígenes salen de la tabla medicamentos_opciones (Configuración >
 // Medicamentos > Orígenes de ingreso). Los del sistema traen codigo_sistema, que
 // es el valor que se envía y guarda (define su regla: COMPRA genera egreso, etc.);
@@ -74,7 +74,7 @@ export default function Stock() {
   const [selected, setSelected] = useState(null);
   const [med, setMed] = useState(newMedicine);
   const [movement, setMovement] = useState(newMovement);
-  const [stockInicial, setStockInicial] = useState('0');
+  const [stockInicial, setStockInicial] = useState('');
   const [history, setHistory] = useState([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -126,7 +126,7 @@ export default function Stock() {
     setMovement({ ...newMovement(), fecha_vencimiento: medicine?.fecha_vencimiento || '',
       origen: origenInicial(catalogos, medicine ? 'STOCK' : 'ALTA'),
       tipo: medicine && !vigenteParaEntrega(medicine.fecha_vencimiento) ? 'BAJA_DESCARTE' : 'ENTREGA_DONACION' });
-    setStockInicial('0');
+    setStockInicial('');
     setTab('DATOS');
     setModal('editar');
   };
@@ -235,7 +235,7 @@ export default function Stock() {
     ? [op('ENTREGA_DONACION','Entrega sin cargo'),op('SALIDA_VENTA','Venta'),op('AJUSTE_SALIDA','Ajuste negativo'),op('BAJA_DESCARTE','Descarte')]
     : [op('AJUSTE_SALIDA','Ajuste negativo'),op('BAJA_DESCARTE','Descarte')];
   const fieldsMovement = <Campos>
-    <Campo label="Cantidad" type="number" min="1" step="1" required value={movement.cantidad} onChange={v => updateMovement('cantidad', v)} />
+    <Campo label="Cantidad" quantity type="number" min="1" step="1" required value={movement.cantidad} onChange={v => updateMovement('cantidad', v)} />
     {entrada ? <>
       <Campo label="Motivo del ingreso" required options={opcionesOrigen('STOCK')}
         onAddOption={write ? () => nuevaOpcion('ORIGEN_INGRESO') : undefined} value={movement.origen} onChange={v => updateMovement('origen',v)} />
@@ -327,7 +327,7 @@ export default function Stock() {
           <Campo label="Fecha de vencimiento" type="date" required={Boolean(num(med.id_medicamento ? selected?.stock_actual : stockInicial) > 0)} value={med.fecha_vencimiento} onChange={v => { updateMed('fecha_vencimiento',v); if(!med.id_medicamento) updateMovement('fecha_vencimiento',v); }} />
           <Campo label="Observaciones del medicamento" wide textarea maxLength={3000} value={med.observaciones} onChange={v => updateMed('observaciones',v)} />
           {!med.id_medicamento ? <>
-            <Campo label="Stock inicial (opcional)" type="number" min="0" step="1" value={stockInicial} onChange={setStockInicial} />
+            <Campo label="Stock inicial (opcional)" quantity type="number" min="0" step="1" value={stockInicial} onChange={setStockInicial} />
             {num(stockInicial)>0 ? <>
               <Campo label="Origen" options={opcionesOrigen('ALTA')}
                 onAddOption={write ? () => nuevaOpcion('ORIGEN_INGRESO') : undefined} value={movement.origen} onChange={v => updateMovement('origen',v)} />

@@ -11,6 +11,94 @@
   flex: 1 1 0%;
   min-height: 0;
 }
+/* Tarjetas de resumen: misma composición que el resto de Configuración. */
+.config-medicamentosPage .med-config__stats {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
+}
+.config-medicamentosPage .med-config__stat {
+  --med-config-stat-tone: var(--entity-modal-action, var(--balto-action));
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 94px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--med-config-stat-tone) 22%, var(--entity-modal-border, var(--border-color)));
+  border-radius: var(--blue-inst-radius-lg, 16px);
+  color: var(--med-config-stat-tone);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--med-config-stat-tone) 12%, var(--surface-color, #fff)), var(--surface-color, #fff) 75%);
+  box-shadow: var(--mov-shadow-sm, 0 8px 22px rgb(15 23 42 / .08));
+}
+.config-medicamentosPage .med-config__stat::before {
+  position: absolute;
+  inset: 14px auto 14px 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--med-config-stat-tone);
+  content: '';
+}
+.config-medicamentosPage .med-config__statIcon {
+  z-index: 1;
+  display: grid;
+  flex: 0 0 38px;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: var(--blue-inst-radius, 12px);
+  color: var(--med-config-stat-tone);
+  background: color-mix(in srgb, currentColor 14%, var(--surface-color, #fff));
+  font-size: 13px;
+}
+.config-medicamentosPage .med-config__statContent { z-index: 1; min-width: 0; }
+.config-medicamentosPage .med-config__stat small {
+  display: block;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--med-config-stat-tone) 76%, var(--entity-modal-text, var(--gray-500)));
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .045em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.config-medicamentosPage .med-config__stat strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--balto-midnight);
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1;
+}
+.config-medicamentosPage .med-config__stat p {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--gray-500);
+  font-size: 10.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.config-medicamentosPage .med-config__stat--total { --med-config-stat-tone: var(--entity-modal-action, var(--balto-action)); }
+.config-medicamentosPage .med-config__stat--active { --med-config-stat-tone: var(--success-600, #059669); }
+.config-medicamentosPage .med-config__stat--inactive { --med-config-stat-tone: var(--danger-500, #ef4444); }
+.config-medicamentosPage .med-config__stat--usage { --med-config-stat-tone: var(--secondary-600, #7c3aed); }
+@media (max-width: 1180px) {
+  .config-medicamentosPage .med-config__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .config-medicamentosPage .med-config__stats { gap: 8px; padding: 10px; }
+  .config-medicamentosPage .med-config__stat { min-height: 76px; gap: 8px; padding: 10px; }
+  .config-medicamentosPage .med-config__statIcon { flex-basis: 32px; width: 32px; height: 32px; font-size: 12px; }
+  .config-medicamentosPage .med-config__stat strong { font-size: 16px; }
+  .config-medicamentosPage .med-config__stat p { font-size: 9px; }
+}
 .config-medicamentosPage .med-config {
   display: flex;
   flex: 1 1 0%;

@@ -25,8 +25,8 @@ const buscarSocios = async buscar => {
     tipo: 'SOCIO', detalle: p.documento || 'SIN DOCUMENTO', id_socio: p.id_socio,
   }));
 };
-const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '', id_medio_pago: '', observaciones: '', items: [{ id_medicamento: '', cantidad: '1' }] });
-const newReturn = (idDetalle = '') => ({ id_detalle_prestamo: idDetalle, cantidad: '1', observaciones: '' });
+const newLoan = () => ({ id_socio: '', fecha_devolucion_prevista: '', sena: '', id_medio_pago: '', observaciones: '', items: [{ id_medicamento: '', cantidad: '' }] });
+const newReturn = (idDetalle = '') => ({ id_detalle_prestamo: idDetalle, cantidad: '', observaciones: '' });
 const newMoney = () => ({ monto: '', id_medio_pago: '', observaciones: '' });
 const tituloAccion = (icon, text, info) => <MedModalInfo icon={icon} info={info}>{text}</MedModalInfo>;
 
@@ -283,12 +283,12 @@ export default function Prestamos() {
                 {form.items.map((item, i) => <div className={`med-loan-create__medicine-row${form.items.length > 1 ? ' has-remove' : ''}`} key={i}>
                   <span className="med-loan-create__medicine-number" aria-hidden="true">{i + 1}</span>
                   <Campo className="med-med-editor__select" label={`Medicamento ${i + 1}`} required value={item.id_medicamento} options={opts} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, id_medicamento: v } : r) }))} />
-                  <Campo className="med-med-editor__quantity" label="Cantidad" required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
+                  <Campo className="med-med-editor__quantity" label="Cantidad" quantity required type="number" min="1" step="1" value={item.cantidad} onChange={v => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, cantidad: v } : r) }))} />
                   {form.items.length > 1 ? <button className="med-med-editor__remove" type="button" title={`Quitar medicamento ${i + 1}`} aria-label={`Quitar medicamento ${i + 1}`} onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}><FontAwesomeIcon icon={faXmark} aria-hidden="true" /></button> : null}
                 </div>)}
               </div>
               {!sinDuplicados && form.items.every(item => item.id_medicamento) ? <p className="med-inline-danger" role="status">No repitas el mismo medicamento en el préstamo.</p> : null}
-              <button type="button" className="med-loan-create__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '1' }] }))}>
+              <button type="button" className="med-loan-create__add" disabled={form.items.length >= 30} onClick={() => setForm(f => ({ ...f, items: [...f.items, { id_medicamento: '', cantidad: '' }] }))}>
                 <FontAwesomeIcon icon={faPlus} aria-hidden="true" /> Agregar otro medicamento
               </button>
             </div>
@@ -379,8 +379,8 @@ export default function Prestamos() {
       <Campos>
         <Campo label="Medicamento devuelto" required value={returnForm.id_detalle_prestamo}
           options={returnable.map(d => op(d.id_detalle_prestamo, `${d.nombre_comercial} · ${d.dosis} · ${Math.max(0, num(d.cantidad_entregada) - num(d.cantidad_recibida))} pendientes`))}
-          onChange={v => setReturnForm(f => ({ ...f, id_detalle_prestamo: v, cantidad: '1' }))} />
-        <Campo label={`Cantidad recibida (máximo ${returnMax})`} type="number" min="1" step="1" required
+          onChange={v => setReturnForm(f => ({ ...f, id_detalle_prestamo: v, cantidad: '' }))} />
+        <Campo label={`Cantidad recibida (máximo ${returnMax})`} quantity type="number" min="1" step="1" required
           value={returnForm.cantidad} onChange={v => setReturnForm(f => ({ ...f, cantidad: v }))} />
         <Campo label="Observaciones" wide textarea maxLength={450} value={returnForm.observaciones}
           onChange={v => setReturnForm(f => ({ ...f, observaciones: v }))} />

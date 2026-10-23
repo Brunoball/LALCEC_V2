@@ -399,9 +399,11 @@
   width: 100%;
   min-width: 0;
 }
-/* El label de importes flota desde el inicio y el 0,00 nunca es un valor. */
+/* Importes y cantidades: label siempre flotante; el valor sugerido es solo placeholder. */
 .med-modal .med-field--money > input::placeholder,
-.med-global-confirm-fields .med-field--money > input::placeholder {
+.med-global-confirm-fields .med-field--money > input::placeholder,
+.med-modal .med-field--quantity > input::placeholder,
+.med-global-confirm-fields .med-field--quantity > input::placeholder {
   color: var(--text-secondary, #94a3b8);
   opacity: .75;
 }

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faCapsules, faBoxOpen, faHandHoldingMedical, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faCapsules, faBoxOpen, faCircleCheck, faHandHoldingMedical, faLink, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import CrudModal from '../../Global/Modales/CrudModal';
 import ModalEliminarGlobal from '../../Global/Modales/ModalEliminarGlobal';
@@ -21,6 +21,20 @@ const LISTAS = {
     uso: ['ingreso', 'ingresos'], destino: 'nuevos ingresos de stock' },
 };
 const MAYUS = v => String(v || '').toLocaleUpperCase('es-AR');
+
+// Mismo formato de indicadores que Catálogos, Contable y Usuarios.
+function MedicamentosStat({ icon, label, value, detail, tone }) {
+  return (
+    <article className={`med-config__stat med-config__stat--${tone}`}>
+      <span className="med-config__statIcon" aria-hidden="true"><FontAwesomeIcon icon={icon} /></span>
+      <div className="med-config__statContent">
+        <small>{label}</small>
+        <strong>{value}</strong>
+        <p>{detail}</p>
+      </div>
+    </article>
+  );
+}
 
 export default function MedicamentosConfiguracion() {
   const navigate = useNavigate();
@@ -45,7 +59,20 @@ export default function MedicamentosConfiguracion() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
-  const opciones = useMemo(() => datos.filter(x => x.tipo === tipo && MAYUS(x.nombre).includes(MAYUS(busqueda))), [datos, tipo, busqueda]);
+  const opcionesTipo = useMemo(() => datos.filter(x => x.tipo === tipo), [datos, tipo]);
+  const opciones = useMemo(() => opcionesTipo.filter(x => MAYUS(x.nombre).includes(MAYUS(busqueda))), [opcionesTipo, busqueda]);
+  const estadisticas = useMemo(() => {
+    const total = opcionesTipo.length;
+    const activas = opcionesTipo.filter(x => Number(x.activo) === 1).length;
+    const enUso = opcionesTipo.filter(x => Number(x.cantidad_usos || 0) > 0).length;
+    const mostrar = valor => loading ? '—' : valor;
+    return [
+      { icon: meta.icon, label: 'TOTAL', value: mostrar(total), detail: 'Opciones configuradas', tone: 'total' },
+      { icon: faCircleCheck, label: 'ACTIVAS', value: mostrar(activas), detail: 'Disponibles para seleccionar', tone: 'active' },
+      { icon: faPowerOff, label: 'BAJAS', value: mostrar(total - activas), detail: 'Fuera de nuevas operaciones', tone: 'inactive' },
+      { icon: faLink, label: 'EN USO', value: mostrar(enUso), detail: 'Con registros asociados', tone: 'usage' },
+    ];
+  }, [opcionesTipo, loading, meta.icon]);
   const avisar = (type, message) => setFeedback({ type, message });
 
   const guardar = async e => {
@@ -89,6 +116,9 @@ export default function MedicamentosConfiguracion() {
       secondaryActions={[{ key: 'volver', label: 'Volver', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
       notice={!editable ? 'Tu usuario solo tiene permiso de consulta.' : null}>
       <ModuleFeedback type={feedback?.type || 'error'} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
+      <section className="med-config__stats" aria-label={`Resumen de ${meta.nombre.toLowerCase()}`}>
+        {estadisticas.map(stat => <MedicamentosStat key={stat.label} {...stat} />)}
+      </section>
       <section className="config-detailPanel config-detailPanel--list med-config">
         <div className="med-config__toolbar">
           <div className="med-config__tabs" role="tablist" aria-label="Selectores de medicamentos">
