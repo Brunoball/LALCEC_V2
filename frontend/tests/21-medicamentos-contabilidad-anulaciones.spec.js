@@ -51,4 +51,33 @@ test.describe('Medicamentos: ingresos, ventas y anulaciones contables', () => {
     await assertError(request,'medicamentos_anular',{id_movimiento:compra.id_movimiento,id_medio_pago:medio,motivo:'PW E2E ANULACIÓN NO PERMITIDA POR CONSUMO',devolucion_confirmada:true},/consumo/i);
     expect(Number((await stockOf(request,fx.id)).stock_actual)).toBe(3);
   });
+  test('UI: motivo de anulación en mayúsculas y Escape cierra anulación antes que historial', async ({request, page}) => {
+    await requireAccountingOptions(request, { CATEGORIA_EGRESO: ['COMPRA DE MEDICAMENTOS'], CONCEPTO_EGRESO: ['COMPRA DE MEDICAMENTOS'] });
+    const medio = await medioPago(request);
+    const fx = await createMedicine(request, { first: entryFixture({ cantidad: 2 }) });
+    const compra = await apiCall(request, 'medicamentos_ingresar', {
+      method: 'POST', data: { id_medicamento: fx.id, ...entryFixture({ origen: 'COMPRA', cantidad: 3, costo_unitario: '10.00', id_medio_pago: medio, procedencia: 'PW E2E COMPRA PARA ESCAPE' }) },
+    });
+    await page.goto('/medicamentos/stock');
+    await page.getByRole('textbox', { name: 'Búsqueda' }).fill(fx.medicine.nombre_comercial);
+    const registro = page.getByRole('table', { name: 'Stock de medicamentos' }).getByRole('row')
+      .filter({ hasText: fx.medicine.nombre_comercial });
+    await registro.getByRole('button', { name: 'Historial' }).click();
+    const historial = page.getByRole('dialog', { name: `Historial · ${fx.medicine.nombre_comercial}` });
+    const movimiento = historial.locator('.med-history-row').filter({ hasText: 'PW E2E COMPRA PARA ESCAPE' });
+    await expect(movimiento.getByRole('button', { name: 'Anular operación' })).toBeEnabled();
+    await movimiento.getByRole('button', { name: 'Anular operación' }).click();
+    const anular = page.getByRole('dialog', { name: 'Anular compra de medicamentos' });
+    await expect(anular).toBeVisible();
+    const motivo = anular.getByRole('textbox', { name: /Motivo documentado de anulación/ });
+    await motivo.fill('devolución de prueba e2e');
+    await expect(motivo).toHaveValue('DEVOLUCIÓN DE PRUEBA E2E');
+    await page.keyboard.press('Escape');
+    await expect(anular).not.toBeVisible();
+    await expect(historial).toBeVisible();
+    expect(Number((await movementsOf(request, fx.id)).find(x => Number(x.id_movimiento) === Number(compra.id_movimiento)).anulada)).toBe(0);
+    await page.keyboard.press('Escape');
+    await expect(historial).not.toBeVisible();
+  });
+
 });

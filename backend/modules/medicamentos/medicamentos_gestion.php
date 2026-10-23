@@ -185,7 +185,20 @@ trait MedicamentosGestion {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_medicamento']??null,'medicamento');
             $m=self::medicamentoBloqueado($db,$id);
-            $tipo=self::enum($b['tipo']??'',['ENTREGA_DONACION','SALIDA_VENTA','AJUSTE_SALIDA','BAJA_DESCARTE'],'tipo de salida');
+            // Los motivos propios se registran como ajuste negativo sin asiento de
+            // venta, guardando el nombre histórico en `origen`. Así no se altera el
+            // ENUM de movimientos ni las reglas contables preexistentes.
+            require_once __DIR__ . '/medicamentos_opciones.php';
+            $motivo=clean_text(is_scalar($b['tipo']??null)?(string)$b['tipo']:'',100,true);
+            if(in_array($motivo,MedicamentosOpciones::CODIGOS_SALIDA_SISTEMA,true)) {
+                MedicamentosOpciones::validarSalidaSistema($db,$motivo);
+                $tipo=$motivo;
+                $motivoPersonalizado=null;
+            } else {
+                MedicamentosOpciones::validar($db,'SALIDA_STOCK',$motivo);
+                $tipo='AJUSTE_SALIDA';
+                $motivoPersonalizado=$motivo;
+            }
             if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::verificarVigenciaParaEntrega($m);
             $cantidad=self::qty($b['cantidad']??null);
             $nota=self::str($b,'detalle',500);
@@ -195,8 +208,8 @@ trait MedicamentosGestion {
                 $medio=self::medio($db,$b['id_medio_pago']??null);
                 $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'VENTA DE MEDICAMENTOS','VENTA DE MEDICAMENTOS',$total,'Venta de '.$cantidad.' '.$m['unidad_stock'].' de '.$m['nombre_comercial']);
             }
-            $mov=self::inventory($db,$id,$tipo,$cantidad,-$cantidad,null,null,null,$ingreso,null,$nota);
-            self::audit($db,$auth,'EGRESO_STOCK','medicamentos_movimientos',$mov,null,['medicamento'=>$id,'tipo'=>$tipo,'cantidad'=>$cantidad,'ingreso'=>$ingreso]);
+            $mov=self::inventory($db,$id,$tipo,$cantidad,-$cantidad,null,null,null,$ingreso,null,$nota,$motivoPersonalizado);
+            self::audit($db,$auth,'EGRESO_STOCK','medicamentos_movimientos',$mov,null,['medicamento'=>$id,'tipo'=>$tipo,'motivo_salida'=>$motivo,'cantidad'=>$cantidad,'ingreso'=>$ingreso]);
             return ['id_movimiento'=>$mov];
         },$auth,$b,'salidaStock');
     }

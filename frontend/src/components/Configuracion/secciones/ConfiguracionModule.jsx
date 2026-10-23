@@ -135,11 +135,11 @@ function ConfigurationHome() {
     {
       id: "medicamentos",
       title: "Medicamentos",
-      description: "Administrá las opciones de presentación y unidad de stock que aparecen en Medicamentos.",
+      description: "Administrá presentaciones, unidades de stock, orígenes de ingreso y motivos de salida.",
       icon: faCapsules,
-      status: "2 pestañas",
+      status: "4 pestañas",
       area: "Medicamentos",
-      detail: "Presentaciones y unidades de stock",
+      detail: "Presentaciones, stock, ingresos y salidas",
       path: "/configuracion/medicamentos",
     },
     {

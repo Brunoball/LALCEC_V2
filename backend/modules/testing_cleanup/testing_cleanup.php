@@ -491,7 +491,8 @@ final class TestingCleanup
                     WHERE (o.nombre LIKE 'PW E2E %' OR o.nombre LIKE 'PW EE %')
                       AND NOT (o.tipo='PRESENTACION' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.presentacion=o.nombre))
                       AND NOT (o.tipo='UNIDAD_STOCK' AND EXISTS (SELECT 1 FROM medicamentos m WHERE m.unidad_stock=o.nombre))
-                      AND NOT (o.tipo='ORIGEN_INGRESO' AND EXISTS (SELECT 1 FROM medicamentos_movimientos mv WHERE mv.tipo='INGRESO_OTRO' AND mv.origen=o.nombre))");
+                      AND NOT (o.tipo='ORIGEN_INGRESO' AND EXISTS (SELECT 1 FROM medicamentos_movimientos mv WHERE mv.tipo='INGRESO_OTRO' AND mv.origen=o.nombre))
+                      AND NOT (o.tipo='SALIDA_STOCK' AND EXISTS (SELECT 1 FROM medicamentos_movimientos mv WHERE mv.tipo='AJUSTE_SALIDA' AND mv.origen=o.nombre))");
                 $q->execute();
                 $counts['medicamentos_opciones'] += $q->rowCount();
             }

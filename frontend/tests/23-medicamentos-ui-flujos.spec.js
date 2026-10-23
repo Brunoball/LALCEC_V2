@@ -55,7 +55,7 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     await dialog.getByRole('button',{name:'Cancelar'}).click();
   });
 
-  test('vencido: Restar stock solo ofrece descarte o ajuste, sin venta ni entrega',async ({request,page})=>{
+  test('vencido: Restar stock permite descarte, ajuste o motivo propio, pero no venta ni entrega',async ({request,page})=>{
     const vencido=await createMedicine(request,{
       medicine:medFixture({fecha_vencimiento:futureIso(-1)}),
       first:entryFixture({cantidad:3,fecha_vencimiento:futureIso(-1)}),
@@ -73,9 +73,14 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     await expect(motivo.locator('option[value="SALIDA_VENTA"]')).toHaveCount(0);
     await expect(motivo.locator('option[value="ENTREGA_DONACION"]')).toHaveCount(0);
     await expect(motivo.locator('option[value="BAJA_DESCARTE"]')).toHaveCount(1);
-    // La explicación está en la ayuda contextual del encabezado (portal), no en el formulario.
+    await expect(motivo.locator('option[value="AJUSTE_SALIDA"]')).toHaveCount(1);
+    // Incluso si está vencido, se puede agregar un motivo propio para registrar
+    // una salida sin venta ni entrega. La ayuda contextual debe aclarar esa regla.
+    await expect(motivo.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(1);
     await dialog.getByRole('button', { name: 'Ver información importante de este formulario' }).click();
-    await expect(page.getByRole('tooltip')).toContainText(/solo se puede descartar o ajustar/i);
+    const ayuda = page.getByRole('tooltip');
+    await expect(ayuda).toContainText(/no se puede vender, entregar ni prestar/i);
+    await expect(ayuda).toContainText(/podés descartar, ajustar o registrar otro motivo de salida/i);
   });
 
   test('préstamo: selector solo con nombre y stock; vencidos excluidos y explicación visible',async ({request,page})=>{

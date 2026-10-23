@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faCapsules, faBoxOpen, faCircleCheck, faHandHoldingMedical, faLink, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faCapsules, faBoxOpen, faCircleCheck, faHandHoldingMedical, faArrowRightFromBracket, faLink, faPen, faPowerOff, faRotateLeft, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import CrudModal from '../../Global/Modales/CrudModal';
 import ModalEliminarGlobal from '../../Global/Modales/ModalEliminarGlobal';
@@ -19,6 +19,8 @@ const LISTAS = {
     uso: ['medicamento', 'medicamentos'], destino: 'nuevos medicamentos' },
   ORIGEN_INGRESO: { nombre: 'Orígenes de ingreso', singular: 'origen de ingreso', nueva: 'Nuevo origen de ingreso', icon: faHandHoldingMedical, max: 60,
     uso: ['ingreso', 'ingresos'], destino: 'nuevos ingresos de stock' },
+  SALIDA_STOCK: { nombre: 'Motivos de salida', singular: 'motivo de salida', nueva: 'Nuevo motivo de salida', icon: faArrowRightFromBracket, max: 100,
+    uso: ['salida', 'salidas'], destino: 'nuevas salidas de stock' },
 };
 const MAYUS = v => String(v || '').toLocaleUpperCase('es-AR');
 
@@ -139,7 +141,7 @@ export default function MedicamentosConfiguracion() {
                 {editable ? <>
                   <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo, codigo_sistema: item.codigo_sistema || null })}><FontAwesomeIcon icon={faPen} /></button>
                   <button type="button" className={`mov-iconBtn ${Number(item.activo) === 1 ? 'mov-iconBtn--danger' : ''}`} aria-label={`${Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} ${item.nombre}`} title={Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} onClick={() => setEstado(item)}><FontAwesomeIcon icon={Number(item.activo) === 1 ? faPowerOff : faRotateLeft} /></button>
-                  <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={item.codigo_sistema ? 'Origen del sistema: se puede renombrar o dar de baja, no eliminar' : Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Boolean(item.codigo_sistema) || Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>
+                  <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={item.codigo_sistema ? 'Opción del sistema: se puede renombrar o dar de baja, no eliminar' : Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Boolean(item.codigo_sistema) || Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>
                 </> : '—'}
               </div>
             </article>)}
@@ -156,7 +158,7 @@ export default function MedicamentosConfiguracion() {
         </FloatingField>
       </div></div>
       {Boolean(form?.id_opcion) ? <p className="med-config__help">{form?.codigo_sistema
-        ? 'Es un origen del sistema: el nuevo nombre se mostrará en los selectores y en el historial, sin cambiar su comportamiento.'
+        ? 'Es una opción del sistema: el nuevo nombre se mostrará en el selector sin cambiar su comportamiento.'
         : 'Si una opción ya está utilizada, conservala como dato histórico: podés darla de baja y crear otra con el nuevo nombre.'}</p> : null}
     </CrudModal>
     <ModalEliminarGlobal open={Boolean(estado)} row={estado} operacion={Number(estado?.activo) === 1 ? 'baja' : 'alta'}

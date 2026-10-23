@@ -4,20 +4,22 @@ declare(strict_types=1);
  * Catálogos editables de Medicamentos (tabla medicamentos_opciones).
  *
  * Todos los selectores de opciones del módulo se arman desde esta tabla:
- * PRESENTACION, UNIDAD_STOCK y ORIGEN_INGRESO.
+ * PRESENTACION, UNIDAD_STOCK, ORIGEN_INGRESO y SALIDA_STOCK.
  *
  * En ORIGEN_INGRESO, las filas con codigo_sistema (COMPRA, DONACION, AJUSTE,
  * INICIAL) son los orígenes del sistema: su comportamiento está definido por
  * el código (la compra genera un egreso contable, el stock inicial solo se usa
- * al crear el medicamento, etc.). Se pueden renombrar y dar de baja, pero no
- * eliminar. Los movimientos guardan el código, por lo que renombrar no altera
- * el historial. Las filas sin codigo_sistema son orígenes adicionales sin costo.
+ * al crear el medicamento, etc.). SALIDA_STOCK también tiene códigos del
+ * sistema (venta, entrega, ajuste, descarte) que no pierden sus reglas al
+ * cambiar el nombre. Opciones adicionales se registran como AJUSTE_SALIDA,
+ * conservando el motivo en medicamentos_movimientos.origen.
  */
 final class MedicamentosOpciones {
-    private const CAMPOS = ['PRESENTACION' => 'presentacion', 'UNIDAD_STOCK' => 'unidad_stock', 'ORIGEN_INGRESO' => 'origen'];
-    private const MAXIMOS = ['PRESENTACION' => 100, 'UNIDAD_STOCK' => 40, 'ORIGEN_INGRESO' => 60];
+    private const CAMPOS = ['PRESENTACION' => 'presentacion', 'UNIDAD_STOCK' => 'unidad_stock', 'ORIGEN_INGRESO' => 'origen', 'SALIDA_STOCK' => 'origen'];
+    private const MAXIMOS = ['PRESENTACION' => 100, 'UNIDAD_STOCK' => 40, 'ORIGEN_INGRESO' => 60, 'SALIDA_STOCK' => 100];
     /** Códigos internos de los orígenes del sistema. Un origen adicional no puede llamarse igual. */
     public const CODIGOS_ORIGEN_SISTEMA = ['COMPRA', 'DONACION', 'AJUSTE', 'INICIAL'];
+    public const CODIGOS_SALIDA_SISTEMA = ['ENTREGA_DONACION', 'SALIDA_VENTA', 'AJUSTE_SALIDA', 'BAJA_DESCARTE'];
 
     private static function tipo(mixed $tipo): string {
         $tipo = strtoupper(trim((string)$tipo));
@@ -36,10 +38,11 @@ final class MedicamentosOpciones {
     private static function sinAcentos(string $v): string {
         return strtr($v, ['Á'=>'A','É'=>'E','Í'=>'I','Ó'=>'O','Ú'=>'U','Ü'=>'U']);
     }
-    /** Un origen adicional no puede usar como nombre un código interno (se confundiría con el del sistema). */
-    private static function validarNombreOrigenAdicional(string $nombre): void {
-        if (in_array(self::sinAcentos($nombre), self::CODIGOS_ORIGEN_SISTEMA, true))
-            api_error('«'.$nombre.'» está reservado para un origen del sistema. Elegí otro nombre.', 'OPTION_RESERVED', 422);
+    /** Una opción adicional no puede hacerse pasar por un código reservado del sistema. */
+    private static function validarNombreAdicional(string $nombre,string $tipo): void {
+        $reservados=$tipo==='SALIDA_STOCK' ? self::CODIGOS_SALIDA_SISTEMA : self::CODIGOS_ORIGEN_SISTEMA;
+        if (in_array(self::sinAcentos($nombre), $reservados, true))
+            api_error('«'.$nombre.'» está reservado para una opción del sistema. Elegí otro nombre.', 'OPTION_RESERVED', 422);
     }
     private static function usos(PDO $db, array $opcion): int {
         $tipo = (string)$opcion['tipo'];
@@ -50,6 +53,17 @@ final class MedicamentosOpciones {
                 ? $db->prepare("SELECT COUNT(*) FROM medicamentos_movimientos WHERE tipo<>'INGRESO_OTRO' AND origen = ?")
                 : $db->prepare("SELECT COUNT(*) FROM medicamentos_movimientos WHERE tipo='INGRESO_OTRO' AND origen = ?");
             $q->execute([$codigo !== null && $codigo !== '' ? $codigo : (string)$opcion['nombre']]);
+            return (int)$q->fetchColumn();
+        }
+        if ($tipo === 'SALIDA_STOCK') {
+            $codigo=$opcion['codigo_sistema']??null;
+            if ($codigo !== null && $codigo !== '') {
+                $q=$db->prepare('SELECT COUNT(*) FROM medicamentos_movimientos WHERE tipo=?');
+                $q->execute([$codigo]);
+            } else {
+                $q=$db->prepare("SELECT COUNT(*) FROM medicamentos_movimientos WHERE tipo='AJUSTE_SALIDA' AND origen=?");
+                $q->execute([(string)$opcion['nombre']]);
+            }
             return (int)$q->fetchColumn();
         }
         $campo = self::CAMPOS[$tipo]; // Identificador de lista blanca.
@@ -98,7 +112,7 @@ final class MedicamentosOpciones {
             if ($id !== null) {
                 $antes=self::obtenerPorId($db,$id);
                 if ($antes['tipo']!==$tipo) api_error('No se puede cambiar el selector de una opción.', 'VALIDATION', 422);
-                if ($tipo==='ORIGEN_INGRESO' && !self::esSistema($antes)) self::validarNombreOrigenAdicional($nombre);
+                if (in_array($tipo,['ORIGEN_INGRESO','SALIDA_STOCK'],true) && !self::esSistema($antes)) self::validarNombreAdicional($nombre,$tipo);
                 // Un origen del sistema se identifica por su código: renombrarlo no altera
                 // el historial. El resto guarda el nombre como dato histórico.
                 if (!self::esSistema($antes) && $antes['nombre']!==$nombre && self::usos($db,$antes)>0)
@@ -107,7 +121,7 @@ final class MedicamentosOpciones {
                 self::auditar($db,$a,'EDITAR_OPCION',$id,$antes,['tipo'=>$tipo,'nombre'=>$nombre]);
                 return ['id_opcion'=>$id,'creado'=>false,'nombre'=>$nombre];
             }
-            if ($tipo==='ORIGEN_INGRESO') self::validarNombreOrigenAdicional($nombre);
+            if (in_array($tipo,['ORIGEN_INGRESO','SALIDA_STOCK'],true)) self::validarNombreAdicional($nombre,$tipo);
             self::escribirSinDuplicar(static fn() => $db->prepare('INSERT INTO medicamentos_opciones (tipo,nombre,activo) VALUES (?,?,1)')->execute([$tipo,$nombre]));
             $nuevo=(int)$db->lastInsertId();
             self::auditar($db,$a,'CREAR_OPCION',$nuevo,null,['tipo'=>$tipo,'nombre'=>$nombre]);
@@ -134,7 +148,7 @@ final class MedicamentosOpciones {
         transaction($db,static function()use($db,$a,$id):void {
             $antes=self::obtenerPorId($db,$id);
             if (self::esSistema($antes))
-                api_error('«'.$antes['nombre'].'» es un origen del sistema: podés renombrarlo o darlo de baja, pero no eliminarlo.','OPTION_SYSTEM',409);
+                api_error('«'.$antes['nombre'].'» es una opción del sistema: podés renombrarla o darla de baja, pero no eliminarla.','OPTION_SYSTEM',409);
             if (self::usos($db,$antes)>0)
                 api_error('No se puede eliminar una opción en uso. Podés darla de baja sin perder el historial.','OPTION_IN_USE',409);
             $db->prepare('DELETE FROM medicamentos_opciones WHERE id_opcion=?')->execute([$id]);
@@ -147,8 +161,16 @@ final class MedicamentosOpciones {
         if ($valorActual!==null && $valorActual===$nombre) return;
         $q=$db->prepare('SELECT id_opcion FROM medicamentos_opciones WHERE tipo=? AND nombre=? AND activo=1 AND codigo_sistema IS NULL LIMIT 1');
         $q->execute([$tipo,$nombre]);
-        $etiqueta = ['PRESENTACION'=>'presentación','UNIDAD_STOCK'=>'unidad de stock','ORIGEN_INGRESO'=>'origen'][$tipo] ?? 'selector';
+        $etiqueta = ['PRESENTACION'=>'presentación','UNIDAD_STOCK'=>'unidad de stock','ORIGEN_INGRESO'=>'origen','SALIDA_STOCK'=>'motivo de salida'][$tipo] ?? 'selector';
         if (!$q->fetchColumn()) api_error('La opción de '.$etiqueta.' «'.$nombre.'» no está disponible. Actualizá el selector.', 'OPTION_INACTIVE',422);
+    }
+    /** Validar una salida estándar por su código inmutable, incluso si cambia la etiqueta. */
+    public static function validarSalidaSistema(PDO $db,string $codigo): void {
+        $q=$db->prepare("SELECT nombre,activo FROM medicamentos_opciones WHERE tipo='SALIDA_STOCK' AND codigo_sistema=? LIMIT 1");
+        $q->execute([$codigo]);
+        $row=$q->fetch(PDO::FETCH_ASSOC);
+        if (!$row || (int)$row['activo']!==1)
+            api_error('El motivo de salida «'.($row['nombre']??$codigo).'» no está disponible. Revisá Configuración > Medicamentos > Motivos de salida.','OPTION_INACTIVE',422);
     }
     /** Un origen del sistema dado de baja en Configuración no admite nuevos ingresos. */
     public static function validarOrigenSistema(PDO $db,string $codigo): void {

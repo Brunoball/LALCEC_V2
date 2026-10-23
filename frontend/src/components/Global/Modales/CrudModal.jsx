@@ -4,24 +4,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import GlobalLoader from "../GlobalLoader";
 import useAnimatedModalSize from "./useAnimatedModalSize";
+import { registerOpenModal, unregisterOpenModal, isTopOpenModal } from "./modalEscapeStack";
 import "../Global_css/Global_Modals.css";
 
-const openModalStack = [];
-
-function registerOpenModal(modalId) {
-  const existingIndex = openModalStack.indexOf(modalId);
-  if (existingIndex !== -1) openModalStack.splice(existingIndex, 1);
-  openModalStack.push(modalId);
-}
-
-function unregisterOpenModal(modalId) {
-  const index = openModalStack.lastIndexOf(modalId);
-  if (index !== -1) openModalStack.splice(index, 1);
-}
-
-function isTopOpenModal(modalId) {
-  return openModalStack[openModalStack.length - 1] === modalId;
-}
 
 function uppercaseModalTextField(event) {
   const field = event.target;

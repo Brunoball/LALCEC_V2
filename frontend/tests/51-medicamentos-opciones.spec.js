@@ -9,6 +9,22 @@ const frontend = process.cwd();
 const backend = path.resolve(frontend, '..', 'backend');
 const read = (dir, file) => fs.readFileSync(path.join(dir, file), 'utf8');
 
+// Las alertas de vencimiento son flotantes y pueden tapar las acciones del stock.
+// Se cierran desde su encabezado como lo haría un usuario, sin forzar el clic.
+async function ocultarAlertas(page) {
+  const alertas = page.locator('aside.med-alertas--abiertas');
+  const ocultar = alertas.getByRole('button', { name: 'Ocultar alertas de vencimiento', exact: true });
+  try {
+    await ocultar.first().waitFor({ state: 'visible', timeout: 4000 });
+  } catch (_error) {
+    return; // No se abrió el panel flotante en este escenario.
+  }
+  for (const boton of await ocultar.all()) {
+    if (await boton.isVisible()) await boton.click();
+  }
+  await expect(alertas).toHaveCount(0);
+}
+
 // No crea medicamentos ni modifica la información de usuarios reales.
 test.describe('Medicamentos: catálogos configurables', () => {
   test('contrato: catálogos disponibles, datos históricos y rutas vigentes', async ({ request }) => {
@@ -31,7 +47,7 @@ test.describe('Medicamentos: catálogos configurables', () => {
     const items = optionsResponse.registros;
     expect(Array.isArray(items)).toBe(true);
     for (const option of items) {
-      expect(['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO']).toContain(option.tipo);
+      expect(['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO', 'SALIDA_STOCK']).toContain(option.tipo);
       expect(String(option.nombre).trim()).not.toBe('');
       expect([0, 1]).toContain(Number(option.activo));
     }
@@ -66,8 +82,8 @@ test.describe('Medicamentos: catálogos configurables', () => {
     }
   });
 
-  test('API: alta, edición, baja, reactivación, duplicados y eliminación en los tres selectores', async ({ request }) => {
-    for (const tipo of ['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO']) {
+  test('API: alta, edición, baja, reactivación, duplicados y eliminación en los cuatro selectores', async ({ request }) => {
+    for (const tipo of ['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO', 'SALIDA_STOCK']) {
       const name = `PW E2E OPCION ${uniqueSuffix()}`;
       const changed = `PW E2E EDITADA ${uniqueSuffix()}`;
       let id = null;
@@ -347,6 +363,113 @@ test.describe('Medicamentos: catálogos configurables', () => {
         method: 'POST', data: { id_opcion: id },
       });
     }
+  });
+
+  test('contrato: motivos del sistema mantienen código estable y migración SQL disponible', async ({ request }) => {
+    const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
+    const salidas = opciones.filter(o => o.tipo === 'SALIDA_STOCK' && o.codigo_sistema);
+    for (const codigo of ['ENTREGA_DONACION', 'SALIDA_VENTA', 'AJUSTE_SALIDA', 'BAJA_DESCARTE']) {
+      const opcion = salidas.find(o => o.codigo_sistema === codigo);
+      expect(opcion, `Falta el motivo ${codigo}: aplicar sql/2026-10-23_medicamentos_motivos_salida.sql`).toBeTruthy();
+      expect(String(opcion.nombre)).not.toBe('');
+    }
+    const script = path.resolve(frontend, '..', 'sql', '2026-10-23_medicamentos_motivos_salida.sql');
+    if (fs.existsSync(script)) {
+      const sql = fs.readFileSync(script, 'utf8');
+      expect(sql).toContain('SALIDA_STOCK');
+      expect(sql).toContain('chk_med_opciones_tipo');
+    }
+  });
+
+  test('API: motivo de salida propio resta stock sin asiento y respeta baja y trazabilidad', async ({ request }) => {
+    const motivo = `PW E2E ROTURA ${uniqueSuffix()}`;
+    const creado = await apiCall(request, 'medicamentos_opcion_guardar', {
+      method: 'POST', data: { tipo: 'SALIDA_STOCK', nombre: motivo },
+    });
+    const id = Number(creado.id_opcion);
+    try {
+      const fx = await createMedicine(request, { first: entryFixture({ cantidad: 5 }) });
+      const salida = await apiCall(request, 'medicamentos_salida', {
+        method: 'POST', data: { id_medicamento: fx.id, tipo: motivo, cantidad: 2, detalle: 'PW E2E DESCARGA CON MOTIVO' },
+      });
+      const registrado = (await movementsOf(request, fx.id)).find(m => Number(m.id_movimiento) === Number(salida.id_movimiento));
+      expect(registrado).toMatchObject({ tipo: 'AJUSTE_SALIDA', origen: motivo });
+      expect(registrado.id_ingreso_contable).toBeNull();
+      expect(registrado.id_egreso_contable).toBeNull();
+      expect(Number((await stockOf(request, fx.id)).stock_actual)).toBe(3);
+      const opciones = (await apiCall(request, 'medicamentos_opciones')).registros;
+      expect(Number(opciones.find(o => Number(o.id_opcion) === id).cantidad_usos)).toBeGreaterThan(0);
+      const renombrar = await apiResult(request, 'medicamentos_opcion_guardar', {
+        method: 'POST', data: { id_opcion: id, tipo: 'SALIDA_STOCK', nombre: motivo + ' NUEVO' },
+      });
+      expect(renombrar.status).toBe(409);
+      await apiCall(request, 'medicamentos_opcion_estado', { method: 'POST', data: { id_opcion: id, activo: 0 } });
+      const inactivo = await apiResult(request, 'medicamentos_salida', {
+        method: 'POST', data: { id_medicamento: fx.id, tipo: motivo, cantidad: 1 },
+      });
+      expect(inactivo.status).toBe(422);
+      expect(inactivo.body.codigo).toBe('OPTION_INACTIVE');
+      expect(Number((await stockOf(request, fx.id)).stock_actual)).toBe(3);
+      const eliminar = await apiResult(request, 'medicamentos_opcion_eliminar', {
+        method: 'POST', data: { id_opcion: id },
+      });
+      expect(eliminar.status).toBe(409);
+      expect(eliminar.body.codigo).toBe('OPTION_IN_USE');
+    } finally {
+      // El catálogo está vinculado a un movimiento E2E. El guard de limpieza
+      // elimina los datos propios al terminar los tests, sin borrar datos reales.
+      await apiResult(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
+    }
+  });
+
+  test('UI: motivo de salida permite alta rápida y Configuración tiene su pestaña', async ({ page, request }) => {
+    const fx = await createMedicine(request, { first: entryFixture({ cantidad: 5 }) });
+    const name = `PW E2E SALIDA RAPIDA ${uniqueSuffix()}`;
+    let id = null;
+    await page.goto('/medicamentos/stock');
+    await page.getByRole('textbox', { name: 'Búsqueda' }).fill(fx.medicine.nombre_comercial);
+    const registro = page.getByRole('table', { name: 'Stock de medicamentos' }).getByRole('row')
+      .filter({ hasText: fx.medicine.nombre_comercial });
+    await expect(registro).toBeVisible();
+    await ocultarAlertas(page);
+    await registro.getByRole('button', { name: 'Editar' }).click();
+    const editor = page.getByRole('dialog', { name: new RegExp('Editar medicamento') });
+    try {
+      await editor.getByRole('tab', { name: 'Stock' }).click();
+      await editor.getByRole('button', { name: 'Restar stock' }).click();
+      const motivos = editor.getByLabel('Motivo de salida *');
+      await expect(motivos.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
+      await motivos.selectOption('__MED_AGREGAR__');
+      const modal = page.getByRole('dialog', { name: 'Agregar motivo de salida' });
+      await expect(modal).toBeVisible();
+      // Escape cierra el alta rápida, nunca el editor que quedó detrás.
+      await page.keyboard.press('Escape');
+      await expect(modal).not.toBeVisible();
+      await expect(editor).toBeVisible();
+      await motivos.selectOption('__MED_AGREGAR__');
+      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name.toLowerCase());
+      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
+      await expect(modal).not.toBeVisible();
+      await expect(motivos).toHaveValue(name);
+      const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
+      id = Number(opciones.find(o => o.tipo === 'SALIDA_STOCK' && o.nombre === name)?.id_opcion);
+      expect(id).toBeGreaterThan(0);
+    } finally {
+      const modal = page.getByRole('dialog', { name: 'Agregar motivo de salida' });
+      if (await modal.isVisible()) await modal.getByRole('button', { name: 'Cancelar' }).click();
+      if (await editor.isVisible()) await editor.getByRole('button', { name: 'Cerrar' }).click();
+      if (!id) {
+        const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
+        id = Number(opciones.find(o => o.tipo === 'SALIDA_STOCK' && o.nombre === name)?.id_opcion);
+      }
+      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
+    }
+    await page.goto('/configuracion/medicamentos');
+    const tab = page.getByRole('tab', { name: 'Motivos de salida' });
+    await expect(tab).toBeVisible();
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Nuevo motivo de salida' })).toBeVisible();
   });
 
 });

@@ -42,7 +42,16 @@ const OPCION_RAPIDA = {
   PRESENTACION: { titulo: 'Agregar presentación', max: 100 },
   UNIDAD_STOCK: { titulo: 'Agregar unidad de stock', max: 40 },
   ORIGEN_INGRESO: { titulo: 'Agregar origen de ingreso', max: 60 },
+  SALIDA_STOCK: { titulo: 'Agregar motivo de salida', max: 100 },
 };
+// Los motivos del sistema conservan sus códigos y reglas contables; los
+// personalizados usan el nombre elegido como identificador del selector.
+const opcionesSalida = (catalogos, puedeEntregar) => catalogos
+  .filter(o => o.tipo === 'SALIDA_STOCK' && Number(o.activo) === 1)
+  .filter(o => puedeEntregar || !['ENTREGA_DONACION', 'SALIDA_VENTA'].includes(o.codigo_sistema))
+  .map(o => op(o.codigo_sistema || o.nombre, o.nombre));
+const salidaInicial = (lista, puedeEntregar) =>
+  (lista.find(o => o.value === (puedeEntregar ? 'ENTREGA_DONACION' : 'BAJA_DESCARTE')) || lista[0])?.value || '';
 const buscarProcedencias = async buscar => (await api.procedencias(buscar)).registros || [];
 const textoVencimiento = fechaVence => {
   if (!fechaVence) return 'Sin fecha';
@@ -125,7 +134,7 @@ export default function Stock() {
       id_medicamento: medicine.id_medicamento, fecha_vencimiento_original: medicine.fecha_vencimiento || '' } : inicial);
     setMovement({ ...newMovement(), fecha_vencimiento: medicine?.fecha_vencimiento || '',
       origen: origenInicial(catalogos, medicine ? 'STOCK' : 'ALTA'),
-      tipo: medicine && !vigenteParaEntrega(medicine.fecha_vencimiento) ? 'BAJA_DESCARTE' : 'ENTREGA_DONACION' });
+      tipo: salidaInicial(opcionesSalida(catalogos, vigenteParaEntrega(medicine?.fecha_vencimiento)), vigenteParaEntrega(medicine?.fecha_vencimiento)) });
     setStockInicial('');
     setTab('DATOS');
     setModal('editar');
@@ -219,6 +228,7 @@ export default function Stock() {
       const nueva = lista.find(item => Number(item.id_opcion) === Number(result.id_opcion));
       if (!nueva) throw new Error('La opción se guardó, pero no se pudo actualizar el selector.');
       if (quickOption === 'ORIGEN_INGRESO') updateMovement('origen', nueva.nombre);
+      else if (quickOption === 'SALIDA_STOCK') updateMovement('tipo', nueva.nombre);
       else updateMed(quickOption === 'PRESENTACION' ? 'presentacion' : 'unidad_stock', nueva.nombre);
       setQuickOption(null); setQuickName('');
       notify('success', 'Opción agregada y seleccionada.');
@@ -231,9 +241,15 @@ export default function Stock() {
   // Venta y entrega exigen vencimiento vigente (misma regla que el backend);
   // ajuste negativo y descarte siempre están disponibles.
   const entregable = vigenteParaEntrega(selected?.fecha_vencimiento);
-  const tiposSalida = entregable
-    ? [op('ENTREGA_DONACION','Entrega sin cargo'),op('SALIDA_VENTA','Venta'),op('AJUSTE_SALIDA','Ajuste negativo'),op('BAJA_DESCARTE','Descarte')]
-    : [op('AJUSTE_SALIDA','Ajuste negativo'),op('BAJA_DESCARTE','Descarte')];
+  const tiposSalida = opcionesSalida(catalogos, entregable);
+  // Si el motivo quedó inactivo o no está permitido por vencimiento, elegir
+  // una opción válida al abrir Restar stock o refrescar los catálogos.
+  useEffect(() => {
+    if (modal !== 'editar' || !selected || movement.direccion !== 'SALIDA') return;
+    const disponibles = opcionesSalida(catalogos, vigenteParaEntrega(selected.fecha_vencimiento));
+    setMovement(v => disponibles.some(o => o.value === v.tipo) ? v :
+      { ...v, tipo: salidaInicial(disponibles, vigenteParaEntrega(selected.fecha_vencimiento)) });
+  }, [catalogos, modal, selected, movement.direccion]);
   const fieldsMovement = <Campos>
     <Campo label="Cantidad" quantity type="number" min="1" step="1" required value={movement.cantidad} onChange={v => updateMovement('cantidad', v)} />
     {entrada ? <>
@@ -249,7 +265,9 @@ export default function Stock() {
       </> : null}
     </> : <>
       <Campo label="Motivo de salida" required value={movement.tipo} options={tiposSalida}
+        onAddOption={write ? () => nuevaOpcion('SALIDA_STOCK') : undefined}
         onChange={v => updateMovement('tipo',v)} />
+      {!tiposSalida.length ? <p role="alert" className="med-inline-danger">No hay motivos de salida disponibles. Revisá Configuración → Medicamentos → Motivos de salida y aplicá la migración SQL.</p> : null}
       {movement.tipo === 'SALIDA_VENTA' ? <>
         <Campo label="Importe total de venta ($)" money required type="number" min="0.01" step="0.01" value={movement.importe} onChange={v => updateMovement('importe',v)} />
         <Campo label="Medio de pago" required value={movement.id_medio_pago} options={payments} onChange={v => updateMovement('id_medio_pago',v)} />
@@ -302,13 +320,13 @@ export default function Stock() {
           <>Stock disponible: <strong>{selected?.stock_actual} {selected?.unidad_stock}</strong>. Vencimiento actual: <strong>{fecha(selected?.fecha_vencimiento)}</strong>. No se usan lotes; hay una única fecha de vencimiento por medicamento.</>,
           entrada ? 'Una sola fecha para todo el stock: si la cambiás, también aplica a las unidades que ya estaban cargadas.' : null,
           entrada && movement.origen === 'COMPRA' ? <>La compra registrará un egreso de <strong>{dinero(num(movement.cantidad) * num(movement.costo_unitario))}</strong> en Contabilidad.</> : null,
-          !entrada && !entregable ? `${selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: solo se puede descartar o ajustar. Para vender, entregar o prestar, corregí la fecha en la pestaña Datos.` : null,
+          !entrada && !entregable ? `${selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: no se puede vender, entregar ni prestar. Podés descartar, ajustar o registrar otro motivo de salida. Para habilitar la entrega, corregí la fecha en Datos.` : null,
         ]}>
         {med.id_medicamento ? `Editar medicamento · ${selected?.nombre_comercial || ''}` : 'Nuevo medicamento'}
       </MedModalInfo>}
       subtitle={med.id_medicamento ? 'Los datos y los movimientos de stock se gestionan desde Editar.' : 'Completá los datos. El stock inicial es opcional.'}
       onClose={close} submitLabel={tab==='DATOS' ? 'Guardar medicamento' : 'Registrar movimiento'}
-      onSubmit={run} submitDisabled={tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (!entrada && num(movement.cantidad) > num(selected?.stock_actual)))}>
+      onSubmit={run} submitDisabled={tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (!entrada && (num(movement.cantidad) > num(selected?.stock_actual) || !tiposSalida.some(o => o.value === movement.tipo))))}>
       <div className={med.id_medicamento ? 'med-tabbed-form' : undefined}>
       {med.id_medicamento ? <div className="entity-form-tabs med-simple-tabs" role="tablist" aria-label="Editar medicamento">
         <button type="button" className={`entity-form-tab ${tab==='DATOS'?'is-active':''}`} role="tab" aria-selected={tab==='DATOS'} disabled={saving} onClick={() => setTab('DATOS')}><FontAwesomeIcon icon={faPills} /> Datos</button>
@@ -364,7 +382,7 @@ export default function Stock() {
       title={`Historial · ${selected?.nombre_comercial || ''}`} subtitle="Movimientos de stock del medicamento"
       footerStart={<GlobalPagination page={historyPage} total={historyTotal} perPage={50} onPageChange={p=>fetchHistory(selected,p)} loading={detailLoading} label="movimientos" />} onClose={close}>
       {history.length ? <div className="med-history-list">{history.map(h => <div className="med-history-row" key={h.id_movimiento}>
-        <div className="med-history-details"><strong>{MED_TIPOS[h.tipo] || h.tipo}{h.tipo === 'INGRESO_OTRO' && h.origen ? ` · ${h.origen}` : ''}</strong>
+        <div className="med-history-details"><strong>{h.tipo === 'AJUSTE_SALIDA' && h.origen ? h.origen : (MED_TIPOS[h.tipo] || h.tipo)}{h.tipo === 'INGRESO_OTRO' && h.origen ? ` · ${h.origen}` : ''}</strong>
           <span>{String(h.fecha_movimiento || '').slice(0,16)}{h.procedencia ? ` · ${h.procedencia}` : ''}{h.costo_unitario ? ` · ${dinero(h.costo_unitario)} por unidad` : ''}</span>
           {h.detalle ? <span>{h.detalle}</span> : null}
           {num(h.anulada)===1 ? <span>Operación anulada con contramovimiento.</span> : null}
@@ -405,7 +423,7 @@ export default function Stock() {
       onToast={(type,message,duration)=>setFeedback({type,message,duration})}
       extraContent={<div className="med-global-confirm-fields"><Campos>
         <Campo label="Medio de pago del reintegro" required options={payments} value={reintegroMedio} onChange={setReintegroMedio} disabled={saving} />
-        <Campo label="Motivo documentado de anulación (10 a 450 caracteres)" wide textarea blurOnEnter required maxLength={450} value={motivoAnulacion} onChange={setMotivoAnulacion} disabled={saving} />
+        <Campo label="Motivo documentado de anulación (10 a 450 caracteres)" wide textarea blurOnEnter required maxLength={450} value={motivoAnulacion} onChange={v => setMotivoAnulacion(v.toLocaleUpperCase('es-AR'))} disabled={saving} />
       </Campos><label className="med-anular-confirmacion"><input type="checkbox" checked={confirmarDevolucion} onChange={e=>setConfirmarDevolucion(e.target.checked)} disabled={saving} /><span>Confirmo la devolución física de las unidades y el reintegro del dinero.</span></label></div>}
     />
 

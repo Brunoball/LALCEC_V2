@@ -17,6 +17,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import Toast from "../Toast";
 import useAnimatedModalSize from "./useAnimatedModalSize";
+import { registerOpenModal, unregisterOpenModal, isTopOpenModal } from "./modalEscapeStack";
 import "../Global_css/Global_ModalEliminar.css";
 
 const OPERATION_CONFIG = {
@@ -150,6 +151,7 @@ export default function ModalEliminarGlobal({
   fixedHeight = false,
 }) {
   const modalRef = useRef(null);
+  const escapeIdRef = useRef(Symbol("confirm-modal"));
   const cancelRef = useRef(null);
   useAnimatedModalSize(modalRef, open && !fixedHeight);
   const reasonRef = useRef(null);
@@ -295,9 +297,19 @@ export default function ModalEliminarGlobal({
 
   useEffect(() => {
     if (!open) return undefined;
+    const modalId = escapeIdRef.current;
+    registerOpenModal(modalId);
+    return () => unregisterOpenModal(modalId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onKeyDown = (event) => {
+      if (!isTopOpenModal(escapeIdRef.current)) return;
       if (event.key === "Escape") {
+        // También consume el evento si se está guardando, para no cerrar el fondo.
         event.preventDefault();
+        event.stopPropagation();
         event.stopImmediatePropagation();
         close();
       } else if (
