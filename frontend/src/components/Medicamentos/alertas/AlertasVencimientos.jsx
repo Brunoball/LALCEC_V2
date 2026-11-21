@@ -17,7 +17,7 @@ const mensajeDias = valor => {
  * entrar a la sección se despliegan de nuevo. Descartar con confirmación las
  * persiste por usuario y fecha en la base de datos.
  */
-export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 }) {
+export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0, idsPermitidos = null }) {
   const esMedicamento = tipo === 'MEDICAMENTO';
   const [alertas, setAlertas] = useState([]);
   const [desplegado, setDesplegado] = useState(true);
@@ -83,19 +83,21 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0 
     } finally { setProcesando(false); }
   };
 
-  if (!alertas.length && !error && !aDescartar) return null;
+  const visibles = idsPermitidos === null ? alertas : alertas.filter(a =>
+    idsPermitidos.includes(Number(a.id_referencia)));
+  if (!visibles.length && !error && !aDescartar) return null;
   return <>
     <aside className={`med-alertas ${desplegado ? 'med-alertas--abiertas' : 'med-alertas--minimizadas'}`} aria-label={esMedicamento ? "Alertas de vencimiento de medicamentos" : "Alertas de préstamos"}>
       {<button className="med-alertas__tab" tabIndex={desplegado ? -1 : 0} aria-hidden={desplegado} type="button" onClick={() => setDesplegado(true)} aria-expanded={false}>
-        <FontAwesomeIcon icon={faBell} /> Alertas {alertas.length ? `(${alertas.length})` : ''} <FontAwesomeIcon icon={faChevronUp} />
+        <FontAwesomeIcon icon={faBell} /> Alertas {visibles.length ? `(${visibles.length})` : ''} <FontAwesomeIcon icon={faChevronUp} />
       </button>}
       <div className="med-alertas__panel" aria-hidden={!desplegado} inert={!desplegado ? "" : undefined}>
         <button type="button" className="med-alertas__head" title="Ocultar tarjetas de alertas" aria-label={`Ocultar ${esMedicamento ? 'alertas de vencimiento' : 'alertas de devolución'}`} aria-expanded={desplegado} onClick={() => setDesplegado(false)}>
-          <span className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>{esMedicamento ? "Alertas de vencimiento" : "Alertas de devolución"}</strong><span>{alertas.length}</span></span>
+          <span className="med-alertas__heading"><FontAwesomeIcon icon={faBell} /><strong>{esMedicamento ? "Alertas de vencimiento" : "Alertas de devolución"}</strong><span>{visibles.length}</span></span>
           <span className="med-alertas__minimizar" aria-hidden="true"><FontAwesomeIcon icon={faChevronDown} /></span>
         </button>
-        {alertas.length ? <div className="med-alertas__scroll">
-          {alertas.map(a => <div className={`med-alertas__item ${Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo'}`} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
+        {visibles.length ? <div className="med-alertas__scroll">
+          {visibles.map(a => <div className={`med-alertas__item ${Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo'}`} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
             <button type="button" className="med-alertas__contenido" onClick={() => void verAlerta(a)}
               title={esMedicamento ? "Abrir medicamento para gestionarlo" : "Abrir préstamo para gestionarlo"}>
               <span className="med-alertas__nombre">{a.titulo}</span>

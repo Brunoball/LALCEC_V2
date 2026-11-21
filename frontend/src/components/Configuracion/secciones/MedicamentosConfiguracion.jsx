@@ -9,6 +9,7 @@ import ModuleFeedback from '../../Global/ModuleFeedback';
 import { FloatingField } from '../../Global/Formularios/TabbedForm';
 import { canWrite } from '../../_shared/auth/session';
 import { medicamentosApi } from '../../Medicamentos/api/medicamentosApi';
+import { PRESENTACIONES_FIJAS } from '../../Medicamentos/utils/medicamentosSelectores';
 import '../configuracion.css';
 import './MedicamentosConfiguracion.css';
 
@@ -51,6 +52,10 @@ export default function MedicamentosConfiguracion() {
   const [estado, setEstado] = useState(null);
   const [eliminar, setEliminar] = useState(null);
   const meta = LISTAS[tipo];
+  const esUnidadFija = tipo === 'UNIDAD_STOCK';
+  // Las presentaciones de Banco de Drogas definen la sección de cada medicamento:
+  // no se renombran, dan de baja ni eliminan (el backend también lo impide).
+  const esFija = item => esUnidadFija || (tipo === 'PRESENTACION' && PRESENTACIONES_FIJAS.includes(item.nombre));
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -113,10 +118,10 @@ export default function MedicamentosConfiguracion() {
       className="config-sectionPage config-medicamentosPage"
       filters={[{ key: 'med-opciones-search', type: 'search', label: 'Buscar', placeholder: '', value: busqueda, onChange: setBusqueda }]}
       primaryActionLabel={meta.nueva}
-      onPrimaryAction={editable ? () => { setFeedback(null); setForm({ tipo, nombre: '', id_opcion: '' }); } : undefined}
-      canCreate={editable}
+      onPrimaryAction={editable && !esUnidadFija ? () => { setFeedback(null); setForm({ tipo, nombre: '', id_opcion: '' }); } : undefined}
+      canCreate={editable && !esUnidadFija}
       secondaryActions={[{ key: 'volver', label: 'Volver', icon: faArrowLeft, onClick: () => navigate('/configuracion') }]}
-      notice={!editable ? 'Tu usuario solo tiene permiso de consulta.' : null}>
+      notice={!editable ? 'Tu usuario solo tiene permiso de consulta.' : esUnidadFija ? 'En Banco de Drogas se puede elegir solo Blíster, Ampolla y Caja. Las demás opciones se conservan en la base y se muestran aquí para consulta.' : tipo === 'PRESENTACION' ? 'Banco de Drogas muestra presentaciones por sector. El catálogo completo se mantiene aquí para conservar el historial y otros usos.' : null}>
       <ModuleFeedback type={feedback?.type || 'error'} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
       <section className="med-config__stats" aria-label={`Resumen de ${meta.nombre.toLowerCase()}`}>
         {estadisticas.map(stat => <MedicamentosStat key={stat.label} {...stat} />)}
@@ -134,11 +139,11 @@ export default function MedicamentosConfiguracion() {
           <div className="med-config__head"><span>Nombre</span><span>Estado</span><span>Uso</span><span>Acciones</span></div>
           <div className="med-config__body">
             {loading ? <div className="med-config__empty">Cargando opciones...</div> : opciones.length === 0 ? <div className="med-config__empty">No hay opciones para mostrar.</div> : opciones.map(item => <article key={item.id_opcion} className={`med-config__row ${Number(item.activo) === 1 ? '' : 'is-inactive'}`}>
-              <div className="med-config__identity"><span className="med-config__identityIcon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{item.codigo_sistema ? `${meta.singular} · del sistema` : meta.singular}</small></div></div>
+              <div className="med-config__identity"><span className="med-config__identityIcon"><FontAwesomeIcon icon={meta.icon} /></span><div><strong>{item.nombre}</strong><small>{item.codigo_sistema ? `${meta.singular} · del sistema` : esFija(item) && tipo === 'PRESENTACION' ? `${meta.singular} · fija de Banco de Drogas` : meta.singular}</small></div></div>
               <span className={`med-config__status ${Number(item.activo) === 1 ? 'is-active' : 'is-inactive'}`}>{Number(item.activo) === 1 ? 'Disponible' : 'Baja'}</span>
               <span className="med-config__usage"><strong>{item.cantidad_usos}</strong> {Number(item.cantidad_usos) === 1 ? meta.uso[0] : meta.uso[1]}</span>
               <div className="med-config__actions mov-actionsInline">
-                {editable ? <>
+                {editable && !esFija(item) ? <>
                   <button type="button" className="mov-iconBtn" aria-label={`Editar ${item.nombre}`} title="Editar" onClick={() => setForm({ id_opcion: item.id_opcion, nombre: item.nombre, tipo: item.tipo, codigo_sistema: item.codigo_sistema || null })}><FontAwesomeIcon icon={faPen} /></button>
                   <button type="button" className={`mov-iconBtn ${Number(item.activo) === 1 ? 'mov-iconBtn--danger' : ''}`} aria-label={`${Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} ${item.nombre}`} title={Number(item.activo) === 1 ? 'Dar de baja' : 'Reactivar'} onClick={() => setEstado(item)}><FontAwesomeIcon icon={Number(item.activo) === 1 ? faPowerOff : faRotateLeft} /></button>
                   <button type="button" className="mov-iconBtn mov-iconBtn--danger" aria-label={`Eliminar ${item.nombre}`} title={item.codigo_sistema ? 'Opción del sistema: se puede renombrar o dar de baja, no eliminar' : Number(item.cantidad_usos) ? 'En uso: solo se puede dar de baja' : 'Eliminar'} disabled={Boolean(item.codigo_sistema) || Number(item.cantidad_usos) > 0} onClick={() => setEliminar(item)}><FontAwesomeIcon icon={faTrashCan} /></button>

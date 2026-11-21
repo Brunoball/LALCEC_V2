@@ -9,7 +9,7 @@ const backend=path.resolve(root,'..','backend');
 test.describe('Medicamentos: seguridad y protección de datos',()=>{
   test('solicitudes concurrentes no dejan inventario negativo',async ({request})=>{
     const fx=await createMedicine(request,{first:entryFixture({cantidad:6})});
-    const payload={id_medicamento:fx.id,tipo:'ENTREGA_DONACION',cantidad:4,detalle:'PW E2E SALIDA EN PARALELO'};
+    const payload={id_medicamento:fx.id,tipo:'ENTREGA_DONACION',cantidad:4,detalle:'PW E2E SALIDA EN PARALELO',receptor:'PW E2E RECEPTOR'};
     const [a,b]=await Promise.all([
       apiResult(request,'medicamentos_salida',{method:'POST',data:payload}),
       apiResult(request,'medicamentos_salida',{method:'POST',data:payload}),

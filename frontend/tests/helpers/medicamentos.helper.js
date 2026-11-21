@@ -18,7 +18,7 @@ function medFixture(overrides = {}) {
     laboratorio: 'LABORATORIO PLAYWRIGHT',
     presentacion: 'COMPRIMIDOS',
     dosis: '500 MG',
-    unidad_stock: 'UNIDAD',
+    unidad_stock: 'CAJA',
     // El backend actual exige vencimiento cuando el alta incluye stock.
     fecha_vencimiento: futureIso(365),
     observaciones: 'MEDICAMENTO EXCLUSIVO DE PLAYWRIGHT',
@@ -39,8 +39,8 @@ function entryFixture(overrides = {}) {
 
 async function medioPago(request) {
   const result = await apiCall(request, 'medicamentos_medios');
-  const medio = result.registros?.[0];
-  expect(medio, 'Debe existir un medio de pago activo para ejecutar el testing de Medicamentos').toBeTruthy();
+  const medio = (result.registros || []).find(m => String(m.nombre).trim().toUpperCase() === 'EFECTIVO');
+  expect(medio, 'Debe existir EFECTIVO activo: ejecutá SQL de selectores Medicamentos').toBeTruthy();
   return Number(medio.id_medio_pago);
 }
 

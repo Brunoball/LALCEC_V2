@@ -25,7 +25,7 @@ trait MedicamentosAlertas {
             return ['registros'=>$q->fetchAll(),'hoy'=>$hoy,'umbral_dias'=>30];
         }
         $q=$db->prepare("SELECT 'PRESTAMO' AS tipo,p.id_prestamo AS id_referencia,
-          COALESCE(NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) AS titulo,
+          COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) AS titulo,
           p.fecha_entrega AS detalle,p.fecha_devolucion_prevista AS fecha_objetivo,
           DATEDIFF(p.fecha_devolucion_prevista,?) AS dias_restantes
           FROM medicamentos_prestamos p

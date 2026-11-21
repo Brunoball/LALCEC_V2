@@ -11,6 +11,14 @@ trait MedicamentosGestion {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=(int)($b['id_medicamento']??0);
             $fields=[self::req($b,'droga'),self::req($b,'nombre_comercial'),self::str($b,'laboratorio',160),self::req($b,'presentacion',100),self::req($b,'dosis',100),self::req($b,'unidad_stock',40),self::str($b,'observaciones',3000)];
+            // La unidad de dosis es independiente de la unidad de stock. Los
+            // registros antiguos sin unidad explícita conservan su dosis literal.
+            $unidadDosis=self::textoLimitado($b,'unidad_dosis',20,'unidad de dosis');
+            if($unidadDosis!==null && !preg_match('/^[\p{L}\p{N}µμ%\/.-]+$/u',$unidadDosis))
+                api_error('La unidad de dosis sólo admite letras, números y símbolos de medida.','VALIDATION_ERROR',422);
+            $cadenaFrio=$b['cadena_frio']??0;
+            if(!in_array($cadenaFrio,[0,1,'0','1',false,true],true))api_error('Indicá si el medicamento requiere cadena de frío.','VALIDATION_ERROR',422);
+            $cadenaFrio=(int)$cadenaFrio;
             // Un vencimiento por medicamento (no por lote). El cambio de fecha afecta
             // a todo el stock existente, y queda trazado por la auditoría general.
             // Los selectores editables provienen de la tabla centralizada.
@@ -19,12 +27,18 @@ trait MedicamentosGestion {
                 ? self::date($b['fecha_vencimiento'],'fecha de vencimiento') : null;
             if($id>0){
                 $before=self::medicamentoBloqueado($db,$id,false);
+                // Compatibilidad con clientes antiguos: si todavía no envían los
+                // campos nuevos, una edición no debe borrar esos valores.
+                if(!array_key_exists('unidad_dosis',$b))$unidadDosis=$before['unidad_dosis'];
+                if(!array_key_exists('cadena_frio',$b))$cadenaFrio=(int)$before['cadena_frio'];
                 // Las unidades de un préstamo o de un movimiento siguen refiriéndose a
                 // esta presentación: no se reinterpretan retrospectivamente.
                 $q=$db->prepare('SELECT COUNT(*) FROM medicamentos_movimientos WHERE id_medicamento=?');$q->execute([$id]);
                 if((int)$q->fetchColumn()>0){
                     foreach(['droga'=>0,'presentacion'=>3,'dosis'=>4,'unidad_stock'=>5] as $campo=>$pos)
                         if((string)$before[$campo]!==$fields[$pos])api_error('No podés cambiar droga, presentación, dosis o unidad con movimientos históricos. Creá un medicamento nuevo para otra presentación.');
+                    if((string)($before['unidad_dosis']??'')!==($unidadDosis??''))
+                        api_error('No podés modificar la unidad de dosis de un medicamento con movimientos históricos.','VALIDATION_ERROR',422);
                 }
                 MedicamentosOpciones::validar($db,'PRESENTACION',$fields[3],(string)$before['presentacion']);
                 MedicamentosOpciones::validar($db,'UNIDAD_STOCK',$fields[5],(string)$before['unidad_stock']);
@@ -46,22 +60,22 @@ trait MedicamentosGestion {
                 }
                 if($vencimiento===null && (int)$before['stock_actual']>0)
                     api_error('Indicá la fecha de vencimiento del stock actual.');
-                $db->prepare('UPDATE medicamentos SET droga=?,nombre_comercial=?,laboratorio=?,presentacion=?,dosis=?,unidad_stock=?,observaciones=?,fecha_vencimiento=? WHERE id_medicamento=?')
-                    ->execute([...$fields,$vencimiento,$id]);
+                $db->prepare('UPDATE medicamentos SET droga=?,nombre_comercial=?,laboratorio=?,presentacion=?,dosis=?,unidad_stock=?,observaciones=?,fecha_vencimiento=?,unidad_dosis=?,cadena_frio=? WHERE id_medicamento=?')
+                    ->execute([...$fields,$vencimiento,$unidadDosis,$cadenaFrio,$id]);
             } else {
                  $before=null;
                 MedicamentosOpciones::validar($db,'PRESENTACION',$fields[3]);
                 MedicamentosOpciones::validar($db,'UNIDAD_STOCK',$fields[5]);
                 if((int)($b['ingreso_inicial']['cantidad']??0)>0 && $vencimiento===null)
                     api_error('Indicá la fecha de vencimiento del medicamento para cargar stock.');
-                $db->prepare('INSERT INTO medicamentos (droga,nombre_comercial,laboratorio,presentacion,dosis,unidad_stock,observaciones,fecha_vencimiento) VALUES (?,?,?,?,?,?,?,?)')
-                    ->execute([...$fields,$vencimiento]);
+                $db->prepare('INSERT INTO medicamentos (droga,nombre_comercial,laboratorio,presentacion,dosis,unidad_stock,observaciones,fecha_vencimiento,unidad_dosis,cadena_frio) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                    ->execute([...$fields,$vencimiento,$unidadDosis,$cadenaFrio]);
                 $id=(int)$db->lastInsertId();
                 // Es válido crearlo con stock 0; si se carga inicial es atómico.
                 if(is_array($b['ingreso_inicial']??null) && (int)($b['ingreso_inicial']['cantidad']??0)>0)
                     self::registrarIngresoStock($db,$auth,$b['ingreso_inicial'],$id,true);
             }
-            self::audit($db,$auth,$before?'EDITAR':'CREAR','medicamentos',$id,$before,[...$fields,'fecha_vencimiento'=>$vencimiento]);
+            self::audit($db,$auth,$before?'EDITAR':'CREAR','medicamentos',$id,$before,[...$fields,'fecha_vencimiento'=>$vencimiento,'unidad_dosis'=>$unidadDosis,'cadena_frio'=>$cadenaFrio]);
             return ['id_medicamento'=>$id];
         },$auth,$b,'guardarMedicamento');
     }
@@ -131,6 +145,12 @@ trait MedicamentosGestion {
         $costo=$origen==='COMPRA'?self::money($b['costo_unitario']??null):null;
         // 160 = largo de contable_egresos.proveedor (la procedencia de una compra se copia allí).
         $proveedor=self::textoLimitado($b,'procedencia',160,'donante / proveedor');
+        // Trello: el donante se identifica con nombre y apellido (sin vincularlo a
+        // socios) y el proveedor con sus datos. Ambos son obligatorios.
+        if(in_array($origen,['DONACION','COMPRA'],true) && ($proveedor===null || self::largo($proveedor)<3))
+            api_error($origen==='DONACION'
+                ? 'Ingresá nombre y apellido del donante (mínimo 3 caracteres).'
+                : 'Ingresá los datos del proveedor (mínimo 3 caracteres).','PROCEDENCIA_REQUERIDA',422);
         $egreso=null;
         if($origen==='COMPRA'){
             $medio=self::medio($db,$b['id_medio_pago']??null);
@@ -176,15 +196,25 @@ trait MedicamentosGestion {
     private static function verificarVigenciaParaEntrega(array $med): void {
         $v=(string)($med['fecha_vencimiento']??'');
         $nombre=trim((string)($med['nombre_comercial']??'')) ?: 'seleccionado';
-        if($v==='')api_error('El medicamento «'.$nombre.'» no tiene fecha de vencimiento. Corregila en Medicamentos > Stock > Editar > Datos antes de entregarlo, venderlo o prestarlo.','VENCIMIENTO_FALTANTE',422);
+        $sector=MedicamentosOpciones::esPresentacionDolor((string)($med['presentacion']??''))
+            ? 'Tratamiento del dolor' : 'Medicamentos';
+        $ruta='Banco de Drogas > '.$sector.' > Stock';
+        if($v==='')api_error('El medicamento «'.$nombre.'» no tiene fecha de vencimiento. Corregila en '.$ruta.' > Editar > Datos antes de entregarlo, venderlo o prestarlo.','VENCIMIENTO_FALTANTE',422);
         if($v<date('Y-m-d'))
-            api_error('El medicamento «'.$nombre.'» venció el '.date('d/m/Y',strtotime($v)).'. No se puede entregar, vender ni prestar. Revisá su stock en Medicamentos > Stock.','MEDICAMENTO_VENCIDO',422);
+            api_error('El medicamento «'.$nombre.'» venció el '.date('d/m/Y',strtotime($v)).'. No se puede entregar, vender ni prestar. Revisá su stock en '.$ruta.'.','MEDICAMENTO_VENCIDO',422);
     }
 
     protected static function salidaStock(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_medicamento']??null,'medicamento');
             $m=self::medicamentoBloqueado($db,$id);
+            // Las entregas de Tratamiento del dolor siempre descuentan stock del
+            // mismo sector y guardan el receptor manual, sin tocar el padrón.
+            $entregaDolor=($b['sector_destino']??null)==='DOLOR';
+            if(isset($b['sector_destino']) && !$entregaDolor)
+                api_error('Sector de entrega inválido.','VALIDATION_ERROR',422);
+            if($entregaDolor && !MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
+                api_error('Esta presentación no corresponde a Tratamiento del dolor.','VALIDATION_ERROR',422);
             // Los motivos propios se registran como ajuste negativo sin asiento de
             // venta, guardando el nombre histórico en `origen`. Así no se altera el
             // ENUM de movimientos ni las reglas contables preexistentes.
@@ -200,15 +230,30 @@ trait MedicamentosGestion {
                 $motivoPersonalizado=$motivo;
             }
             if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::verificarVigenciaParaEntrega($m);
-            $cantidad=self::qty($b['cantidad']??null);
+            if($entregaDolor && $tipo!=='ENTREGA_DONACION')
+                api_error('Tratamiento del dolor solo admite entregas sin cargo.','VALIDATION_ERROR',422);
+            // "Descarte por vencimiento" solo aplica a stock vencido (o sin fecha,
+            // que no se puede entregar). Para corregir errores de carga existe el ajuste.
+            $vence=(string)($m['fecha_vencimiento']??'');
+            if($tipo==='BAJA_DESCARTE' && $vence!=='' && $vence>=date('Y-m-d'))
+                api_error('El descarte por vencimiento solo se registra con el medicamento vencido (vence el '
+                    .date('d/m/Y',strtotime($vence)).'). Para corregir un error de carga usá «Ajuste por error de carga».','DESCARTE_NO_VENCIDO',422);
             $nota=self::str($b,'detalle',500);
+            if($tipo==='AJUSTE_SALIDA' && $motivoPersonalizado===null && ($nota===null || self::largo($nota)<10))
+                api_error('Explicá el motivo del ajuste por error de carga (mínimo 10 caracteres).','VALIDATION_ERROR',422);
+            // Toda entrega sin cargo (Medicamentos o Tratamiento del dolor) registra
+            // quién recibe, en texto libre y sin vincularlo al padrón de socios.
+            $receptor=$tipo==='ENTREGA_DONACION' ? self::textoLimitado($b,'receptor',160,'persona que recibe') : null;
+            if($tipo==='ENTREGA_DONACION' && ($receptor===null || self::largo($receptor)<3))
+                api_error('Ingresá nombre y apellido de quien recibe (mínimo 3 caracteres).','VALIDATION_ERROR',422);
+            $cantidad=self::qty($b['cantidad']??null);
             $ingreso=null;
             if($tipo==='SALIDA_VENTA'){
                 $total=self::money($b['importe']??null);
                 $medio=self::medio($db,$b['id_medio_pago']??null);
                 $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'VENTA DE MEDICAMENTOS','VENTA DE MEDICAMENTOS',$total,'Venta de '.$cantidad.' '.$m['unidad_stock'].' de '.$m['nombre_comercial']);
             }
-            $mov=self::inventory($db,$id,$tipo,$cantidad,-$cantidad,null,null,null,$ingreso,null,$nota,$motivoPersonalizado);
+            $mov=self::inventory($db,$id,$tipo,$cantidad,-$cantidad,null,null,null,$ingreso,null,$nota,$motivoPersonalizado,$receptor);
             self::audit($db,$auth,'EGRESO_STOCK','medicamentos_movimientos',$mov,null,['medicamento'=>$id,'tipo'=>$tipo,'motivo_salida'=>$motivo,'cantidad'=>$cantidad,'ingreso'=>$ingreso]);
             return ['id_movimiento'=>$mov];
         },$auth,$b,'salidaStock');
@@ -216,7 +261,17 @@ trait MedicamentosGestion {
 
     protected static function crearPrestamo(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
-            $socio=positive_id($b['id_socio']??null,'socio');
+            // El paciente/receptor no necesita pertenecer al padrón de socios.
+            // Se admite id_socio solo para compatibilidad con integraciones y
+            // préstamos históricos que siguen enviando ese identificador.
+            $socio=isset($b['id_socio']) && (string)$b['id_socio']!==''
+                ? positive_id($b['id_socio'],'socio') : null;
+            $nombre=self::textoLimitado($b,'nombre_receptor',160,'nombre de quien retira');
+            $apellido=self::textoLimitado($b,'apellido_receptor',160,'apellido de quien retira');
+            if($socio===null && (!$nombre || !$apellido || self::largo($nombre)<2 || self::largo($apellido)<2))
+                api_error('Ingresá nombre y apellido de la persona que retira el medicamento (mínimo 2 caracteres por campo).','VALIDATION_ERROR',422);
+            if($socio!==null && ($nombre!==null || $apellido!==null))
+                api_error('No combines un socio vinculado con nombre y apellido manuales.','VALIDATION_ERROR',422);
             $items=$b['items']??null;
             if(!is_array($items)||count($items)<1||count($items)>30)api_error('Agregá entre 1 y 30 medicamentos.');
             $parsed=[];
@@ -228,17 +283,21 @@ trait MedicamentosGestion {
             }
             ksort($parsed,SORT_NUMERIC);
             self::bloquearMedicamentos($db,array_keys($parsed));
-            $q=$db->prepare("SELECT estado FROM socios WHERE id_socio=? AND NOT EXISTS (SELECT 1 FROM socios_eliminados x WHERE x.id_socio=socios.id_socio) FOR UPDATE");
-            $q->execute([$socio]);if($q->fetchColumn()!=='ACTIVO')api_error('Elegí un socio activo.');
+            if($socio!==null){
+                $q=$db->prepare("SELECT estado FROM socios WHERE id_socio=? AND NOT EXISTS (SELECT 1 FROM socios_eliminados x WHERE x.id_socio=socios.id_socio) FOR UPDATE");
+                $q->execute([$socio]);if($q->fetchColumn()!=='ACTIVO')api_error('Elegí un socio activo.');
+            }
             foreach($parsed as $id=>$cantidad){
                 $m=self::medicamentoBloqueado($db,$id);
+                if(MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
+                    api_error('Tratamiento del dolor registra Entregas, no Préstamos.','VALIDATION_ERROR',422);
                 self::verificarVigenciaParaEntrega($m);
                 if((int)$m['stock_actual']<$cantidad)api_error('Stock insuficiente de '.$m['nombre_comercial'].'.');
             }
             $vence=($b['fecha_devolucion_prevista']??'')!==''?self::date($b['fecha_devolucion_prevista'],'fecha prevista'):null;
             if($vence!==null && $vence<date('Y-m-d'))api_error('La devolución prevista no puede ser pasada.');
-            $db->prepare('INSERT INTO medicamentos_prestamos (id_socio,fecha_entrega,fecha_devolucion_prevista,observaciones) VALUES (?,?,?,?)')
-                ->execute([$socio,date('Y-m-d H:i:s'),$vence,self::str($b,'observaciones',3000)]);
+            $db->prepare('INSERT INTO medicamentos_prestamos (id_socio,nombre_receptor,apellido_receptor,fecha_entrega,fecha_devolucion_prevista,observaciones) VALUES (?,?,?,?,?,?)')
+                ->execute([$socio,$nombre,$apellido,date('Y-m-d H:i:s'),$vence,self::str($b,'observaciones',3000)]);
             $prestamo=(int)$db->lastInsertId();
             foreach($parsed as $id=>$cantidad){
                 $db->prepare('INSERT INTO medicamentos_prestamos_detalle (id_prestamo,id_medicamento,cantidad_entregada) VALUES (?,?,?)')->execute([$prestamo,$id,$cantidad]);
@@ -250,13 +309,13 @@ trait MedicamentosGestion {
             if($senaRecibida===null || (is_string($senaRecibida) && trim($senaRecibida)==='')) $senaRecibida='0';
             $sena=self::money($senaRecibida,true);
             if((float)$sena>0){
-                $medio=self::medio($db,$b['id_medio_pago']??null);
-                $nombre=self::nombreSocioPrestamo($db,$socio);
-                $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'SEÑAS DE MEDICAMENTOS','COBRO DE SEÑA',$sena,'Seña préstamo medicamentos #'.$prestamo,$nombre);
+                $medio=self::medioEfectivo($db,$b['id_medio_pago']??null);
+                $titular=($nombre && $apellido) ? trim($nombre.' '.$apellido) : self::nombreSocioPrestamo($db,$socio);
+                $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'SEÑAS DE MEDICAMENTOS','COBRO DE SEÑA',$sena,'Seña préstamo medicamentos #'.$prestamo,$titular);
                 $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_ingreso_contable) VALUES (?,?,'COBRO_SENA',?,?,?)")
                     ->execute([$prestamo,date('Y-m-d H:i:s'),$sena,$medio,$ingreso]);
             }
-            self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$prestamo,null,['socio'=>$socio,'items'=>$parsed,'sena'=>$sena]);
+            self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$prestamo,null,['socio'=>$socio,'receptor'=>trim(($nombre??'').' '.($apellido??'')),'items'=>$parsed,'sena'=>$sena]);
             return ['id_prestamo'=>$prestamo];
         },$auth,$b,'crearPrestamo');
     }
@@ -284,7 +343,7 @@ trait MedicamentosGestion {
             $db->prepare('INSERT INTO medicamentos_prestamos_devoluciones (id_detalle_prestamo,fecha_recepcion,cantidad,estado,observaciones) VALUES (?,?,?,\'APROBADA\',?)')
                 ->execute([$detalle,date('Y-m-d H:i:s'),$cantidad,$nota]);
             $devolucion=(int)$db->lastInsertId();
-            self::inventory($db,$id,'DEVOLUCION_LIBERADA',$cantidad,$cantidad,$detalle,$devolucion,(int)$p['id_socio'],null,null,'Devolución de préstamo'.($nota?' · '.$nota:''));
+            self::inventory($db,$id,'DEVOLUCION_LIBERADA',$cantidad,$cantidad,$detalle,$devolucion,$p['id_socio']===null?null:(int)$p['id_socio'],null,null,'Devolución de préstamo'.($nota?' · '.$nota:''));
             self::audit($db,$auth,'REGISTRAR_DEVOLUCION','medicamentos_prestamos_devoluciones',$devolucion,null,['detalle'=>$detalle,'cantidad'=>$cantidad]);
             return ['id_devolucion'=>$devolucion];
         },$auth,$b,'devolverMedicamento');
@@ -414,8 +473,10 @@ trait MedicamentosGestion {
             $q=$db->prepare("SELECT COALESCE(SUM(CASE WHEN tipo='COBRO_SENA' THEN monto ELSE -monto END),0) FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo=?");
             $q->execute([$id]);$saldo=(float)$q->fetchColumn();
             if((int)round((float)$monto*100)>(int)round($saldo*100))api_error('El reintegro supera la seña pendiente.');
-            $medio=self::medio($db,$b['id_medio_pago']??null);
-            $nombre=self::nombreSocioPrestamo($db,(int)$p['id_socio']);
+            $medio=self::medioEfectivo($db,$b['id_medio_pago']??null);
+            $nombre=($p['nombre_receptor'] && $p['apellido_receptor'])
+                ? trim($p['nombre_receptor'].' '.$p['apellido_receptor'])
+                : self::nombreSocioPrestamo($db,(int)$p['id_socio']);
             $egreso=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$monto,'Devolución seña préstamo #'.$id,$nombre);
             $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_egreso_contable,observaciones) VALUES (?,?,'DEVOLUCION_SENA',?,?,?,?)")
                 ->execute([$id,date('Y-m-d H:i:s'),$monto,$medio,$egreso,self::str($b,'observaciones',500)]);

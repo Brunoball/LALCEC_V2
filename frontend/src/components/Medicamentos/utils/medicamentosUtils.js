@@ -14,7 +14,7 @@ export const MED_TIPOS = {
   INGRESO_DONACION:'Ingreso por donación', INGRESO_COMPRA:'Ingreso por compra', INGRESO_INICIAL:'Stock inicial', INGRESO_OTRO:'Ingreso',
   ENTREGA_PRESTAMO:'Préstamo', ENTREGA_DONACION:'Entrega sin cargo', SALIDA_VENTA:'Venta',
   DEVOLUCION_LIBERADA:'Devolución registrada',
-  AJUSTE_ENTRADA:'Ajuste positivo',AJUSTE_SALIDA:'Ajuste negativo',BAJA_DESCARTE:'Descarte',
+  AJUSTE_ENTRADA:'Ajuste positivo',AJUSTE_SALIDA:'Ajuste por error de carga',BAJA_DESCARTE:'Descarte por vencimiento',
 };
 
 // Misma regla que el backend (verificarVigenciaParaEntrega): vence HOY todavía
@@ -29,4 +29,26 @@ export const estadoVencimiento = (fechaVence) => {
   const [a,m,d] = hoy.split('-').map(Number);
   const limite = new Date(Date.UTC(a,m-1,d+30)).toISOString().slice(0,10);
   return fechaVence <= limite ? 'is-warning' : 'is-safe';
+};
+
+// La base histórica puede tener la unidad escrita dentro de 'dosis'.
+export const mostrarDosis = (dosis, unidad) => {
+  const valor = String(dosis || '').trim();
+  const sufijo = String(unidad || '').trim();
+  return sufijo && !new RegExp(`(?:^|\\s)${sufijo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i').test(valor)
+    ? `${valor} ${sufijo}`.trim() : valor;
+};
+
+// Plurales para las unidades de stock configurables; no se altera el valor
+// guardado en la base ni se cambian las reglas del catálogo.
+const pluralesIrregulares = { UNIDAD: 'UNIDADES', CAJA: 'CAJAS', FRASCO: 'FRASCOS', AMPOLLA: 'AMPOLLAS', 'BLÍSTER': 'BLÍSTERES', BLISTER: 'BLÍSTERES', SOBRE: 'SOBRES', COMPRIMIDO: 'COMPRIMIDOS', INYECTABLE: 'INYECTABLES', CÁPSULA: 'CÁPSULAS', CAPSULA: 'CÁPSULAS', DOSIS: 'DOSIS' };
+export const unidadStockPlural = (unidad, cantidad) => {
+  const singular = String(unidad || '').trim();
+  if (!singular || Number(cantidad) === 1) return singular;
+  const clave = singular.toLocaleUpperCase('es-AR');
+  if (pluralesIrregulares[clave]) return pluralesIrregulares[clave];
+  // Para nombres nuevos, aplicar las reglas habituales, sin forzar -s si
+  // ya se encuentran en plural (ej.: COMPRIMIDOS).
+  if (/S$/i.test(singular)) return singular;
+  return /[AEIOUÁÉÍÓÚ]$/i.test(singular) ? `${singular}S` : `${singular}ES`;
 };

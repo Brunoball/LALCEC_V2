@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBars,
+  faChevronDown,
   faChartLine,
   faGear,
   faPills,
@@ -51,10 +52,23 @@ const NAV_ITEMS = [
     ],
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
-  { key: "medicamentos", label: "Medicamentos", path: "/medicamentos", defaultPath: "/medicamentos/stock", icon: faPills, children: [
-    { key: "med-stock", label: "Stock", path: "/medicamentos/stock" },
-    { key: "med-prestamos", label: "Préstamos", path: "/medicamentos/prestamos" },
-  ] },
+  {
+    key: "medicamentos",
+    label: "Banco de Drogas",
+    path: "/medicamentos",
+    defaultPath: "/medicamentos/stock",
+    icon: faPills,
+    children: [
+      { key: "med-seccion", label: "Medicamentos", children: [
+        { key: "med-stock", label: "Stock", path: "/medicamentos/stock" },
+        { key: "med-prestamos", label: "Préstamos", path: "/medicamentos/prestamos" },
+      ] },
+      { key: "dolor-seccion", label: "Tratamiento del dolor", children: [
+        { key: "dolor-stock", label: "Stock", path: "/medicamentos/dolor/stock" },
+        { key: "dolor-entregas", label: "Entregas", path: "/medicamentos/dolor/entregas" },
+      ] },
+    ],
+  },
   {
     key: "categorias",
     label: "Categorías",
@@ -252,6 +266,15 @@ export default function Principal() {
   const [openGroupKey, setOpenGroupKey] = useState(() =>
     getGroupKeyForPath(location.pathname),
   );
+  // Cada sector conserva sus dos pantallas; las presentaciones se filtran en Stock.
+  const [openDrugBranches, setOpenDrugBranches] = useState({});
+  const toggleDrugBranch = key => setOpenDrugBranches(current => ({ ...current, [key]: !current[key] }));
+  const drugBranchOpen = key => {
+    if (Object.prototype.hasOwnProperty.call(openDrugBranches, key)) return openDrugBranches[key];
+    if (key === 'med-seccion') return location.pathname.startsWith('/medicamentos/stock') || location.pathname.startsWith('/medicamentos/prestamos');
+    if (key === 'dolor-seccion') return location.pathname.startsWith('/medicamentos/dolor');
+    return false;
+  };
   const groupClickTimer = useRef(null);
   const logoutInProgress = useRef(false);
 
@@ -270,6 +293,8 @@ export default function Principal() {
   useEffect(() => {
     setDrawerOpen(false);
     setOpenGroupKey(getGroupKeyForPath(location.pathname));
+    // Abrir automáticamente la rama de la ruta activa tras navegar o entrar por URL.
+    setOpenDrugBranches({});
   }, [location.pathname]);
 
   useEffect(
@@ -481,9 +506,13 @@ export default function Principal() {
     }
     if (location.pathname.startsWith("/configuracion")) return "Configuración";
     for (const item of NAV_ITEMS) {
-      const child = item.children?.find(
-        (entry) => location.pathname === entry.path,
-      );
+      if (item.key === 'medicamentos') {
+        if (location.pathname.startsWith('/medicamentos/dolor/entregas')) return 'Tratamiento del dolor · Entregas';
+        if (location.pathname.startsWith('/medicamentos/dolor/stock')) return 'Tratamiento del dolor · Stock';
+        if (location.pathname.startsWith('/medicamentos/prestamos')) return 'Medicamentos · Préstamos';
+        if (location.pathname.startsWith('/medicamentos/stock')) return 'Medicamentos · Stock';
+      }
+      const child = item.children?.find(entry => location.pathname === entry.path);
       if (child) return child.label;
       if (
         location.pathname === item.path ||
@@ -673,7 +702,7 @@ export default function Principal() {
             );
             return (
               <div
-                className={`pp-navGroup ${item.children ? "has-sub" : ""} ${groupOpen ? "is-open" : ""}`}
+                className={`pp-navGroup ${item.children ? "has-sub" : ""} ${groupOpen ? "is-open" : ""} ${item.key === "medicamentos" ? "pp-navGroup--banco" : ""}`}
                 key={item.key}
               >
                 {item.external ? (
@@ -762,15 +791,27 @@ export default function Principal() {
                 )}
                 {item.children ? (
                   <div className="pp-navSub" aria-hidden={!groupOpen}>
-                    {item.children.map((child) => (
-                      <NavLink
-                        end
-                        className={({ isActive }) =>
-                          `pp-navSub__item ${isActive ? "is-active" : ""}`
-                        }
-                        to={child.path}
-                        key={child.key}
-                      >
+                    {item.children.map(child => child.children ? (
+                      <div className="pp-navBranch" key={child.key}>
+                        <button type="button" className="pp-navBranch__button" aria-expanded={drugBranchOpen(child.key)}
+                          onClick={() => toggleDrugBranch(child.key)}>
+                          <span>{child.label}</span>
+                          <FontAwesomeIcon icon={faChevronDown} className={drugBranchOpen(child.key) ? 'pp-navBranch__chevron--open' : ''} />
+                        </button>
+                        {drugBranchOpen(child.key) ? (
+                          <div className="pp-navBranch__children">
+                            {child.children.map(section => (
+                              <NavLink key={section.key} to={section.path} end
+                                className={({isActive}) => `pp-navBranch__link ${isActive ? 'is-active' : ''}`}>
+                                {section.label}
+                              </NavLink>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <NavLink end className={({ isActive }) => `pp-navSub__item ${isActive ? "is-active" : ""}`}
+                        to={child.path} key={child.key}>
                         <span className="pp-navSub__dot" />
                         <span className="pp-navSub__label">{child.label}</span>
                       </NavLink>

@@ -70,3 +70,16 @@ npx playwright test tests/23-medicamentos-ui-flujos.spec.js tests/51-medicamento
 ```
 
 Para cerrar el testing hay que ejecutar luego la suite completa y confirmar que aprueban los escenarios E2E y la verificación de integridad. **Esta actualización fue validada estáticamente, pero no ejecutada contra la aplicación/DB** desde el entorno de entrega.
+
+## Actualización del 21/11/2026 · Correcciones de revisión Trello (Banco de Drogas)
+
+- `55-medicamentos-correcciones-trello.spec.js` (nuevo): unidad MG según presentación (también con filtro activo), donante/proveedor obligatorio, receptor obligatorio en toda entrega sin cargo, descarte por vencimiento solo con stock vencido, ajuste por error de carga con motivo (mínimo 10 caracteres) y presentaciones fijas protegidas en Configuración.
+- `20`, `22`, `27`: las salidas previas a la baja sobre medicamentos vigentes pasan de `BAJA_DESCARTE` a `AJUSTE_SALIDA` (el descarte ahora exige vencido).
+- `20`, `24`, `25`, `28`: las entregas `ENTREGA_DONACION` envían `receptor`.
+- `23`: un vencido ofrece Descarte y Ajuste por error de carga; texto de ayuda nuevo; el selector de préstamos muestra la unidad (`7 CAJAS disponibles`).
+- `51`: un vigente ofrece Entrega sin cargo y Ajuste por error de carga (sin Descarte).
+- No requiere migración SQL. Sí requiere que el motivo del sistema `AJUSTE_SALIDA` esté **activo** en Configuración → Medicamentos → Motivos de salida.
+
+```powershell
+npx playwright test tests/20-medicamentos-stock-integridad.spec.js tests/22-medicamentos-prestamos-senas.spec.js tests/23-medicamentos-ui-flujos.spec.js tests/24-medicamentos-seguridad-regresiones.spec.js tests/25-medicamentos-idempotencia.spec.js tests/27-medicamentos-venta-lote-descartado.spec.js tests/28-medicamentos-cierre-regresiones.spec.js tests/51-medicamentos-opciones.spec.js tests/55-medicamentos-correcciones-trello.spec.js --project=chromium --workers=1 --reporter=list
+```

@@ -81,14 +81,14 @@ test.describe('Medicamentos: préstamos y señas sin lotes',()=>{
     expect(String(error.body?.mensaje)).toContain('Stock > Editar > Datos');
   });
 
-  test('no permite dar de baja con unidades prestadas pendientes; tras devolver y descartar, sí',async ({request})=>{
+  test('no permite dar de baja con unidades prestadas pendientes; tras devolver y ajustar, sí',async ({request})=>{
     const fx=await createMedicine(request,{first:entryFixture({cantidad:3})});
     const socio=await createBorrower(request);
     const prestamo=await apiCall(request,'medicamentos_prestar',{method:'POST',data:{
       id_socio:socio.id,items:[{id_medicamento:fx.id,cantidad:2}],sena:'0',
     }});
     const det=(await loanDetail(request,prestamo.id_prestamo)).detalle[0];
-    await apiCall(request,'medicamentos_salida',{method:'POST',data:{id_medicamento:fx.id,tipo:'BAJA_DESCARTE',cantidad:1,detalle:'PW E2E DESCARTE'}});
+    await apiCall(request,'medicamentos_salida',{method:'POST',data:{id_medicamento:fx.id,tipo:'AJUSTE_SALIDA',cantidad:1,detalle:'PW E2E AJUSTE POR ERROR DE CARGA'}});
     const pendiente=await assertError(request,'medicamentos_cambiar_estado',{
       id_medicamento:fx.id,activo:0,motivo_baja:'PW E2E MEDICAMENTO DADO DE BAJA',
     },/prestad/i);
@@ -96,7 +96,7 @@ test.describe('Medicamentos: préstamos y señas sin lotes',()=>{
     await apiCall(request,'medicamentos_devolver',{method:'POST',data:{id_detalle_prestamo:det.id_detalle_prestamo,cantidad:2}});
     expect(Number((await stockOf(request,fx.id)).stock_actual)).toBe(2);
     expect(Number((await loanDetail(request,prestamo.id_prestamo)).detalle[0].cantidad_recibida)).toBe(2);
-    await apiCall(request,'medicamentos_salida',{method:'POST',data:{id_medicamento:fx.id,tipo:'BAJA_DESCARTE',cantidad:2,detalle:'PW E2E DESCARTE'}});
+    await apiCall(request,'medicamentos_salida',{method:'POST',data:{id_medicamento:fx.id,tipo:'AJUSTE_SALIDA',cantidad:2,detalle:'PW E2E AJUSTE POR ERROR DE CARGA'}});
     await apiCall(request,'medicamentos_cambiar_estado',{method:'POST',data:{
       id_medicamento:fx.id,activo:0,motivo_baja:'PW E2E MEDICAMENTO DADO DE BAJA',
     }});

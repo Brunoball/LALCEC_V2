@@ -17,5 +17,19 @@ export function Campo({ label, value, onChange, options, textarea, blurOnEnter=f
       : <input {...attrs} type={type} min={min} max={max} step={step} maxLength={maxLength} placeholder={money ? '0,00' : quantity ? '0' : (placeholder || ' ')} />}
   </label>;
 }
+/** Número y unidad de dosis en una única caja; la abreviatura es editable. */
+export function CampoDosis({ label, value, unidad, onChange, onUnidadChange, disabled = false, required = false }) {
+  return <div className="entity-field med-dosis-field">
+    <label className="med-dosis-label" htmlFor="med-dosis-cantidad">{label}{required ? ' *' : ''}</label>
+    <div className="med-dosis-control">
+      <input id="med-dosis-cantidad" type="text" autoComplete="off" aria-label={label} required={required}
+        maxLength={100} value={value ?? ''} disabled={disabled} placeholder="Ej.: 500"
+        onChange={e => onChange(e.target.value)} />
+      <input type="text" className="med-dosis-unidad" aria-label="Unidad de dosis" title="Unidad de dosis (editable)"
+        autoComplete="off" maxLength={20} value={unidad ?? ''} disabled={disabled} placeholder="MG"
+        onChange={e => onUnidadChange(e.target.value.toUpperCase())} />
+    </div>
+  </div>;
+}
 export function Campos({ children }) { return <div className="entity-form med-fields"><div className="entity-form__grid med-fields__row">{children}</div></div>; }
 export const op = (value, label) => ({ value: String(value), label });

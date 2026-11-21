@@ -1591,3 +1591,22 @@ body.pp-lockScroll{ overflow:hidden !important; }
     display: none;
   }
 }
+
+/* Banco de Drogas: un submenú por sector; las presentaciones están en el filtro del Stock. */
+.pp-navGroup--banco { --sub-open-h: 470px; }
+.pp-navGroup--banco .pp-navSub { gap: 5px; }
+.pp-navBranch { min-width: 0; }
+.pp-navBranch__button, .pp-navBranch__link {
+  display:flex; align-items:center; justify-content:space-between;
+  width:100%; min-width:0; border:0; border-radius:9px;
+  padding:8px 9px; background:transparent; color:var(--text-primary,#0f172a);
+  font:inherit; font-size:13px; text-align:left; text-decoration:none;
+}
+.pp-navBranch__button { cursor:pointer; font-weight:750; background:color-mix(in srgb,var(--primary-color) 9%,white); }
+.pp-navBranch__button span { min-width:0; white-space:normal; }
+.pp-navBranch__button svg { flex:0 0 auto; margin-left:6px; font-size:11px; }
+.pp-navBranch__chevron--open { transform:rotate(180deg); }
+.pp-navBranch__children { padding:4px 0 4px 10px; border-left:2px solid color-mix(in srgb,var(--primary-color) 25%,transparent); margin-left:8px; }
+.pp-navBranch__link { display:block; padding:7px 10px; min-height:33px; cursor:pointer; }
+.pp-navBranch__link:hover,.pp-navBranch__button:hover { background:var(--balto-hover); }
+.pp-navBranch__link.is-active { background:color-mix(in srgb,var(--primary-color) 16%,white); color:var(--balto-action); font-weight:700; }

@@ -1251,3 +1251,21 @@ html[data-theme="oscuro"] .med-loan-create__medicine-row .med-field > select {
 @media (prefers-reduced-motion: reduce) {
   .med-loan-create__medicine-row, .med-loan-create__add { transition: none; }
 }
+
+/* Dosis con sufijo editable dentro del mismo campo visual. */
+.med-dosis-field { align-self: flex-start; width:100%; min-width:0; }
+.med-dosis-label { display:block; font-size:12px; font-weight:650; margin:0 0 5px; color:var(--text-secondary,#64748b); }
+.med-dosis-control { display:flex; align-items:stretch; min-height:44px; border:1px solid var(--entity-modal-border,#cbd5e1); border-radius:9px; overflow:hidden; background:var(--surface-color,#fff); }
+.med-dosis-control:focus-within { outline:2px solid var(--primary-color,#f97316); outline-offset:1px; }
+.med-dosis-control > input { display:block; flex:1 1 auto; width:0; min-width:0; padding:10px 12px; border:0!important; border-radius:0!important; background:transparent; color:var(--text-primary,#1e293b); font:inherit; font-size:14px; box-shadow:none!important; outline:none!important; }
+.med-dosis-control > .med-dosis-unidad { flex:0 0 64px; width:64px; min-width:0; max-width:75px; padding:10px 6px; border-left:1px solid var(--entity-modal-border,#cbd5e1)!important; background:color-mix(in srgb, var(--surface-color,#fff) 90%, var(--text-secondary,#64748b)); text-align:center; font-weight:700; font-size:12px; }
+.med-dosis-control > input:disabled { cursor:not-allowed; opacity:.6; }
+.med-cadena-frio-field { display:flex; align-items:center; gap:12px; min-height:44px; margin:0; font-size:13px; color:var(--text-primary,#1e293b); font-weight:600; }
+.med-cadena-frio-field > input { width:18px; height:18px; margin:0; flex:none; accent-color:var(--primary-color,#f97316); cursor:pointer; }
+.med-cadena-frio-field > span { cursor:pointer; }
+@media (max-width:480px) { .med-dosis-control > .med-dosis-unidad { flex-basis:58px; width:58px; } }
+
+/* Listado de entregas de Tratamiento del dolor. */
+.med-table .med-grid--entregas { grid-template-columns: 110px minmax(160px,1.4fr) minmax(150px,1fr) minmax(110px,.7fr) minmax(180px,1.3fr); }
+.med-table .med-grid--entregas.global-divTable__row > .mov-gridCell { padding:10px 12px; min-width:0; overflow-wrap:anywhere; }
+@media (max-width:900px) { .med-table .med-grid--entregas { min-width:720px; } }

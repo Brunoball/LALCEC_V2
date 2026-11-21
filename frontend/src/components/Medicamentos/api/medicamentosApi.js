@@ -38,6 +38,7 @@ export const medicamentosApi = {
   estadoOpcion: (id_opcion, activo) => apiPost('medicamentos_opcion_estado', { id_opcion, activo }),
   eliminarOpcion: (id_opcion) => apiPost('medicamentos_opcion_eliminar', { id_opcion }),
   historial: (params) => apiGet('medicamentos_historial', params),
+  entregas: (params) => apiGet('medicamentos_entregas', params),
   prestamos: (params) => apiGet('medicamentos_prestamos', params),
   prestamoDetalle: (id) => apiGet('medicamentos_prestamo_detalle', { id }),
   socios: (buscar) => apiGet('medicamentos_socios', { buscar }),

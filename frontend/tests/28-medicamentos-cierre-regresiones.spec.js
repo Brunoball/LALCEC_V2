@@ -182,8 +182,8 @@ test.describe('Medicamentos: regresiones de cierre', () => {
   test('misma clave con otro contenido no ejecuta una segunda operación', async ({ request }) => {
     const fx = await createMedicine(request, { first: entryFixture({ cantidad: 5 }) });
     const key = `med-PWE2E-${randomUUID()}`;
-    await apiCall(request, 'medicamentos_salida', { method: 'POST', data: { id_medicamento: fx.id, tipo: 'ENTREGA_DONACION', cantidad: 1, _idempotency_key: key } });
-    const otra = await apiResult(request, 'medicamentos_salida', { method: 'POST', data: { id_medicamento: fx.id, tipo: 'ENTREGA_DONACION', cantidad: 2, _idempotency_key: key } });
+    await apiCall(request, 'medicamentos_salida', { method: 'POST', data: { id_medicamento: fx.id, tipo: 'ENTREGA_DONACION', cantidad: 1, receptor: 'PW E2E RECEPTOR', _idempotency_key: key } });
+    const otra = await apiResult(request, 'medicamentos_salida', { method: 'POST', data: { id_medicamento: fx.id, tipo: 'ENTREGA_DONACION', cantidad: 2, receptor: 'PW E2E RECEPTOR', _idempotency_key: key } });
     expect(otra.status).toBe(409);
     expect(Number((await stockOf(request, fx.id)).stock_actual)).toBe(4);
   });

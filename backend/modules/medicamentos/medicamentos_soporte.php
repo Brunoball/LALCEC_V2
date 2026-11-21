@@ -52,6 +52,15 @@ trait MedicamentosSoporte {
         $id=positive_id($id,'medio de pago'); $s=$db->prepare('SELECT id_medio_pago FROM medios_pago WHERE id_medio_pago=? AND activo=1 FOR UPDATE'); $s->execute([$id]);
         if(!$s->fetchColumn()) api_error('Seleccioná un medio de pago activo.'); return $id;
     }
+    /** Préstamos y reintegros: EFECTIVO exclusivamente, sin tocar medios globales. */
+    private static function medioEfectivo(PDO $db,mixed $id): int {
+        $medio=self::medio($db,$id);
+        $q=$db->prepare('SELECT nombre FROM medios_pago WHERE id_medio_pago=?');
+        $q->execute([$medio]);
+        if (strtoupper(trim((string)$q->fetchColumn())) !== 'EFECTIVO')
+            api_error('Las señas y sus reintegros deben registrarse en EFECTIVO.', 'MEDIO_EFECTIVO', 422);
+        return $medio;
+    }
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.
      */

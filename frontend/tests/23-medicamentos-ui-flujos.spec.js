@@ -55,7 +55,7 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     await dialog.getByRole('button',{name:'Cancelar'}).click();
   });
 
-  test('vencido: Restar stock permite descarte, ajuste o motivo propio, pero no venta ni entrega',async ({request,page})=>{
+  test('vencido: Restar stock permite descarte por vencimiento o ajuste por error de carga, pero no venta ni entrega',async ({request,page})=>{
     const vencido=await createMedicine(request,{
       medicine:medFixture({fecha_vencimiento:futureIso(-1)}),
       first:entryFixture({cantidad:3,fecha_vencimiento:futureIso(-1)}),
@@ -74,13 +74,12 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     await expect(motivo.locator('option[value="ENTREGA_DONACION"]')).toHaveCount(0);
     await expect(motivo.locator('option[value="BAJA_DESCARTE"]')).toHaveCount(1);
     await expect(motivo.locator('option[value="AJUSTE_SALIDA"]')).toHaveCount(1);
-    // Incluso si está vencido, se puede agregar un motivo propio para registrar
-    // una salida sin venta ni entrega. La ayuda contextual debe aclarar esa regla.
-    await expect(motivo.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(1);
+    // Los selectores visibles no permiten crear motivos adicionales, aunque el catálogo histórico los conserva.
+    await expect(motivo.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Ver información importante de este formulario' }).click();
     const ayuda = page.getByRole('tooltip');
     await expect(ayuda).toContainText(/no se puede vender, entregar ni prestar/i);
-    await expect(ayuda).toContainText(/podés descartar, ajustar o registrar otro motivo de salida/i);
+    await expect(ayuda).toContainText(/podés registrar el descarte por vencimiento o, si fue un error de carga, el ajuste/i);
   });
 
   test('préstamo: selector solo con nombre y stock; vencidos excluidos y explicación visible',async ({request,page})=>{
@@ -97,7 +96,7 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     const validoOpcion=selector.locator(`option[value="${valido.id}"]`);
     // Campo fuerza mayúsculas de presentación. Solo se muestra el nombre y
     // la cantidad, sin droga, laboratorio ni descripción dentro de la opción.
-    await expect(validoOpcion).toHaveText(new RegExp(`^${valido.medicine.nombre_comercial} · 7 disponibles$`, 'i'));
+    await expect(validoOpcion).toHaveText(new RegExp(`^${valido.medicine.nombre_comercial} · 7 CAJAS disponibles$`, 'i'));
     await expect(selector.locator(`option[value="${vencido.id}"]`)).toHaveCount(0);
     // Los no prestables se excluyen del selector y se explican al abrir la ayuda.
     await dialog.getByRole('button', { name: 'Ver información importante de este formulario' }).click();

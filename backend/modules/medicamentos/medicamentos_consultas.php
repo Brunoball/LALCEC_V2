@@ -52,6 +52,32 @@ trait MedicamentosConsultas {
         }
         return ['registros'=>$db->query($campos.$from.' ORDER BY mov.id_movimiento DESC LIMIT 300')->fetchAll()];
     }
+    /** Tratamiento del dolor: entregas sin cargo, sin préstamos ni operaciones de otros sectores.
+     * Registros históricos de una entrega sin receptor conservan procedencia NULL.
+     * Se filtra en SQL antes de paginar, nunca sólo en el navegador.
+     */
+    protected static function entregasDolorDatos(PDO $db, array $filter): array {
+        $pagina=max(1,min(100000,(int)($filter['pagina']??1)));$porPagina=20;
+        $buscar=trim((string)($filter['buscar']??''));
+        $buscar=function_exists('mb_substr') ? mb_substr($buscar,0,80,'UTF-8') : substr($buscar,0,80);
+        $donde=" FROM medicamentos_movimientos mov JOIN medicamentos m ON m.id_medicamento=mov.id_medicamento
+            WHERE mov.tipo='ENTREGA_DONACION' AND m.presentacion IN (".MedicamentosOpciones::presentacionesDolorSql($db).")";
+        $params=[];
+        if($buscar!==''){
+            $donde.=" AND (m.nombre_comercial LIKE ? OR m.droga LIKE ? OR mov.procedencia LIKE ?)";
+            $params=array_fill(0,3,'%'.$buscar.'%');
+        }
+        $q=$db->prepare('SELECT COUNT(*)'.$donde);$q->execute($params);$total=(int)$q->fetchColumn();
+        $pagina=min($pagina,max(1,(int)ceil($total/$porPagina)));
+        $q=$db->prepare('SELECT mov.id_movimiento,mov.fecha_movimiento,mov.cantidad,
+             mov.procedencia AS receptor,mov.detalle,m.nombre_comercial,m.droga,m.presentacion,m.unidad_stock'
+             .$donde.' ORDER BY mov.id_movimiento DESC LIMIT ? OFFSET ?');
+        foreach($params as $i=>$valor)$q->bindValue($i+1,$valor,PDO::PARAM_STR);
+        $q->bindValue(count($params)+1,$porPagina,PDO::PARAM_INT);
+        $q->bindValue(count($params)+2,($pagina-1)*$porPagina,PDO::PARAM_INT);
+        $q->execute();
+        return ['registros'=>$q->fetchAll(),'total'=>$total,'pagina'=>$pagina,'por_pagina'=>$porPagina];
+    }
     /** Buscar procedencias sin duplicar registros: proveedores activos de Contable y SOCIOS ACTIVOS.
      * Los socios inactivos o eliminados no se ofrecen como donantes/proveedores.
      * Se guarda una instantánea del nombre en medicamentos_movimientos.procedencia;
@@ -106,7 +132,7 @@ trait MedicamentosConsultas {
         $search=function_exists('mb_substr')?mb_substr($search,0,90,'UTF-8'):substr($search,0,90);
         $page=max(1,min(100000,(int)($filter['pagina']??1)));$perPage=20;
         $from=" FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio";
-        $nombreSocio="COALESCE(NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio))";
+        $nombreSocio="COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio))";
         $documentoSocio="COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento)";
         $where=[];$params=[];
         if(in_array($status,['ABIERTO','CERRADO','ANULADO'],true)){$where[]='p.estado=?';$params[]=$status;}
@@ -126,9 +152,9 @@ trait MedicamentosConsultas {
         return ['registros'=>$q->fetchAll(),'total'=>$total,'pagina'=>$page,'por_pagina'=>$perPage];
     }
     protected static function prestamoDatos(PDO $db,int $id): array {
-        $q=$db->prepare("SELECT p.*,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) socio,COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento) documento FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio WHERE p.id_prestamo=?");
+        $q=$db->prepare("SELECT p.*,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) socio,COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento) documento FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio WHERE p.id_prestamo=?");
         $q->execute([$id]);$prestamo=$q->fetch();if(!$prestamo)api_error('Préstamo no encontrado.','NOT_FOUND',404);
-        $q=$db->prepare("SELECT d.*,m.nombre_comercial,m.droga,m.dosis,
+        $q=$db->prepare("SELECT d.*,m.nombre_comercial,m.droga,m.dosis,m.unidad_dosis,
             COALESCE((SELECT SUM(r.cantidad) FROM medicamentos_prestamos_devoluciones r WHERE r.id_detalle_prestamo=d.id_detalle_prestamo),0) AS cantidad_recibida
             FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=?");
         $q->execute([$id]);$detalle=$q->fetchAll();

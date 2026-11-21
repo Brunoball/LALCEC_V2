@@ -20,6 +20,37 @@ final class MedicamentosOpciones {
     /** Códigos internos de los orígenes del sistema. Un origen adicional no puede llamarse igual. */
     public const CODIGOS_ORIGEN_SISTEMA = ['COMPRA', 'DONACION', 'AJUSTE', 'INICIAL'];
     public const CODIGOS_SALIDA_SISTEMA = ['ENTREGA_DONACION', 'SALIDA_VENTA', 'AJUSTE_SALIDA', 'BAJA_DESCARTE'];
+    /** El stock se mide exclusivamente en estas tres unidades. */
+    public const UNIDADES_STOCK_FIJAS = ['BLÍSTER', 'AMPOLLA', 'CAJA'];
+    /**
+     * Presentaciones de cada sección de Banco de Drogas (Trello). La sección de
+     * un medicamento se deduce de su presentación, así que estas opciones no se
+     * pueden renombrar, dar de baja ni eliminar desde Configuración: hacerlo
+     * movería registros de sección o los dejaría fuera de los selectores.
+     * Única fuente en el backend; el frontend replica la lista en
+     * src/components/Medicamentos/utils/medicamentosSelectores.js.
+     */
+    public const PRESENTACIONES_MEDICAMENTOS = ['COMPRIMIDOS', 'INYECTABLES', 'GOTAS', 'CREMAS', 'OTRAS/OS'];
+    public const PRESENTACIONES_DOLOR = ['JARABE', 'CONCENTRADO', 'DOBLE CONCENTRADO', 'AMITRIPTILINA'];
+    public static function esPresentacionDolor(string $presentacion): bool {
+        return in_array($presentacion, self::PRESENTACIONES_DOLOR, true);
+    }
+    /** Lista SQL segura (valores constantes citados por PDO) para filtros IN (...). */
+    public static function presentacionesDolorSql(PDO $db): string {
+        return implode(',', array_map(static fn(string $v): string => (string)$db->quote($v), self::PRESENTACIONES_DOLOR));
+    }
+    private static function esPresentacionFija(array $opcion): bool {
+        return ($opcion['tipo'] ?? '') === 'PRESENTACION'
+            && in_array((string)$opcion['nombre'], [...self::PRESENTACIONES_MEDICAMENTOS, ...self::PRESENTACIONES_DOLOR], true);
+    }
+    private static function exigirPresentacionModificable(array $opcion, string $accion): void {
+        if (self::esPresentacionFija($opcion))
+            api_error('«'.$opcion['nombre'].'» es una presentación fija de Banco de Drogas: no se puede '.$accion.'.', 'OPTION_FIXED', 422);
+    }
+    private static function exigirCatalogoEditable(string $tipo): void {
+        if ($tipo === 'UNIDAD_STOCK')
+            api_error('Las unidades de stock son fijas: Blíster, Ampolla y Caja. No se pueden agregar ni modificar.', 'OPTION_FIXED', 422);
+    }
 
     private static function tipo(mixed $tipo): string {
         $tipo = strtoupper(trim((string)$tipo));
@@ -103,6 +134,7 @@ final class MedicamentosOpciones {
     public static function guardar(): never {
         $a=require_admin();$b=request_body();$db=$a['db'];
         $tipo=self::tipo($b['tipo']??'');
+        self::exigirCatalogoEditable($tipo);
         $nombre=self::nombre($b['nombre']??null,$tipo);
         $id=isset($b['id_opcion']) && $b['id_opcion']!=='' && $b['id_opcion']!==null ? positive_id($b['id_opcion'],'opción') : null;
         $result=transaction($db,static function()use($db,$a,$tipo,$nombre,$id):array {
@@ -112,6 +144,7 @@ final class MedicamentosOpciones {
             if ($id !== null) {
                 $antes=self::obtenerPorId($db,$id);
                 if ($antes['tipo']!==$tipo) api_error('No se puede cambiar el selector de una opción.', 'VALIDATION', 422);
+                if ($antes['nombre']!==$nombre) self::exigirPresentacionModificable($antes,'renombrar');
                 if (in_array($tipo,['ORIGEN_INGRESO','SALIDA_STOCK'],true) && !self::esSistema($antes)) self::validarNombreAdicional($nombre,$tipo);
                 // Un origen del sistema se identifica por su código: renombrarlo no altera
                 // el historial. El resto guarda el nombre como dato histórico.
@@ -136,6 +169,9 @@ final class MedicamentosOpciones {
         $activo=(int)$b['activo'];
         $result=transaction($db,static function()use($db,$a,$id,$activo):array {
             $antes=self::obtenerPorId($db,$id);
+            self::exigirCatalogoEditable((string)$antes['tipo']);
+            // Reactivar una presentación fija siempre se permite (repara una baja previa).
+            if ($activo===0) self::exigirPresentacionModificable($antes,'dar de baja');
             $db->prepare('UPDATE medicamentos_opciones SET activo=? WHERE id_opcion=?')->execute([$activo,$id]);
             self::auditar($db,$a,$activo?'REACTIVAR_OPCION':'BAJA_OPCION',$id,$antes,['activo'=>$activo]);
             return ['id_opcion'=>$id,'activo'=>$activo];
@@ -147,6 +183,8 @@ final class MedicamentosOpciones {
         $id=positive_id($b['id_opcion']??null,'opción');
         transaction($db,static function()use($db,$a,$id):void {
             $antes=self::obtenerPorId($db,$id);
+            self::exigirCatalogoEditable((string)$antes['tipo']);
+            self::exigirPresentacionModificable($antes,'eliminar');
             if (self::esSistema($antes))
                 api_error('«'.$antes['nombre'].'» es una opción del sistema: podés renombrarla o darla de baja, pero no eliminarla.','OPTION_SYSTEM',409);
             if (self::usos($db,$antes)>0)
@@ -159,6 +197,8 @@ final class MedicamentosOpciones {
     /** Para el alta/edición de medicamentos, aceptar valores dados de baja solo si el registro ya los tenía. */
     public static function validar(PDO $db,string $tipo,string $nombre,?string $valorActual=null): void {
         if ($valorActual!==null && $valorActual===$nombre) return;
+        if ($tipo === 'UNIDAD_STOCK' && !in_array($nombre, self::UNIDADES_STOCK_FIJAS, true))
+            api_error('Unidad de stock inválida. Elegí Blíster, Ampolla o Caja.', 'OPTION_FIXED', 422);
         $q=$db->prepare('SELECT id_opcion FROM medicamentos_opciones WHERE tipo=? AND nombre=? AND activo=1 AND codigo_sistema IS NULL LIMIT 1');
         $q->execute([$tipo,$nombre]);
         $etiqueta = ['PRESENTACION'=>'presentación','UNIDAD_STOCK'=>'unidad de stock','ORIGEN_INGRESO'=>'origen','SALIDA_STOCK'=>'motivo de salida'][$tipo] ?? 'selector';

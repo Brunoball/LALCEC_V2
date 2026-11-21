@@ -136,7 +136,11 @@ export default function App() {
           <Route path="/contable/ingresos" element={<Ingresos />} />
           <Route path="/medicamentos" element={<Navigate to="/medicamentos/stock" replace />} />
           <Route path="/medicamentos/stock" element={<Medicamentos view="stock" />} />
+          <Route path="/medicamentos/stock/:presentacion" element={<Medicamentos view="stock" />} />
           <Route path="/medicamentos/prestamos" element={<Medicamentos view="prestamos" />} />
+          <Route path="/medicamentos/dolor/stock" element={<Medicamentos view="stock" sector="DOLOR" />} />
+          <Route path="/medicamentos/dolor/stock/:presentacion" element={<Medicamentos view="stock" sector="DOLOR" />} />
+          <Route path="/medicamentos/dolor/entregas" element={<Medicamentos view="entregas" sector="DOLOR" />} />
           <Route path="/contable/egresos" element={<Egresos />} />
           <Route path="/contable/resumen" element={<Resumen />} />
 

@@ -82,8 +82,8 @@ test.describe('Medicamentos: catálogos configurables', () => {
     }
   });
 
-  test('API: alta, edición, baja, reactivación, duplicados y eliminación en los cuatro selectores', async ({ request }) => {
-    for (const tipo of ['PRESENTACION', 'UNIDAD_STOCK', 'ORIGEN_INGRESO', 'SALIDA_STOCK']) {
+  test('API: alta, edición, baja, reactivación y eliminación en los tres selectores configurables', async ({ request }) => {
+    for (const tipo of ['PRESENTACION', 'ORIGEN_INGRESO', 'SALIDA_STOCK']) {
       const name = `PW E2E OPCION ${uniqueSuffix()}`;
       const changed = `PW E2E EDITADA ${uniqueSuffix()}`;
       let id = null;
@@ -184,107 +184,85 @@ test.describe('Medicamentos: catálogos configurables', () => {
     expect(despues.every(x => !String(x.detalle || '').includes('INACTIVO'))).toBe(true);
   });
 
-  test('UI: opción AGREGAR abre modal pequeño y agrega al selector sin cerrar el medicamento', async ({ page, request }) => {
+  test('UI: cada sección de Banco de Drogas tiene su propia ruta y presentaciones', async ({ page }) => {
+    await page.goto('/medicamentos/stock');
+    await page.getByRole('button', { name: 'Nuevo medicamento' }).click();
+    let editor = page.getByRole('dialog', { name: 'Nuevo medicamento' });
+    let presentacion = editor.getByLabel('Presentación *');
+    const opciones = async () => presentacion.locator('option').evaluateAll(xs => xs.map(x => x.value));
+    expect(await opciones()).toEqual(['COMPRIMIDOS','INYECTABLES','GOTAS','CREMAS','OTRAS/OS']);
+    await expect(presentacion).toHaveValue('COMPRIMIDOS');
+    await expect(editor.getByLabel('Unidad de dosis')).toHaveValue('MG');
+    await expect(editor.getByLabel(/Sector de Banco de Drogas/)).toHaveCount(0);
+    await page.goto('/medicamentos/dolor/stock');
+    await page.getByRole('button', { name: 'Nuevo tratamiento' }).click();
+    editor = page.getByRole('dialog', { name: 'Nuevo tratamiento' });
+    presentacion = editor.getByLabel('Presentación *');
+    expect(await opciones()).toEqual(['JARABE','CONCENTRADO','DOBLE CONCENTRADO','AMITRIPTILINA']);
+    await expect(presentacion).toHaveValue('JARABE');
+    await expect(editor.getByLabel('Unidad de dosis')).toHaveValue('');
+    await expect(editor.getByLabel(/Sector de Banco de Drogas/)).toHaveCount(0);
+    await expect(presentacion.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
+  });
+  test('UI: unidad de stock muestra únicamente Blíster, Ampolla y Caja, sin alta rápida', async ({ page }) => {
     await page.goto('/medicamentos/stock');
     await page.getByRole('button', { name: 'Nuevo medicamento' }).click();
     const editor = page.getByRole('dialog', { name: 'Nuevo medicamento' });
-    await expect(editor).toBeVisible();
-    const presentacion = editor.getByLabel(/Presentación/);
-    await expect(presentacion.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
-    await presentacion.selectOption('__MED_AGREGAR__');
-    const modal = page.getByRole('dialog', { name: 'Agregar presentación' });
-    await expect(modal).toBeVisible();
-    const name = `PW E2E RAPIDA ${uniqueSuffix()}`;
-    let id = null;
-    try {
-      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name);
-      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      await expect(editor).toBeVisible();
-      await expect(presentacion).toHaveValue(name);
-      const listed = await apiCall(request, 'medicamentos_opciones');
-      id = Number(listed.registros.find(item => item.nombre === name && item.tipo === 'PRESENTACION')?.id_opcion);
-      expect(id).toBeGreaterThan(0);
-    } finally {
-      await editor.getByRole('button', { name: 'Cerrar' }).click();
-      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', {
-        method: 'POST', data: { id_opcion: id },
-      });
-    }
-  });
-  test('UI: alta rápida de unidad de stock conserva abierto el formulario', async ({ page, request }) => {
-    await page.goto('/medicamentos');
-    await expect(page).toHaveURL(/\/medicamentos\/stock(?:[?#]|$)/);
-    await page.getByRole('button', { name: 'Nuevo medicamento' }).click();
-    const editor = page.getByRole('dialog', { name: 'Nuevo medicamento' });
     const unidad = editor.getByLabel(/Unidad de stock/);
-    await expect(unidad.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
-    await unidad.selectOption('__MED_AGREGAR__');
-    const modal = page.getByRole('dialog', { name: 'Agregar unidad de stock' });
-    await expect(modal).toBeVisible();
-    const name = `PW E2E US RAP ${uniqueSuffix()}`;
-    let id = null;
-    try {
-      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name);
-      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      await expect(editor).toBeVisible();
-      await expect(unidad).toHaveValue(name);
-      const listed = await apiCall(request, 'medicamentos_opciones');
-      id = Number(listed.registros.find(option => option.tipo === 'UNIDAD_STOCK' && option.nombre === name)?.id_opcion);
-      expect(id).toBeGreaterThan(0);
-    } finally {
-      // El modal de alta rápida se superpone al editor: si falló el guardado,
-      // se cierra primero para no ocultar la causa real tras un timeout.
-      if (await modal.isVisible()) {
-        await modal.getByRole('button', { name: 'Cancelar' }).click();
-      }
-      if (await editor.isVisible()) {
-        await editor.getByRole('button', { name: 'Cerrar' }).click();
-      }
-      // Limpieza segura incluso si la aserción falló antes de obtener el ID.
-      if (!id) {
-        const listado = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-        id = Number(listado.find(option => option.tipo === 'UNIDAD_STOCK' && option.nombre === name)?.id_opcion);
-      }
-      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', {
-        method: 'POST', data: { id_opcion: id },
-      });
-    }
+    await expect(unidad).toHaveValue('CAJA');
+    await expect(unidad.locator('option')).toHaveCount(3);
+    const valores = await unidad.locator('option').evaluateAll(elements => elements.map(el => el.value));
+    expect(valores).toEqual(['BLÍSTER', 'AMPOLLA', 'CAJA']);
+    await expect(unidad.locator('option[value="UNIDAD"]')).toHaveCount(0);
+    await expect(unidad.locator('option[value="FRASCO"]')).toHaveCount(0);
+    await expect(unidad.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
   });
 
-  test('UI: el selector Origen permite agregar un origen sin cerrar el medicamento', async ({ page, request }) => {
+  test('API: unidades fijas, valores antiguos preservados y nuevas opciones rechazadas', async ({ request }) => {
+    const opciones = (await apiCall(request, 'medicamentos_opciones')).registros.filter(item => item.tipo === 'UNIDAD_STOCK');
+    for (const permitida of ['AMPOLLA','BLÍSTER','CAJA']) {
+      const opcion = opciones.find(item => item.nombre === permitida);
+      expect(opcion).toBeTruthy();
+      expect(Number(opcion.activo)).toBe(1);
+    }
+    // UNIDAD/FRASCO pueden seguir ACTIVOS en el catálogo compartido.
+    // El selector del formulario y el guardián de NUEVAS altas los bloquean.
+    const nombre = `PW E2E UNIDAD PROHIBIDA ${uniqueSuffix()}`;
+    const result = await apiResult(request, 'medicamentos_opcion_guardar', {
+      method: 'POST', data: { tipo: 'UNIDAD_STOCK', nombre },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.body.codigo).toBe('OPTION_FIXED');
+    const validacion = await apiResult(request, 'medicamentos_guardar', {
+      method: 'POST', data: {
+        nombre_comercial: `PW E2E MED ${uniqueSuffix()}`, droga: 'PW E2E DROGA',
+        presentacion: 'COMPRIMIDOS', dosis: '500', unidad_dosis: 'MG',
+        unidad_stock: 'FRASCO', fecha_vencimiento: '', cadena_frio: 0,
+      },
+    });
+    expect(validacion.ok).toBe(false);
+    expect(validacion.body.codigo).toBe('OPTION_FIXED');
+  });
+
+  test('UI: donante o proveedor, ambos manuales y sin consultar socios', async ({ page }) => {
     await page.goto('/medicamentos/stock');
     await page.getByRole('button', { name: 'Nuevo medicamento' }).click();
     const editor = page.getByRole('dialog', { name: 'Nuevo medicamento' });
     await editor.getByLabel('Stock inicial (opcional)').fill('2');
-    const origenSelect = editor.getByLabel(/^Origen/);
-    await expect(origenSelect.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
-    await origenSelect.selectOption('__MED_AGREGAR__');
-    const modal = page.getByRole('dialog', { name: 'Agregar origen de ingreso' });
-    await expect(modal).toBeVisible();
-    const name = `PW E2E ORIGEN RAP ${uniqueSuffix()}`;
-    let id = null;
-    try {
-      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name);
-      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      await expect(editor).toBeVisible();
-      await expect(origenSelect).toHaveValue(name);
-      const listed = await apiCall(request, 'medicamentos_opciones');
-      id = Number(listed.registros.find(item => item.nombre === name && item.tipo === 'ORIGEN_INGRESO')?.id_opcion);
-      expect(id).toBeGreaterThan(0);
-    } finally {
-      if (await modal.isVisible()) await modal.getByRole('button', { name: 'Cancelar' }).click();
-      if (await editor.isVisible()) await editor.getByRole('button', { name: 'Cerrar' }).click();
-      if (!id) {
-        const listado = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-        id = Number(listado.find(option => option.tipo === 'ORIGEN_INGRESO' && option.nombre === name)?.id_opcion);
-      }
-      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
-    }
+    const origen = editor.getByLabel('Origen *');
+    // El catálogo compartido puede llegar ordenado por nombre (COMPRA antes de DONACIÓN).
+    // Lo importante es que aparezcan exactamente estas dos alternativas, no su orden.
+    await expect(origen.locator('option')).toHaveCount(2);
+    expect((await origen.locator('option').evaluateAll(xs => xs.map(x => x.value))).sort()).toEqual(['COMPRA', 'DONACION']);
+    await expect(origen).toHaveValue('DONACION');
+    await expect(editor.getByLabel('Nombre y apellido del donante (manual)')).toBeVisible();
+    await expect(editor.getByLabel('Medio de pago')).toHaveCount(0);
+    await origen.selectOption('COMPRA');
+    await expect(editor.getByLabel('Datos del proveedor (manual)')).toBeVisible();
+    await expect(editor.getByLabel('Costo unitario ($)')).toBeVisible();
+    await expect(editor.getByLabel('Medio de pago *')).toBeVisible();
+    await expect(origen.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
   });
-
   test('UI: Configuración muestra la pestaña Orígenes de ingreso y permite crear uno', async ({ page, request }) => {
     await page.goto('/configuracion/medicamentos');
     const tabs = page.getByRole('tablist', { name: 'Selectores de medicamentos' });
@@ -315,54 +293,16 @@ test.describe('Medicamentos: catálogos configurables', () => {
     }
   });
 
-  test('UI: Configuración de medicamentos permite administrar ambas pestañas', async ({ page, request }) => {
+  test('UI: Configuración de unidades queda de solo lectura por ser una lista fija', async ({ page }) => {
     await page.goto('/configuracion/medicamentos');
     const tabs = page.getByRole('tablist', { name: 'Selectores de medicamentos' });
     await expect(tabs.getByRole('tab', { name: 'Presentaciones' })).toBeVisible();
     await tabs.getByRole('tab', { name: 'Unidades de stock' }).click();
     await expect(tabs.getByRole('tab', { name: 'Unidades de stock' })).toHaveAttribute('aria-selected', 'true');
-    const name = `PW E2E CFG U ${uniqueSuffix()}`;
-    const edited = `PW E2E CFG E ${uniqueSuffix()}`;
-    let id = null;
-    try {
-      await page.getByRole('button', { name: 'Nueva unidad de stock' }).click();
-      let modal = page.getByRole('dialog', { name: 'Nueva unidad de stock' });
-      await modal.getByRole('textbox', { name: 'Nombre *' }).fill(name);
-      await modal.getByRole('button', { name: 'Guardar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      const initial = await apiCall(request, 'medicamentos_opciones');
-      id = Number(initial.registros.find(option => option.tipo === 'UNIDAD_STOCK' && option.nombre === name)?.id_opcion);
-      expect(id).toBeGreaterThan(0);
-
-      await page.getByRole('button', { name: `Editar ${name}` }).click();
-      modal = page.getByRole('dialog', { name: 'Editar unidad de stock' });
-      await modal.getByRole('textbox', { name: 'Nombre *' }).fill(edited);
-      await modal.getByRole('button', { name: 'Guardar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      await expect(page.getByRole('button', { name: `Dar de baja ${edited}` })).toBeVisible();
-      await page.getByRole('button', { name: `Dar de baja ${edited}` }).click();
-      let state = page.getByRole('dialog', { name: 'Dar de baja opción' });
-      await state.getByRole('button', { name: 'Dar de baja', exact: true }).click();
-      await expect(state).not.toBeVisible();
-      await expect(page.getByRole('button', { name: `Reactivar ${edited}` })).toBeVisible();
-      await page.getByRole('button', { name: `Reactivar ${edited}` }).click();
-      state = page.getByRole('dialog', { name: 'Reactivar opción' });
-      await state.getByRole('button', { name: 'Dar de alta', exact: true }).click();
-      await expect(state).not.toBeVisible();
-      const updated = await apiCall(request, 'medicamentos_opciones');
-      const option = updated.registros.find(item => Number(item.id_opcion) === id);
-      expect(option).toMatchObject({ tipo: 'UNIDAD_STOCK', nombre: edited });
-      expect(Number(option.activo)).toBe(1);
-    } finally {
-      // Ante un fallo tras guardar, recuperar el ID por el nombre único E2E.
-      if (!id) {
-        const listado = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-        id = Number(listado.find(option => option.tipo === 'UNIDAD_STOCK' && [name, edited].includes(option.nombre))?.id_opcion);
-      }
-      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', {
-        method: 'POST', data: { id_opcion: id },
-      });
-    }
+    await expect(page.getByRole('button', { name: 'Nueva unidad de stock' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Editar (BLÍSTER|AMPOLLA|CAJA)/ })).toHaveCount(0);
+    // El aviso explica el alcance del selector sin alterar las opciones históricas.
+    await expect(page.getByText(/En Banco de Drogas se puede elegir solo Blíster, Ampolla y Caja/)).toBeVisible();
   });
 
   test('contrato: motivos del sistema mantienen código estable y migración SQL disponible', async ({ request }) => {
@@ -422,54 +362,27 @@ test.describe('Medicamentos: catálogos configurables', () => {
     }
   });
 
-  test('UI: motivo de salida permite alta rápida y Configuración tiene su pestaña', async ({ page, request }) => {
+  test('UI: medicamento vigente ofrece Entrega sin cargo y Ajuste por error de carga (el descarte exige vencido), sin modificar Configuración', async ({ page, request }) => {
     const fx = await createMedicine(request, { first: entryFixture({ cantidad: 5 }) });
-    const name = `PW E2E SALIDA RAPIDA ${uniqueSuffix()}`;
-    let id = null;
     await page.goto('/medicamentos/stock');
     await page.getByRole('textbox', { name: 'Búsqueda' }).fill(fx.medicine.nombre_comercial);
     const registro = page.getByRole('table', { name: 'Stock de medicamentos' }).getByRole('row')
       .filter({ hasText: fx.medicine.nombre_comercial });
-    await expect(registro).toBeVisible();
     await ocultarAlertas(page);
     await registro.getByRole('button', { name: 'Editar' }).click();
-    const editor = page.getByRole('dialog', { name: new RegExp('Editar medicamento') });
-    try {
-      await editor.getByRole('tab', { name: 'Stock' }).click();
-      await editor.getByRole('button', { name: 'Restar stock' }).click();
-      const motivos = editor.getByLabel('Motivo de salida *');
-      await expect(motivos.locator('option').first()).toHaveText(/AGREGAR OPCIÓN/);
-      await motivos.selectOption('__MED_AGREGAR__');
-      const modal = page.getByRole('dialog', { name: 'Agregar motivo de salida' });
-      await expect(modal).toBeVisible();
-      // Escape cierra el alta rápida, nunca el editor que quedó detrás.
-      await page.keyboard.press('Escape');
-      await expect(modal).not.toBeVisible();
-      await expect(editor).toBeVisible();
-      await motivos.selectOption('__MED_AGREGAR__');
-      await modal.getByRole('textbox', { name: /Nombre de la opción/ }).fill(name.toLowerCase());
-      await modal.getByRole('button', { name: 'Agregar', exact: true }).click();
-      await expect(modal).not.toBeVisible();
-      await expect(motivos).toHaveValue(name);
-      const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-      id = Number(opciones.find(o => o.tipo === 'SALIDA_STOCK' && o.nombre === name)?.id_opcion);
-      expect(id).toBeGreaterThan(0);
-    } finally {
-      const modal = page.getByRole('dialog', { name: 'Agregar motivo de salida' });
-      if (await modal.isVisible()) await modal.getByRole('button', { name: 'Cancelar' }).click();
-      if (await editor.isVisible()) await editor.getByRole('button', { name: 'Cerrar' }).click();
-      if (!id) {
-        const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-        id = Number(opciones.find(o => o.tipo === 'SALIDA_STOCK' && o.nombre === name)?.id_opcion);
-      }
-      if (id) await apiCall(request, 'medicamentos_opcion_eliminar', { method: 'POST', data: { id_opcion: id } });
-    }
+    const editor = page.getByRole('dialog', { name: /Editar medicamento/ });
+    await editor.getByRole('tab', { name: 'Stock' }).click();
+    await editor.getByRole('button', { name: 'Restar stock' }).click();
+    const motivo = editor.getByLabel('Motivo de salida *');
+    // Vigente: entrega y ajuste; el orden viene del catálogo compartido.
+    await expect(motivo.locator('option')).toHaveCount(2);
+    expect((await motivo.locator('option').evaluateAll(xs => xs.map(x => x.value))).sort()).toEqual(['AJUSTE_SALIDA', 'ENTREGA_DONACION']);
+    await expect(motivo.locator('option[value="ENTREGA_DONACION"]')).toHaveText('ENTREGA SIN CARGO');
+    await expect(motivo.locator('option[value="AJUSTE_SALIDA"]')).toHaveText('AJUSTE POR ERROR DE CARGA');
+    await expect(motivo.locator('option[value="BAJA_DESCARTE"]')).toHaveCount(0);
+    await expect(motivo.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
     await page.goto('/configuracion/medicamentos');
-    const tab = page.getByRole('tab', { name: 'Motivos de salida' });
-    await expect(tab).toBeVisible();
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'Motivos de salida' }).click();
     await expect(page.getByRole('button', { name: 'Nuevo motivo de salida' })).toBeVisible();
   });
-
 });

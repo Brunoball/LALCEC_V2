@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/medicamentos_opciones.php';
 require_once __DIR__ . '/medicamentos_soporte.php';
 require_once __DIR__ . '/medicamentos_consultas.php';
 require_once __DIR__ . '/medicamentos_gestion.php';
@@ -10,6 +11,7 @@ final class Medicamentos {
     public static function descartarAlerta(): never { $a=auth_context(); api_success(self::descartarAlertaDatos($a,request_body()),'Alerta descartada.'); }
     public static function catalogo(): never { api_success(['registros'=>self::catalogoDatos(auth_context()['db'])]); }
     public static function historial(): never { $a=auth_context(); api_success(self::historialDatos($a['db'],$_GET)); }
+    public static function entregas(): never { $a=auth_context(); api_success(self::entregasDolorDatos($a['db'],$_GET)); }
     public static function prestamos(): never { $a=auth_context(); api_success(self::prestamosDatos($a['db'],$_GET)); }
     public static function prestamoDetalle(): never { $a=auth_context(); api_success(self::prestamoDatos($a['db'],positive_id($_GET['id']??null,'préstamo'))); }
     public static function socios(): never { $a=auth_context(); api_success(['registros'=>self::buscarSocios($a['db'],$_GET)]); }

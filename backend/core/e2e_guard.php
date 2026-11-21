@@ -266,8 +266,8 @@ function e2e_registration_payment(PDO $db, int $id): bool
 
 /**
  * Las acciones de Medicamentos sólo pueden modificar fixtures identificados por
- * el nombre del medicamento y, en préstamos, por un socio E2E. Nunca alcanza
- * para autorizar una modificación que el body contenga un texto PW E2E.
+ * el nombre del medicamento y, en préstamos, por un socio E2E o receptor
+ * manual marcado E2E. También se exige que todos los medicamentos sean E2E.
  */
 function e2e_medicamento(PDO $db, int $id): bool
 {
@@ -278,9 +278,14 @@ function e2e_medicamento(PDO $db, int $id): bool
 
 function e2e_prestamo(PDO $db, int $id): bool
 {
-    $q=$db->prepare('SELECT id_socio FROM medicamentos_prestamos WHERE id_prestamo=?');
-    $q->execute([$id]);$socio=$q->fetchColumn();
-    if($socio===false || !e2e_socio($db,(int)$socio)) return false;
+    $q=$db->prepare('SELECT id_socio,nombre_receptor,apellido_receptor FROM medicamentos_prestamos WHERE id_prestamo=?');
+    $q->execute([$id]);$prestamo=$q->fetch(PDO::FETCH_ASSOC);
+    if(!$prestamo) return false;
+    if($prestamo['id_socio']!==null){
+        if(!e2e_socio($db,(int)$prestamo['id_socio'])) return false;
+    } elseif(!e2e_marker_text($prestamo['nombre_receptor']??'')) {
+        return false;
+    }
     return !e2e_exists($db,
         "SELECT 1 FROM medicamentos_prestamos_detalle d
          JOIN medicamentos m ON m.id_medicamento=d.id_medicamento
@@ -426,8 +431,12 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
             return;
         case 'medicamentos_prestar': {
             $socio=e2e_positive_int($body['id_socio']??null);
-            if ($socio===null || !e2e_socio($db,$socio))
-                e2e_scope_error($action,'El préstamo requiere un socio E2E.');
+            if($socio!==null){
+                if(!e2e_socio($db,$socio)) e2e_scope_error($action,'El préstamo requiere un socio E2E.');
+            } elseif(!e2e_marker_text($body['nombre_receptor']??'')) {
+                // La sola presencia de un marcador en observaciones no basta.
+                e2e_scope_error($action,'El préstamo manual requiere nombre de receptor E2E.');
+            }
             if (!is_array($body['items']??null) || $body['items']===[])
                 e2e_scope_error($action,'El préstamo requiere medicamentos E2E.');
             foreach ($body['items'] as $item) {

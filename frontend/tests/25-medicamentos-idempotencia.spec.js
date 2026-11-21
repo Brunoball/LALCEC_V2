@@ -39,7 +39,7 @@ test.describe('Medicamentos: idempotencia transaccional y protección de caja/st
   test('dos POST simultáneos con la misma clave ejecutan una sola salida de stock', async ({ request }) => {
     const fx=await createMedicine(request,{first:entryFixture({cantidad:6})});
     const payload={id_medicamento:fx.id,tipo:'ENTREGA_DONACION',cantidad:4,
-      detalle:'PW E2E CONCURRENCIA CON MISMA CLAVE',_idempotency_key:key()};
+      detalle:'PW E2E CONCURRENCIA CON MISMA CLAVE',receptor:'PW E2E RECEPTOR',_idempotency_key:key()};
     const [a,b]=await Promise.all([
       apiResult(request,'medicamentos_salida',{method:'POST',data:payload}),
       apiResult(request,'medicamentos_salida',{method:'POST',data:payload}),

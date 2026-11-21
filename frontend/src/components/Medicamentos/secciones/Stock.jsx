@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPen, faBan, faRotateLeft, faClockRotateLeft, faInbox, faPills, faBoxesStacked } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
@@ -10,49 +11,44 @@ import ModuleFeedback from '../../Global/ModuleFeedback';
 import { canWrite } from '../../_shared/auth/session';
 import { medicamentosApi as api } from '../api/medicamentosApi';
 import { useMedicamentos } from '../hooks/useMedicamentos';
-import { Campos, Campo, op } from '../modales/CamposMedicamentos';
-import BuscadorEntidad from '../modales/BuscadorEntidad';
+import { Campos, Campo, CampoDosis, op } from '../modales/CamposMedicamentos';
 import MedModalInfo from '../modales/MedModalInfo';
 import AlertasVencimientos from '../alertas/AlertasVencimientos';
-import { fecha, fechaHoy, dinero, num, MED_TIPOS, estadoVencimiento, vigenteParaEntrega } from '../utils/medicamentosUtils';
+import { fecha, fechaHoy, dinero, num, MED_TIPOS, estadoVencimiento, vigenteParaEntrega, mostrarDosis, unidadStockPlural } from '../utils/medicamentosUtils';
+import { PRESENTACIONES_SECTOR, sectorDePresentacion, soloOrigenesTrello, soloSalidasTrello, SALIDAS_TRELLO,
+  unidadDosisInicial, unidadDosisAlCambiar, descartablePorVencimiento } from '../utils/medicamentosSelectores';
 import '../Medicamentos.css';
 
-const newMedicine = () => ({ droga: '', nombre_comercial: '', laboratorio: '', presentacion: 'COMPRIMIDOS', dosis: '', unidad_stock: 'UNIDAD', fecha_vencimiento: '', observaciones: '' });
-const newMovement = () => ({ direccion: 'INGRESO', origen: '', fecha_ingreso: fechaHoy(), fecha_vencimiento: '', cantidad: '', procedencia: '', costo_unitario: '', id_medio_pago: '', tipo: 'ENTREGA_DONACION', importe: '', detalle: '' });
+const newMedicine = (sector = 'MEDICAMENTOS', presentacion = '') => {
+  const inicial = PRESENTACIONES_SECTOR[sector].includes(presentacion) ? presentacion : PRESENTACIONES_SECTOR[sector][0];
+  return {
+    droga: '', nombre_comercial: '', laboratorio: '',
+    presentacion: inicial,
+    // MG solo para Comprimidos e Inyectables, también al abrir con un filtro activo.
+    dosis: '', unidad_dosis: unidadDosisInicial(inicial), unidad_stock: 'CAJA',
+    cadena_frio: 0, fecha_vencimiento: '', observaciones: '',
+  };
+};
+const newMovement = () => ({ direccion: 'INGRESO', origen: '', fecha_ingreso: fechaHoy(), fecha_vencimiento: '', cantidad: '', procedencia: '', receptor: '', costo_unitario: '', id_medio_pago: '', tipo: 'ENTREGA_DONACION', importe: '', detalle: '' });
 // Todos los orígenes salen de la tabla medicamentos_opciones (Configuración >
 // Medicamentos > Orígenes de ingreso). Los del sistema traen codigo_sistema, que
 // es el valor que se envía y guarda (define su regla: COMPRA genera egreso, etc.);
 // los adicionales se identifican por su nombre.
-const valorOrigen = o => o.codigo_sistema || o.nombre;
-// Stock inicial solo se ofrece en el alta; Ajuste positivo solo en Editar > Stock.
-const EXCLUIDO_EN = { ALTA: 'AJUSTE', STOCK: 'INICIAL' };
-const origenesDisponibles = (catalogos, contexto) => catalogos
-  .filter(o => o.tipo === 'ORIGEN_INGRESO' && Number(o.activo) === 1 && o.codigo_sistema !== EXCLUIDO_EN[contexto])
-  .map(o => op(valorOrigen(o), o.nombre));
-const origenInicial = (catalogos, contexto) => {
-  const lista = origenesDisponibles(catalogos, contexto);
-  return (lista.find(o => o.value === 'DONACION') || lista[0])?.value || '';
-};
 const nombreOrigen = (catalogos, valor) => {
   if (!valor) return '—';
   const opcion = catalogos.find(o => o.tipo === 'ORIGEN_INGRESO' && (o.codigo_sistema === valor || (!o.codigo_sistema && o.nombre === valor)));
   return opcion?.nombre || valor;
 };
-const OPCION_RAPIDA = {
-  PRESENTACION: { titulo: 'Agregar presentación', max: 100 },
-  UNIDAD_STOCK: { titulo: 'Agregar unidad de stock', max: 40 },
-  ORIGEN_INGRESO: { titulo: 'Agregar origen de ingreso', max: 60 },
-  SALIDA_STOCK: { titulo: 'Agregar motivo de salida', max: 100 },
-};
-// Los motivos del sistema conservan sus códigos y reglas contables; los
-// personalizados usan el nombre elegido como identificador del selector.
-const opcionesSalida = (catalogos, puedeEntregar) => catalogos
-  .filter(o => o.tipo === 'SALIDA_STOCK' && Number(o.activo) === 1)
-  .filter(o => puedeEntregar || !['ENTREGA_DONACION', 'SALIDA_VENTA'].includes(o.codigo_sistema))
-  .map(o => op(o.codigo_sistema || o.nombre, o.nombre));
-const salidaInicial = (lista, puedeEntregar) =>
-  (lista.find(o => o.value === (puedeEntregar ? 'ENTREGA_DONACION' : 'BAJA_DESCARTE')) || lista[0])?.value || '';
-const buscarProcedencias = async buscar => (await api.procedencias(buscar)).registros || [];
+// Unidades fijas definidas en Trello: no se pueden agregar otras desde el formulario.
+const UNIDADES_STOCK_TRELLO = ['BLÍSTER', 'AMPOLLA', 'CAJA'];
+// Las opciones compartidas siguen intactas en Configuración; este formulario
+// sólo presenta las alternativas específicas pedidas para Banco de Drogas.
+// Los motivos del sistema conservan sus códigos y reglas contables.
+const opcionesSalida = (catalogos, fechaVence) => soloSalidasTrello(catalogos, vigenteParaEntrega(fechaVence), descartablePorVencimiento(fechaVence))
+  .map(o => op(o.codigo_sistema, SALIDAS_TRELLO[o.codigo_sistema]));
+const salidaInicial = (lista, fechaVence) =>
+  (lista.find(o => o.value === (vigenteParaEntrega(fechaVence) ? 'ENTREGA_DONACION' : 'BAJA_DESCARTE')) || lista[0])?.value || '';
+const MINIMO_MOTIVO_AJUSTE = 10;
 const textoVencimiento = fechaVence => {
   if (!fechaVence) return 'Sin fecha';
   if (fechaVence === fechaHoy()) return 'Vence hoy';
@@ -65,15 +61,27 @@ function ActionButton({ icon, label, onClick, danger = false, disabled = false }
     aria-label={label} title={label} onClick={onClick} disabled={disabled}><FontAwesomeIcon icon={icon} /><span className="med-action-label">{label}</span></button>;
 }
 
-export default function Stock() {
+export default function Stock({ sector = 'MEDICAMENTOS' }) {
+  // El sector lo determina la ruta, no el formulario: no se pueden mezclar
+  // medicamentos con Tratamiento del dolor desde un desplegable de edición.
+  const esDolor = sector === 'DOLOR';
+  const nombreSector = esDolor ? 'Tratamiento del dolor' : 'Medicamentos';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const valorFiltro = searchParams.get('presentacion') || '';
+  const filtroPresentacion = PRESENTACIONES_SECTOR[sector].includes(valorFiltro) ? valorFiltro : '';
+  const cambiarFiltroPresentacion = valor => {
+    setSearchParams(actual => {
+      const siguiente = new URLSearchParams(actual);
+      if (valor) siguiente.set('presentacion', valor);
+      else siguiente.delete('presentacion');
+      return siguiente;
+    });
+    setPage(1);
+  };
   const loader = useCallback(() => api.catalogo(), []);
   const { registros, loading, error, cargar } = useMedicamentos(loader);
   const [medios, setMedios] = useState([]);
   const [catalogos, setCatalogos] = useState([]);
-  const [quickOption, setQuickOption] = useState(null);
-  const [quickName, setQuickName] = useState('');
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [quickError, setQuickError] = useState('');
   const [query, setQuery] = useState('');
   const [section, setSection] = useState('ACTIVOS');
   const [page, setPage] = useState(1);
@@ -81,7 +89,7 @@ export default function Stock() {
   const [tab, setTab] = useState('DATOS');
   const [confirmation, setConfirmation] = useState('');
   const [selected, setSelected] = useState(null);
-  const [med, setMed] = useState(newMedicine);
+  const [med, setMed] = useState(() => newMedicine(sector, filtroPresentacion));
   const [movement, setMovement] = useState(newMovement);
   const [stockInicial, setStockInicial] = useState('');
   const [history, setHistory] = useState([]);
@@ -107,12 +115,6 @@ export default function Stock() {
     return () => { active = false; };
   }, []);
 
-  const cargarOpciones = useCallback(async () => {
-    const resultado = await api.opciones();
-    setCatalogos(resultado.registros || []);
-    return resultado.registros || [];
-  }, []);
-
   useEffect(() => {
     let active = true;
     api.opciones().then(r => { if (active) setCatalogos(r.registros || []); })
@@ -123,18 +125,20 @@ export default function Stock() {
   const openMed = (medicine = null) => {
     ++requestRef.current;
     setSelected(medicine);
-    const inicial = newMedicine();
-    for (const [tipo, campo] of [['PRESENTACION','presentacion'], ['UNIDAD_STOCK','unidad_stock']]) {
-      const existentes = catalogos.filter(item => item.tipo === tipo && Number(item.activo) === 1);
+    const inicial = newMedicine(sector, filtroPresentacion);
+    for (const [tipo, campo] of [['UNIDAD_STOCK','unidad_stock']]) {
+      const existentes = catalogos.filter(item => item.tipo === tipo && Number(item.activo) === 1 &&
+        (tipo !== 'UNIDAD_STOCK' || UNIDADES_STOCK_TRELLO.includes(item.nombre)));
       if (existentes.length && !existentes.some(item => item.nombre === inicial[campo])) inicial[campo] = existentes[0].nombre;
     }
     // fecha_vencimiento_original permite al backend detectar si otra operación
     // cambió la fecha única mientras este formulario estaba abierto.
-    setMed(medicine ? { ...inicial, ...Object.fromEntries(Object.keys(inicial).map(k => [k, medicine[k] ?? ''])),
+    setMed(medicine ? { ...inicial, ...Object.fromEntries(Object.keys(inicial).map(k => [k, medicine[k] ?? (k === 'cadena_frio' ? 0 : '')])),
       id_medicamento: medicine.id_medicamento, fecha_vencimiento_original: medicine.fecha_vencimiento || '' } : inicial);
-    setMovement({ ...newMovement(), fecha_vencimiento: medicine?.fecha_vencimiento || '',
-      origen: origenInicial(catalogos, medicine ? 'STOCK' : 'ALTA'),
-      tipo: salidaInicial(opcionesSalida(catalogos, vigenteParaEntrega(medicine?.fecha_vencimiento)), vigenteParaEntrega(medicine?.fecha_vencimiento)) });
+    const efectivo = medios.find(m => String(m.nombre).trim().toUpperCase() === 'EFECTIVO');
+    setMovement({ ...newMovement(), id_medio_pago: efectivo ? String(efectivo.id_medio_pago) : '', fecha_vencimiento: medicine?.fecha_vencimiento || '',
+      origen: soloOrigenesTrello(catalogos).some(o => o.codigo_sistema === 'DONACION') ? 'DONACION' : (soloOrigenesTrello(catalogos)[0]?.codigo_sistema || ''),
+      tipo: salidaInicial(opcionesSalida(catalogos, medicine?.fecha_vencimiento), medicine?.fecha_vencimiento) });
     setStockInicial('');
     setTab('DATOS');
     setModal('editar');
@@ -165,15 +169,22 @@ export default function Stock() {
       let resultado;
       if (tab === 'DATOS') {
         const inicial = !med.id_medicamento && Number(stockInicial) > 0
-          ? { ...movement, fecha_vencimiento: med.fecha_vencimiento, cantidad: stockInicial } : undefined;
+          ? { origen: movement.origen, fecha_ingreso: movement.fecha_ingreso, fecha_vencimiento: med.fecha_vencimiento, cantidad: stockInicial,
+            procedencia: movement.procedencia.trim(), costo_unitario: movement.origen === 'COMPRA' ? movement.costo_unitario : '',
+            id_medio_pago: movement.origen === 'COMPRA' ? movement.id_medio_pago : '' } : undefined;
         resultado = await api.guardar(inicial ? { ...med, ingreso_inicial: inicial } : med);
       } else if (movement.direccion === 'INGRESO') {
         resultado = await api.ingresar({ id_medicamento: selected.id_medicamento, origen: movement.origen, fecha_ingreso: movement.fecha_ingreso, fecha_vencimiento: movement.fecha_vencimiento,
-          cantidad: movement.cantidad, procedencia: movement.procedencia, costo_unitario: movement.costo_unitario,
-          id_medio_pago: movement.id_medio_pago, observaciones: movement.detalle });
+          cantidad: movement.cantidad, procedencia: movement.procedencia.trim(), costo_unitario: movement.origen === 'COMPRA' ? movement.costo_unitario : '',
+          // Donante: sin medio de pago (Trello). Solo la compra lo envía.
+          id_medio_pago: movement.origen === 'COMPRA' ? movement.id_medio_pago : '', observaciones: movement.detalle });
       } else {
         resultado = await api.salida({ id_medicamento: selected.id_medicamento, tipo: movement.tipo, cantidad: movement.cantidad,
-          importe: movement.importe, id_medio_pago: movement.id_medio_pago, detalle: movement.detalle });
+          ...(movement.tipo === 'SALIDA_VENTA' ? { importe: movement.importe, id_medio_pago: movement.id_medio_pago } : {}),
+          detalle: movement.detalle.trim(),
+          // Toda entrega sin cargo registra quién recibe; Dolor además valida su sector.
+          ...(movement.tipo === 'ENTREGA_DONACION' ? { receptor: movement.receptor.trim(), ...(esDolor ? { sector_destino: 'DOLOR' } : {}) } : {}),
+        });
       }
       if (resultado?.ok === false) throw new Error(resultado.mensaje || 'No se pudo guardar.');
       ++requestRef.current;setModal('');setSelected(null);
@@ -193,106 +204,117 @@ export default function Stock() {
       return resultado;
     } finally { guardandoRef.current = false;setSaving(false); }
   };
-  const active = useMemo(() => registros.filter(m => num(m.activo) === 1), [registros]);
-  const bajas = useMemo(() => registros.filter(m => num(m.activo) !== 1), [registros]);
+  const delSector = useMemo(() => registros.filter(m => sectorDePresentacion(m.presentacion) === sector), [registros, sector]);
+  const active = useMemo(() => delSector.filter(m => num(m.activo) === 1), [delSector]);
+  const bajas = useMemo(() => delSector.filter(m => num(m.activo) !== 1), [delSector]);
   const filtered = useMemo(() => (section === 'ACTIVOS' ? active : bajas).filter(m =>
-    [m.nombre_comercial, m.droga, m.laboratorio, m.presentacion, m.dosis, m.motivo_baja].some(x => String(x || '').toUpperCase().includes(query.trim().toUpperCase()))
-  ), [active, bajas, section, query]);
+    (!filtroPresentacion || m.presentacion === filtroPresentacion) &&
+    [m.nombre_comercial, m.droga, m.laboratorio, m.presentacion, m.dosis, m.unidad_dosis, m.motivo_baja].some(x => String(x || '').toUpperCase().includes(query.trim().toUpperCase()))
+  ), [active, bajas, section, query, filtroPresentacion]);
   const pages = Math.max(1, Math.ceil(filtered.length / 20));
   const shown = filtered.slice((Math.min(page, pages) - 1) * 20, Math.min(page, pages) * 20);
   useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
   const updateMed = (key, value) => setMed(v => ({ ...v, [key]: value }));
   const opcionesSelector = (tipo, actual) => {
-    const activas = catalogos.filter(o => o.tipo === tipo && Number(o.activo) === 1).map(o => o.nombre);
-    return [...new Set([actual, ...activas].filter(Boolean))].map(v => op(v, v));
+    // Altas: solo valores permitidos. Edición: conservar el valor histórico del
+    // medicamento, aunque ya no se permita seleccionarlo en nuevas altas.
+    const fijas = tipo === 'PRESENTACION' ? PRESENTACIONES_SECTOR[sector] : UNIDADES_STOCK_TRELLO;
+    const activas = fijas.filter(v => catalogos.some(o => o.tipo === tipo && Number(o.activo) === 1 && o.nombre === v));
+    const historica = Boolean(med.id_medicamento && actual && !fijas.includes(actual));
+    return [
+      ...(historica ? [op(actual, `${actual} (HISTÓRICO)`)] : []),
+      ...activas.map(v => op(v, v)),
+    ];
   };
   // Solo opciones activas de la base; si el valor elegido ya no está disponible,
   // el backend lo rechaza con un mensaje claro.
-  const opcionesOrigen = contexto => origenesDisponibles(catalogos, contexto);
+  const opcionesOrigen = () => soloOrigenesTrello(catalogos).map(o => op(o.codigo_sistema, o.codigo_sistema === 'DONACION' ? 'DONANTE' : 'PROVEEDOR')); 
   // Si el catálogo llega (o cambia) con el formulario abierto, el origen elegido
   // debe ser siempre una opción real del selector, nunca un valor vacío.
-  const contextoOrigen = med.id_medicamento ? 'STOCK' : 'ALTA';
   useEffect(() => {
     if (modal !== 'editar') return;
-    const valores = origenesDisponibles(catalogos, contextoOrigen).map(o => o.value);
-    setMovement(v => (valores.includes(v.origen) ? v : { ...v, origen: origenInicial(catalogos, contextoOrigen) }));
-  }, [catalogos, modal, contextoOrigen]);
-  const nuevaOpcion = tipo => { setQuickOption(tipo); setQuickName(''); setQuickError(''); };
-  const guardarOpcionRapida = async event => {
-    event.preventDefault();
-    if (quickSaving || !quickOption) return;
-    setQuickSaving(true); setQuickError('');
-    try {
-      const result = await api.guardarOpcion({ tipo: quickOption, nombre: quickName.trim().toLocaleUpperCase('es-AR') });
-      const lista = await cargarOpciones();
-      const nueva = lista.find(item => Number(item.id_opcion) === Number(result.id_opcion));
-      if (!nueva) throw new Error('La opción se guardó, pero no se pudo actualizar el selector.');
-      if (quickOption === 'ORIGEN_INGRESO') updateMovement('origen', nueva.nombre);
-      else if (quickOption === 'SALIDA_STOCK') updateMovement('tipo', nueva.nombre);
-      else updateMed(quickOption === 'PRESENTACION' ? 'presentacion' : 'unidad_stock', nueva.nombre);
-      setQuickOption(null); setQuickName('');
-      notify('success', 'Opción agregada y seleccionada.');
-    } catch (e) { setQuickError(e.message || 'No se pudo agregar la opción.'); }
-    finally { setQuickSaving(false); }
-  };
+    const disponibles = soloOrigenesTrello(catalogos).map(o => o.codigo_sistema);
+    setMovement(v => (disponibles.includes(v.origen) ? v : { ...v, origen: disponibles.includes('DONACION') ? 'DONACION' : (disponibles[0] || '') }));
+  }, [catalogos, modal]);
   const updateMovement = (key, value) => setMovement(v => ({ ...v, [key]: value }));
+  const cambiarOrigen = origen => {
+    const efectivo = medios.find(m => String(m.nombre).trim().toUpperCase() === 'EFECTIVO');
+    setMovement(actual => ({ ...actual, origen,
+      procedencia: actual.origen === origen ? actual.procedencia : '',
+      costo_unitario: origen === 'COMPRA' ? actual.costo_unitario : '',
+      id_medio_pago: origen === 'COMPRA' ? (efectivo ? String(efectivo.id_medio_pago) : '') : '',
+    }));
+  };
   const payments = [op('', 'Seleccionar medio'), ...medios.map(m => op(m.id_medio_pago, m.nombre))];
+  useEffect(() => {
+    if (modal !== 'editar') return;
+    const efectivo = medios.find(m => String(m.nombre).trim().toUpperCase() === 'EFECTIVO');
+    if (efectivo) setMovement(v => v.id_medio_pago ? v : { ...v, id_medio_pago: String(efectivo.id_medio_pago) });
+  }, [medios, modal]);
   const entrada = movement.direccion === 'INGRESO';
-  // Venta y entrega exigen vencimiento vigente (misma regla que el backend);
-  // ajuste negativo y descarte siempre están disponibles.
+  // Misma regla que el backend: la entrega exige vencimiento vigente, el descarte
+  // por vencimiento exige stock vencido y el ajuste por error de carga siempre está.
   const entregable = vigenteParaEntrega(selected?.fecha_vencimiento);
-  const tiposSalida = opcionesSalida(catalogos, entregable);
+  const tiposSalida = opcionesSalida(catalogos, selected?.fecha_vencimiento);
+  const esEntrega = movement.tipo === 'ENTREGA_DONACION';
+  const esAjuste = movement.tipo === 'AJUSTE_SALIDA';
+  const requiereProcedencia = ['DONACION', 'COMPRA'].includes(movement.origen);
+  const faltaProcedencia = requiereProcedencia && movement.procedencia.trim().length < 3;
   // Si el motivo quedó inactivo o no está permitido por vencimiento, elegir
   // una opción válida al abrir Restar stock o refrescar los catálogos.
   useEffect(() => {
     if (modal !== 'editar' || !selected || movement.direccion !== 'SALIDA') return;
-    const disponibles = opcionesSalida(catalogos, vigenteParaEntrega(selected.fecha_vencimiento));
+    const disponibles = opcionesSalida(catalogos, selected.fecha_vencimiento);
     setMovement(v => disponibles.some(o => o.value === v.tipo) ? v :
-      { ...v, tipo: salidaInicial(disponibles, vigenteParaEntrega(selected.fecha_vencimiento)) });
+      { ...v, tipo: salidaInicial(disponibles, selected.fecha_vencimiento) });
   }, [catalogos, modal, selected, movement.direccion]);
   const fieldsMovement = <Campos>
     <Campo label="Cantidad" quantity type="number" min="1" step="1" required value={movement.cantidad} onChange={v => updateMovement('cantidad', v)} />
     {entrada ? <>
-      <Campo label="Motivo del ingreso" required options={opcionesOrigen('STOCK')}
-        onAddOption={write ? () => nuevaOpcion('ORIGEN_INGRESO') : undefined} value={movement.origen} onChange={v => updateMovement('origen',v)} />
+      <Campo label="Origen" required options={opcionesOrigen()} value={movement.origen} onChange={cambiarOrigen} />
       <Campo label="Fecha de ingreso" required type="date" max={fechaHoy()} value={movement.fecha_ingreso} onChange={v => updateMovement('fecha_ingreso',v)} />
       <Campo label="Vencimiento del medicamento" required type="date" value={movement.fecha_vencimiento} onChange={v => updateMovement('fecha_vencimiento',v)} />
-      <BuscadorEntidad label="Donante / proveedor (opcional)" manual maxLength={160} value={movement.procedencia} selectedLabel={movement.procedencia}
-        buscar={buscarProcedencias} onSelect={item => updateMovement('procedencia', item?.nombre || '')} />
+      {requiereProcedencia ? <Campo required
+        label={movement.origen === 'DONACION' ? 'Nombre y apellido del donante (manual)' : 'Datos del proveedor (manual)'}
+        maxLength={160} value={movement.procedencia} onChange={v => updateMovement('procedencia',v)} /> : null}
       {movement.origen === 'COMPRA' ? <>
         <Campo label="Costo por unidad ($)" money type="number" required min="0.01" step="0.01" value={movement.costo_unitario} onChange={v => updateMovement('costo_unitario',v)} />
         <Campo label="Medio de pago de la compra" required value={movement.id_medio_pago} options={payments} onChange={v => updateMovement('id_medio_pago',v)} />
       </> : null}
     </> : <>
       <Campo label="Motivo de salida" required value={movement.tipo} options={tiposSalida}
-        onAddOption={write ? () => nuevaOpcion('SALIDA_STOCK') : undefined}
         onChange={v => updateMovement('tipo',v)} />
-      {!tiposSalida.length ? <p role="alert" className="med-inline-danger">No hay motivos de salida disponibles. Revisá Configuración → Medicamentos → Motivos de salida y aplicá la migración SQL.</p> : null}
+      {!tiposSalida.length ? <p role="alert" className="med-inline-danger">No hay motivos de salida disponibles (Entrega sin cargo, Descarte por vencimiento, Ajuste por error de carga). Revisá su estado en Configuración → Medicamentos.</p> : null}
+      {esEntrega ? <Campo
+        label="Nombre y apellido de quien recibe" required maxLength={160}
+        value={movement.receptor} onChange={v => updateMovement('receptor',v)} /> : null}
       {movement.tipo === 'SALIDA_VENTA' ? <>
         <Campo label="Importe total de venta ($)" money required type="number" min="0.01" step="0.01" value={movement.importe} onChange={v => updateMovement('importe',v)} />
         <Campo label="Medio de pago" required value={movement.id_medio_pago} options={payments} onChange={v => updateMovement('id_medio_pago',v)} />
       </> : null}
     </>}
-    <Campo label="Observaciones / motivo" wide textarea maxLength={500} value={movement.detalle} onChange={v => updateMovement('detalle',v)} />
+    <Campo label={!entrada && esAjuste ? `Motivo del ajuste (mínimo ${MINIMO_MOTIVO_AJUSTE} caracteres)` : 'Observaciones / motivo'}
+      required={!entrada && esAjuste} wide textarea maxLength={500} value={movement.detalle} onChange={v => updateMovement('detalle',v)} />
   </Campos>;
 
   return <>
-    <ModulePage title="Medicamentos · Stock" tabsInTitle filters={[
+    <ModulePage title={`${nombreSector} · Stock`} tabsInTitle filters={[
       { type: 'tabs', label: 'Estado', value: section, onChange: v => { setSection(v);setPage(1); }, options: [
         { value: 'ACTIVOS', label: 'Activos', count: active.length },{ value: 'BAJAS', label: 'Bajas', count: bajas.length },
       ] },
+      { type: 'select', label: 'Presentación', value: filtroPresentacion, onChange: cambiarFiltroPresentacion, placeholder: 'Todas las presentaciones', options: PRESENTACIONES_SECTOR[sector].map(v => op(v, v)) },
       { type: 'search', label: 'Búsqueda', value: query, onChange: v => { setQuery(v);setPage(1); }, placeholder: ' ' },
-    ]} primaryActionLabel="Nuevo medicamento" onPrimaryAction={() => openMed()} canCreate={write}>
+    ]} primaryActionLabel={esDolor ? 'Nuevo tratamiento' : 'Nuevo medicamento'} onPrimaryAction={() => openMed()} canCreate={write}>
       {error ? <div className="med-inline-danger">{error}</div> : null}
-      <GlobalDivTable ariaLabel="Stock de medicamentos" loading={loading} empty={!loading && !error && !filtered.length}
+      <GlobalDivTable ariaLabel={`Stock de ${nombreSector.toLowerCase()}`} loading={loading} empty={!loading && !error && !filtered.length}
         className={`med-table ${filtered.length ? 'has-bottom-pagination' : ''}`} gridClassName={section === 'ACTIVOS' ? 'med-grid--stock-simple med-grid--stock-expiry' : 'med-grid--stock-simple'}
         columns={section === 'ACTIVOS' ? ['Medicamento / droga','Laboratorio','Presentación / dosis','Stock actual','Vencimiento','Último ingreso / origen',{ label: 'Acciones', align: 'center' }]
           : ['Medicamento / droga','Laboratorio','Presentación / dosis','Stock actual','Motivo de baja',{ label: 'Acciones', align: 'center' }]}>
         {shown.map(m => <div key={m.id_medicamento} role="row" className={`mov-gridTable mov-gridTable--row global-divTable__row med-grid--stock-simple ${section === 'ACTIVOS' ? `med-grid--stock-expiry med-expiry-row ${estadoVencimiento(m.fecha_vencimiento)}` : ''}`}>
           <div role="cell" className="mov-gridCell entity-main-cell"><strong>{m.nombre_comercial}</strong><span className="med-cell-secondary">{m.droga}</span></div>
           <div role="cell" className="mov-gridCell">{m.laboratorio || '—'}</div>
-          <div role="cell" className="mov-gridCell entity-main-cell"><span>{m.presentacion}</span><span className="med-cell-secondary">Dosis: {m.dosis}</span></div>
-          <div role="cell" className="mov-gridCell entity-main-cell"><strong>{m.stock_actual}</strong><span className="med-cell-secondary">{m.unidad_stock}</span></div>
+          <div role="cell" className="mov-gridCell entity-main-cell"><span>{m.presentacion}{num(m.cadena_frio) === 1 ? ' · ❄ Cadena de frío' : ''}</span><span className="med-cell-secondary">Dosis: {mostrarDosis(m.dosis, m.unidad_dosis)}</span></div>
+          <div role="cell" className="mov-gridCell entity-main-cell"><strong>{m.stock_actual}</strong><span className="med-cell-secondary">{unidadStockPlural(m.unidad_stock, m.stock_actual)}</span></div>
           {section === 'ACTIVOS' ? <div role="cell" className="mov-gridCell entity-main-cell med-expiry-cell"><strong className="med-expiry-date">{fecha(m.fecha_vencimiento)}</strong><span className="med-cell-secondary">{textoVencimiento(m.fecha_vencimiento)}</span></div> : null}
           {section === 'ACTIVOS' ? <div role="cell" className="mov-gridCell entity-main-cell">{fecha(m.ultimo_ingreso)}<span className="med-cell-secondary">{nombreOrigen(catalogos, m.ultimo_origen)}</span></div>
             : <div role="cell" className="mov-gridCell entity-main-cell med-reason-cell">{m.motivo_baja || '—'}<span className="med-cell-secondary">{fecha(m.fecha_baja)}</span></div>}
@@ -317,16 +339,20 @@ export default function Stock() {
       title={<MedModalInfo info={tab === 'DATOS'
         ? (med.id_medicamento ? 'Si el medicamento tiene movimientos registrados, no se puede cambiar su presentación, dosis, droga ni unidad de stock. Podés actualizar el nombre, laboratorio y observaciones.' : null)
         : [
-          <>Stock disponible: <strong>{selected?.stock_actual} {selected?.unidad_stock}</strong>. Vencimiento actual: <strong>{fecha(selected?.fecha_vencimiento)}</strong>. No se usan lotes; hay una única fecha de vencimiento por medicamento.</>,
+          <>Stock disponible: <strong>{selected?.stock_actual} {unidadStockPlural(selected?.unidad_stock, selected?.stock_actual)}</strong>. Vencimiento actual: <strong>{fecha(selected?.fecha_vencimiento)}</strong>. No se usan lotes; hay una única fecha de vencimiento por medicamento.</>,
           entrada ? 'Una sola fecha para todo el stock: si la cambiás, también aplica a las unidades que ya estaban cargadas.' : null,
           entrada && movement.origen === 'COMPRA' ? <>La compra registrará un egreso de <strong>{dinero(num(movement.cantidad) * num(movement.costo_unitario))}</strong> en Contabilidad.</> : null,
-          !entrada && !entregable ? `${selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: no se puede vender, entregar ni prestar. Podés descartar, ajustar o registrar otro motivo de salida. Para habilitar la entrega, corregí la fecha en Datos.` : null,
+          !entrada && !entregable ? `${selected?.fecha_vencimiento ? `Vencido el ${fecha(selected.fecha_vencimiento)}` : 'Sin fecha de vencimiento'}: no se puede vender, entregar ni prestar. Podés registrar el descarte por vencimiento o, si fue un error de carga, el ajuste. Para habilitar la entrega, corregí la fecha en Datos.` : null,
+          !entrada && entregable ? 'El descarte por vencimiento se habilita cuando el medicamento está vencido. Para corregir una cantidad mal cargada usá «Ajuste por error de carga» y explicá el motivo.' : null,
         ]}>
-        {med.id_medicamento ? `Editar medicamento · ${selected?.nombre_comercial || ''}` : 'Nuevo medicamento'}
+        {med.id_medicamento ? `Editar ${esDolor ? 'tratamiento' : 'medicamento'} · ${selected?.nombre_comercial || ''}` : (esDolor ? 'Nuevo tratamiento' : 'Nuevo medicamento')}
       </MedModalInfo>}
       subtitle={med.id_medicamento ? 'Los datos y los movimientos de stock se gestionan desde Editar.' : 'Completá los datos. El stock inicial es opcional.'}
-      onClose={close} submitLabel={tab==='DATOS' ? 'Guardar medicamento' : 'Registrar movimiento'}
-      onSubmit={run} submitDisabled={tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (!entrada && (num(movement.cantidad) > num(selected?.stock_actual) || !tiposSalida.some(o => o.value === movement.tipo))))}>
+      onClose={close} submitLabel={tab==='DATOS' ? (esDolor ? 'Guardar tratamiento' : 'Guardar medicamento') : 'Registrar movimiento'}
+      onSubmit={run} submitDisabled={(tab === 'DATOS' && !med.id_medicamento && num(stockInicial) > 0 && faltaProcedencia) ||
+        (tab === 'STOCK' && (!Number.isInteger(Number(movement.cantidad)) || num(movement.cantidad) < 1 || (entrada && faltaProcedencia) ||
+        (!entrada && (num(movement.cantidad) > num(selected?.stock_actual) || !tiposSalida.some(o => o.value === movement.tipo) ||
+        (esEntrega && movement.receptor.trim().length < 3) || (esAjuste && movement.detalle.trim().length < MINIMO_MOTIVO_AJUSTE)))))}>
       <div className={med.id_medicamento ? 'med-tabbed-form' : undefined}>
       {med.id_medicamento ? <div className="entity-form-tabs med-simple-tabs" role="tablist" aria-label="Editar medicamento">
         <button type="button" className={`entity-form-tab ${tab==='DATOS'?'is-active':''}`} role="tab" aria-selected={tab==='DATOS'} disabled={saving} onClick={() => setTab('DATOS')}><FontAwesomeIcon icon={faPills} /> Datos</button>
@@ -338,20 +364,25 @@ export default function Stock() {
           <Campo label="Nombre comercial" required value={med.nombre_comercial} onChange={v => updateMed('nombre_comercial',v)} />
           <Campo label="Droga" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.droga} onChange={v => updateMed('droga',v)} />
           <Campo label="Laboratorio" value={med.laboratorio} onChange={v => updateMed('laboratorio',v)} />
-          <Campo label="Presentación" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} options={opcionesSelector('PRESENTACION', med.presentacion)} onAddOption={write ? () => nuevaOpcion('PRESENTACION') : undefined}
-            value={med.presentacion} onChange={v => updateMed('presentacion',v)} />
-          <Campo label="Dosis" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.dosis} onChange={v => updateMed('dosis',v)} />
-          <Campo label="Unidad de stock" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.unidad_stock} options={opcionesSelector('UNIDAD_STOCK', med.unidad_stock)} onAddOption={write ? () => nuevaOpcion('UNIDAD_STOCK') : undefined} onChange={v => updateMed('unidad_stock',v)} />
+          <Campo label="Presentación" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} options={opcionesSelector('PRESENTACION', med.presentacion)}
+            value={med.presentacion} onChange={v => setMed(actual => ({ ...actual, presentacion: v, unidad_dosis: unidadDosisAlCambiar(v, actual.unidad_dosis) }))} />
+          <CampoDosis label="Dosis" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)}
+            value={med.dosis} unidad={med.unidad_dosis} onChange={v => updateMed('dosis',v)} onUnidadChange={v => updateMed('unidad_dosis',v)} />
           <Campo label="Fecha de vencimiento" type="date" required={Boolean(num(med.id_medicamento ? selected?.stock_actual : stockInicial) > 0)} value={med.fecha_vencimiento} onChange={v => { updateMed('fecha_vencimiento',v); if(!med.id_medicamento) updateMovement('fecha_vencimiento',v); }} />
+          <Campo label="Unidad de stock" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.unidad_stock} options={opcionesSelector('UNIDAD_STOCK', med.unidad_stock)} onChange={v => updateMed('unidad_stock',v)} />
+          <label className="entity-field med-cadena-frio-field">
+            <input type="checkbox" checked={num(med.cadena_frio) === 1} onChange={e => updateMed('cadena_frio', e.target.checked ? 1 : 0)} />
+            <span>Requiere cadena de frío</span>
+          </label>
           <Campo label="Observaciones del medicamento" wide textarea maxLength={3000} value={med.observaciones} onChange={v => updateMed('observaciones',v)} />
           {!med.id_medicamento ? <>
             <Campo label="Stock inicial (opcional)" quantity type="number" min="0" step="1" value={stockInicial} onChange={setStockInicial} />
             {num(stockInicial)>0 ? <>
-              <Campo label="Origen" options={opcionesOrigen('ALTA')}
-                onAddOption={write ? () => nuevaOpcion('ORIGEN_INGRESO') : undefined} value={movement.origen} onChange={v => updateMovement('origen',v)} />
+              <Campo label="Origen" required options={opcionesOrigen()} value={movement.origen} onChange={cambiarOrigen} />
               <Campo label="Fecha de ingreso" required type="date" max={fechaHoy()} value={movement.fecha_ingreso} onChange={v => updateMovement('fecha_ingreso',v)} />
-              <BuscadorEntidad label="Donante / proveedor (opcional)" manual maxLength={160} value={movement.procedencia} selectedLabel={movement.procedencia}
-                buscar={buscarProcedencias} onSelect={item => updateMovement('procedencia', item?.nombre || '')} />
+              {requiereProcedencia ? <Campo required
+                label={movement.origen === 'DONACION' ? 'Nombre y apellido del donante (manual)' : 'Datos del proveedor (manual)'}
+                maxLength={160} value={movement.procedencia} onChange={v => updateMovement('procedencia',v)} /> : null}
               {movement.origen === 'COMPRA' ? <>
                 <Campo label="Costo unitario ($)" money required type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
                 <Campo label="Medio de pago" required options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
@@ -371,19 +402,12 @@ export default function Stock() {
       </div>
     </CrudModal>
 
-    <CrudModal open={Boolean(quickOption)} modalClassName="med-quick-option-modal" title={OPCION_RAPIDA[quickOption]?.titulo || 'Agregar opción'}
-      subtitle="La nueva opción estará disponible también para los demás medicamentos." saving={quickSaving}
-      onClose={() => { if (!quickSaving) setQuickOption(null); }} onSubmit={guardarOpcionRapida} submitLabel="Agregar" closeOnBackdrop={false}>
-      <Campos><Campo label="Nombre de la opción" required maxLength={OPCION_RAPIDA[quickOption]?.max} value={quickName} onChange={v => setQuickName(v.toLocaleUpperCase('es-AR'))} /></Campos>
-      {quickError ? <p className="med-inline-danger" role="alert">{quickError}</p> : null}
-    </CrudModal>
-
     <CrudModal modalClassName="med-modal med-history-modal" open={modal==='historial'} wide hideSubmit closeOnBackdrop={false} loading={detailLoading}
       title={`Historial · ${selected?.nombre_comercial || ''}`} subtitle="Movimientos de stock del medicamento"
       footerStart={<GlobalPagination page={historyPage} total={historyTotal} perPage={50} onPageChange={p=>fetchHistory(selected,p)} loading={detailLoading} label="movimientos" />} onClose={close}>
       {history.length ? <div className="med-history-list">{history.map(h => <div className="med-history-row" key={h.id_movimiento}>
         <div className="med-history-details"><strong>{h.tipo === 'AJUSTE_SALIDA' && h.origen ? h.origen : (MED_TIPOS[h.tipo] || h.tipo)}{h.tipo === 'INGRESO_OTRO' && h.origen ? ` · ${h.origen}` : ''}</strong>
-          <span>{String(h.fecha_movimiento || '').slice(0,16)}{h.procedencia ? ` · ${h.procedencia}` : ''}{h.costo_unitario ? ` · ${dinero(h.costo_unitario)} por unidad` : ''}</span>
+          <span>{String(h.fecha_movimiento || '').slice(0,16)}{h.procedencia ? ` · ${h.tipo === 'ENTREGA_DONACION' ? 'Recibe: ' : ''}${h.procedencia}` : ''}{h.costo_unitario ? ` · ${dinero(h.costo_unitario)} por unidad` : ''}</span>
           {h.detalle ? <span>{h.detalle}</span> : null}
           {num(h.anulada)===1 ? <span>Operación anulada con contramovimiento.</span> : null}
         </div>
@@ -402,7 +426,7 @@ export default function Stock() {
       title={num(selected?.activo)===1?'Dar de baja medicamento':'Reactivar medicamento'}
       message={num(selected?.activo)===1?'Este medicamento no podrá utilizarse en nuevos movimientos ni préstamos hasta reactivarlo.':'El medicamento volverá a estar disponible.'}
       warning={num(selected?.activo)===1 && num(selected?.stock_actual)>0
-        ? `Tiene ${selected?.stock_actual} ${selected?.unidad_stock || ''} en stock. Registrá el descarte o ajuste desde Editar → Stock → Restar stock antes de darlo de baja. Tampoco puede tener unidades prestadas sin devolver.` : undefined}
+        ? `Tiene ${selected?.stock_actual} ${unidadStockPlural(selected?.unidad_stock, selected?.stock_actual)} en stock. Registrá el descarte o ajuste desde Editar → Stock → Restar stock antes de darlo de baja. Tampoco puede tener unidades prestadas sin devolver.` : undefined}
       confirmDisabled={num(selected?.activo)===1 && num(selected?.stock_actual)>0}
       details={selected ? [{label:'Medicamento',value:selected.nombre_comercial},{label:'Stock actual',value:selected.stock_actual}] : []}
       showReason={num(selected?.activo)===1} reasonRequired={num(selected?.activo)===1} reasonLabel="Motivo de baja" reasonPlaceholder=" " reasonMaxLength={500}
@@ -428,6 +452,7 @@ export default function Stock() {
     />
 
     <AlertasVencimientos tipo="MEDICAMENTO" actualizacion={alertRevision}
+      idsPermitidos={delSector.map(m => Number(m.id_medicamento))}
       onSelect={alerta => {
         const registro = registros.find(m => Number(m.id_medicamento) === Number(alerta.id_referencia));
         if (registro) openMed(registro);
