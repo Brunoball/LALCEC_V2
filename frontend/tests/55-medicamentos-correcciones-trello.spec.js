@@ -96,34 +96,30 @@ test.describe('Banco de Drogas: correcciones de revisión Trello', () => {
     expect(Number((await stockOf(request, vencido.id)).stock_actual)).toBe(0);
   });
 
-  test('API: las presentaciones de Banco de Drogas no se renombran ni se dan de baja', async ({ request }) => {
-    // Sin eliminar por API: con un backend desactualizado no podría revertirse.
+  test('contrato: presentaciones fijas protegidas sin modificar opciones reales', async ({ request }) => {
+    // Este contrato se verifica con lectura de API y de código: el guardián E2E
+    // impide escribir sobre opciones reales, incluso si la operación sería rechazada
+    // por OPTION_FIXED. Nunca intentar la escritura ni una reversión sobre ellas.
     const gestion = fs.readFileSync(path.join(backend, 'modules', 'medicamentos', 'medicamentos_opciones.php'), 'utf8');
-    expect(gestion).toContain("self::exigirPresentacionModificable($antes,'eliminar')");
+    const guard = fs.readFileSync(path.join(backend, 'core', 'e2e_guard.php'), 'utf8');
+    for (const expresion of [
+      "self::exigirPresentacionModificable($antes,'renombrar')",
+      "self::exigirPresentacionModificable($antes,'dar de baja')",
+      "self::exigirPresentacionModificable($antes,'eliminar')",
+      "'OPTION_FIXED'",
+    ]) {
+      expect(gestion, `Falta la protección ${expresion}`).toContain(expresion);
+    }
+    expect(gestion).toContain('self::PRESENTACIONES_MEDICAMENTOS, ...self::PRESENTACIONES_DOLOR');
+    expect(guard).toContain("case 'medicamentos_opcion_guardar'");
+    expect(guard).toContain("case 'medicamentos_opcion_estado'");
+    expect(guard).toContain("case 'medicamentos_opcion_eliminar'");
+
+    // Comprobar que las opciones existen de verdad, sin alterarlas en DB.
     const opciones = (await apiCall(request, 'medicamentos_opciones')).registros || [];
-    for (const nombre of ['COMPRIMIDOS', 'JARABE']) {
+    for (const nombre of ['COMPRIMIDOS', 'JARABE', 'DOBLE CONCENTRADO']) {
       const opcion = opciones.find(o => o.tipo === 'PRESENTACION' && o.nombre === nombre);
-      expect(opcion, `Falta la presentación ${nombre} en medicamentos_opciones`).toBeTruthy();
-      const renombrar = await apiResult(request, 'medicamentos_opcion_guardar', {
-        method: 'POST', data: { id_opcion: opcion.id_opcion, tipo: 'PRESENTACION', nombre: `${nombre} PW E2E` },
-      });
-      try {
-        expect(renombrar.ok).toBe(false);
-        expect(renombrar.body.codigo).toBe('OPTION_FIXED');
-      } finally {
-        if (renombrar.ok) await apiResult(request, 'medicamentos_opcion_guardar', {
-          method: 'POST', data: { id_opcion: opcion.id_opcion, tipo: 'PRESENTACION', nombre },
-        });
-      }
-      if (Number(opcion.activo) === 1) {
-        const baja = await apiResult(request, 'medicamentos_opcion_estado', { method: 'POST', data: { id_opcion: opcion.id_opcion, activo: 0 } });
-        try {
-          expect(baja.ok).toBe(false);
-          expect(baja.body.codigo).toBe('OPTION_FIXED');
-        } finally {
-          if (baja.ok) await apiResult(request, 'medicamentos_opcion_estado', { method: 'POST', data: { id_opcion: opcion.id_opcion, activo: 1 } });
-        }
-      }
+      expect(opcion, `Falta la presentación fija ${nombre}`).toBeTruthy();
     }
   });
 

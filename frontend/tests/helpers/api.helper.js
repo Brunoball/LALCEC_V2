@@ -106,15 +106,15 @@ async function apiResult(requestContext, action, options = {}) {
     headers,
     failOnStatusCode: false,
   };
-  // Solo las nueve escrituras transaccionales necesitan clave. Cada invocación
-  // independiente genera una clave E2E; los reintentos explícitos conservan la suya.
+  // Las diez escrituras transaccionales de Medicamentos requieren clave.
+  // Cada invocación independiente genera una clave E2E; los reintentos explícitos conservan la suya.
   // El prefijo controlado permite que el backend limpie únicamente solicitudes
   // Playwright, sin tocar las operaciones de usuarios reales.
   const transactionalMedicationActions = new Set([
     'medicamentos_guardar', 'medicamentos_cambiar_estado', 'medicamentos_ingresar',
     'medicamentos_salida', 'medicamentos_anular',
     'medicamentos_prestar', 'medicamentos_devolver', 'medicamentos_cerrar',
-    'medicamentos_sena',
+    'medicamentos_sena', 'medicamentos_entregar',
   ]);
   if (options.data !== undefined) {
     const isMedicineWrite = method === 'POST' && transactionalMedicationActions.has(action);

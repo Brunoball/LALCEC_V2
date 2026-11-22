@@ -25,5 +25,6 @@ final class Medicamentos {
     public static function prestar(): never { $a=require_admin(); api_success(self::crearPrestamo($a,request_body()),'Préstamo registrado.'); }
     public static function devolver(): never { $a=require_admin(); api_success(self::devolverMedicamento($a,request_body()),'Devolución registrada y stock actualizado.'); }
     public static function cerrar(): never { $a=require_admin(); api_success(self::cerrarPrestamo($a,request_body()),'Préstamo cerrado.'); }
+    public static function entregar(): never { $a=require_admin(); api_success(self::entregarDolor($a,request_body()),'Entrega registrada, cobro contabilizado y stock actualizado.'); }
     public static function sena(): never { $a=require_admin(); api_success(self::registrarSena($a,request_body()),'Movimiento de seña registrado.'); }
 }

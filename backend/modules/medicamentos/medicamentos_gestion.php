@@ -229,9 +229,13 @@ trait MedicamentosGestion {
                 $tipo='AJUSTE_SALIDA';
                 $motivoPersonalizado=$motivo;
             }
+            // Trello: en Tratamiento del dolor la entrega SE COBRA (efectivo o
+            // transferencia) y se registra desde Entregas, con varios tratamientos.
+            // Desde Restar stock solo quedan el descarte y el ajuste por error de carga.
+            if(($entregaDolor || MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
+                && in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true))
+                api_error('Las entregas de Tratamiento del dolor se cobran y se registran en Tratamiento del dolor > Entregas.','ENTREGA_DOLOR_COBRADA',422);
             if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::verificarVigenciaParaEntrega($m);
-            if($entregaDolor && $tipo!=='ENTREGA_DONACION')
-                api_error('Tratamiento del dolor solo admite entregas sin cargo.','VALIDATION_ERROR',422);
             // "Descarte por vencimiento" solo aplica a stock vencido (o sin fecha,
             // que no se puede entregar). Para corregir errores de carga existe el ajuste.
             $vence=(string)($m['fecha_vencimiento']??'');
@@ -296,8 +300,32 @@ trait MedicamentosGestion {
             }
             $vence=($b['fecha_devolucion_prevista']??'')!==''?self::date($b['fecha_devolucion_prevista'],'fecha prevista'):null;
             if($vence!==null && $vence<date('Y-m-d'))api_error('La devolución prevista no puede ser pasada.');
-            $db->prepare('INSERT INTO medicamentos_prestamos (id_socio,nombre_receptor,apellido_receptor,fecha_entrega,fecha_devolucion_prevista,observaciones) VALUES (?,?,?,?,?,?)')
-                ->execute([$socio,$nombre,$apellido,date('Y-m-d H:i:s'),$vence,self::str($b,'observaciones',3000)]);
+            // Trello: paciente (nombre y DNI) y persona que retira (DNI y celular)
+            // se cargan a mano, sin vincularlos al padrón. Son obligatorios en los
+            // préstamos manuales; los préstamos con id_socio (integraciones e
+            // históricos) los admiten de forma opcional.
+            $columnasNuevas=self::columnasPacienteDisponibles($db);
+            $manual=$socio===null;
+            $pacienteEnviado=false;
+            foreach(['paciente_nombre','paciente_dni','dni_receptor','celular_receptor'] as $campo)
+                if(trim(is_scalar($b[$campo]??null)?(string)$b[$campo]:'')!=='')$pacienteEnviado=true;
+            if(!$columnasNuevas && ($manual || $pacienteEnviado))
+                api_error('Falta ejecutar la migración de préstamos (datos del paciente, DNI y celular). Ejecutá el SQL incluido en el ZIP.','MIGRACION_PENDIENTE',503);
+            $paciente=[];
+            if($columnasNuevas){
+                $pacienteNombre=self::textoLimitado($b,'paciente_nombre',160,'nombre y apellido del paciente');
+                if($manual && ($pacienteNombre===null || self::largo($pacienteNombre)<3))
+                    api_error('Ingresá nombre y apellido del paciente (mínimo 3 caracteres).','VALIDATION_ERROR',422,['campo'=>'paciente_nombre']);
+                $paciente=[
+                    'paciente_nombre'=>$pacienteNombre,
+                    'paciente_dni'=>self::documentoTexto($b,'paciente_dni','DNI del paciente',$manual),
+                    'dni_receptor'=>self::documentoTexto($b,'dni_receptor','DNI de quien retira',$manual),
+                    'celular_receptor'=>self::celularTexto($b,'celular_receptor','celular de contacto',$manual),
+                ];
+            }
+            $columnas=['id_socio','nombre_receptor','apellido_receptor','fecha_entrega','fecha_devolucion_prevista','observaciones',...array_keys($paciente)];
+            $db->prepare('INSERT INTO medicamentos_prestamos ('.implode(',',$columnas).') VALUES ('.implode(',',array_fill(0,count($columnas),'?')).')')
+                ->execute([$socio,$nombre,$apellido,date('Y-m-d H:i:s'),$vence,self::str($b,'observaciones',3000),...array_values($paciente)]);
             $prestamo=(int)$db->lastInsertId();
             foreach($parsed as $id=>$cantidad){
                 $db->prepare('INSERT INTO medicamentos_prestamos_detalle (id_prestamo,id_medicamento,cantidad_entregada) VALUES (?,?,?)')->execute([$prestamo,$id,$cantidad]);
@@ -315,61 +343,220 @@ trait MedicamentosGestion {
                 $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_ingreso_contable) VALUES (?,?,'COBRO_SENA',?,?,?)")
                     ->execute([$prestamo,date('Y-m-d H:i:s'),$sena,$medio,$ingreso]);
             }
-            self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$prestamo,null,['socio'=>$socio,'receptor'=>trim(($nombre??'').' '.($apellido??'')),'items'=>$parsed,'sena'=>$sena]);
+            self::audit($db,$auth,'CREAR_PRESTAMO','medicamentos_prestamos',$prestamo,null,['socio'=>$socio,'receptor'=>trim(($nombre??'').' '.($apellido??'')),'items'=>$parsed,'sena'=>$sena]+$paciente);
             return ['id_prestamo'=>$prestamo];
         },$auth,$b,'crearPrestamo');
     }
 
+    /**
+     * Devolución de medicamentos prestados.
+     *
+     * Formatos admitidos por la misma acción `medicamentos_devolver`:
+     * - Individual (histórico): {id_detalle_prestamo, cantidad, observaciones}.
+     * - Múltiple: {id_prestamo, items:[{id_detalle_prestamo,cantidad},...], observaciones}.
+     *
+     * Ambos comparten una única transacción: se valida TODO antes de escribir y,
+     * si un renglón es inválido, no se registra ninguno. El préstamo se bloquea
+     * primero (FOR UPDATE), luego sus renglones y por último los medicamentos en
+     * orden estable; así dos devoluciones simultáneas del mismo préstamo se
+     * serializan y nunca superan las unidades pendientes.
+     */
     protected static function devolverMedicamento(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
-            $detalle=positive_id($b['id_detalle_prestamo']??null,'detalle de préstamo');
-            $q=$db->prepare('SELECT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_detalle_prestamo=?');
-            $q->execute([$detalle]);$prestamo=(int)$q->fetchColumn();if(!$prestamo)api_error('Detalle inexistente.');
+            $multiple=array_key_exists('items',$b);
+            if($multiple){
+                $prestamo=positive_id($b['id_prestamo']??null,'préstamo');
+                $items=$b['items'];
+                if(!is_array($items) || !array_is_list($items) || count($items)<1)
+                    api_error('Seleccioná al menos un medicamento para devolver.','DEVOLUCION_SIN_ITEMS',422);
+                if(count($items)>30)api_error('Una devolución admite hasta 30 medicamentos.','VALIDATION_ERROR',422);
+            } else {
+                $detalleUnico=positive_id($b['id_detalle_prestamo']??null,'detalle de préstamo');
+                $q=$db->prepare('SELECT id_prestamo FROM medicamentos_prestamos_detalle WHERE id_detalle_prestamo=?');
+                $q->execute([$detalleUnico]);$prestamo=(int)$q->fetchColumn();if(!$prestamo)api_error('Detalle inexistente.');
+                $items=[['id_detalle_prestamo'=>$detalleUnico,'cantidad'=>$b['cantidad']??null]];
+            }
+            // Validación sintáctica completa antes de tocar la base.
+            $pedidos=[];
+            foreach($items as $i=>$item){
+                if(!is_array($item))api_error('Renglón de devolución inválido.','VALIDATION_ERROR',422);
+                $detalle=positive_id($item['id_detalle_prestamo']??null,'detalle de préstamo');
+                if(isset($pedidos[$detalle]))
+                    api_error('No repitas el mismo medicamento en la devolución.','DEVOLUCION_DUPLICADA',422);
+                $pedidos[$detalle]=self::qty($item['cantidad']??null);
+            }
+            // 450: deja lugar al prefijo "Devolución de préstamo · " en el detalle del movimiento (500).
+            $nota=self::textoLimitado($b,'observaciones',450,'observaciones');
+
             $q=$db->prepare('SELECT estado,id_socio FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
-            $q->execute([$prestamo]);$p=$q->fetch();if(!$p||$p['estado']!=='ABIERTO')api_error('Préstamo no abierto.');
-            $q=$db->prepare('SELECT * FROM medicamentos_prestamos_detalle WHERE id_detalle_prestamo=?');
-            $q->execute([$detalle]);$d=$q->fetch();if(!$d)api_error('Detalle inexistente.');
-            $id=(int)$d['id_medicamento'];
+            $q->execute([$prestamo]);$p=$q->fetch(PDO::FETCH_ASSOC);
+            if(!$p)api_error('Préstamo no encontrado.','NOT_FOUND',404);
+            if($p['estado']!=='ABIERTO')api_error('Préstamo no abierto.','PRESTAMO_NO_ABIERTO',422);
+
+            $ids=array_keys($pedidos);sort($ids,SORT_NUMERIC);
+            $in=implode(',',array_fill(0,count($ids),'?'));
+            $q=$db->prepare("SELECT d.id_detalle_prestamo,d.id_prestamo,d.id_medicamento,d.cantidad_entregada,m.nombre_comercial
+                FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento
+                WHERE d.id_detalle_prestamo IN ($in) ORDER BY d.id_detalle_prestamo FOR UPDATE");
+            $q->execute($ids);
+            $renglones=[];
+            foreach($q->fetchAll(PDO::FETCH_ASSOC) as $row)$renglones[(int)$row['id_detalle_prestamo']]=$row;
+            foreach($ids as $detalle){
+                if(!isset($renglones[$detalle]))api_error('Detalle inexistente.','NOT_FOUND',404);
+                // Impide devolver renglones de otro préstamo manipulando la API.
+                if((int)$renglones[$detalle]['id_prestamo']!==$prestamo)
+                    api_error('El medicamento seleccionado no pertenece a este préstamo.','DETALLE_AJENO',422);
+            }
             // Un préstamo abierto debe admitir devolución aun si el medicamento
             // fue dado de baja después de prestarlo. El stock vuelve al mismo
             // registro inactivo y seguirá bloqueado para nuevas salidas.
-            self::medicamentoBloqueado($db,$id,false);
-            $cantidad=self::qty($b['cantidad']??null);
+            self::bloquearMedicamentos($db,array_map(static fn($r)=>(int)$r['id_medicamento'],$renglones));
+
             $q=$db->prepare('SELECT COALESCE(SUM(cantidad),0) FROM medicamentos_prestamos_devoluciones WHERE id_detalle_prestamo=?');
-            $q->execute([$detalle]);$recibido=(int)$q->fetchColumn();
-            if($cantidad>(int)$d['cantidad_entregada']-$recibido)api_error('La devolución supera las unidades pendientes.');
-            // 450: deja lugar al prefijo "Devolución de préstamo · " en el detalle del movimiento (500).
-            $nota=self::textoLimitado($b,'observaciones',450,'observaciones');
-            $db->prepare('INSERT INTO medicamentos_prestamos_devoluciones (id_detalle_prestamo,fecha_recepcion,cantidad,estado,observaciones) VALUES (?,?,?,\'APROBADA\',?)')
-                ->execute([$detalle,date('Y-m-d H:i:s'),$cantidad,$nota]);
-            $devolucion=(int)$db->lastInsertId();
-            self::inventory($db,$id,'DEVOLUCION_LIBERADA',$cantidad,$cantidad,$detalle,$devolucion,$p['id_socio']===null?null:(int)$p['id_socio'],null,null,'Devolución de préstamo'.($nota?' · '.$nota:''));
-            self::audit($db,$auth,'REGISTRAR_DEVOLUCION','medicamentos_prestamos_devoluciones',$devolucion,null,['detalle'=>$detalle,'cantidad'=>$cantidad]);
-            return ['id_devolucion'=>$devolucion];
+            foreach($ids as $detalle){
+                $q->execute([$detalle]);$recibido=(int)$q->fetchColumn();$q->closeCursor();
+                $pendiente=(int)$renglones[$detalle]['cantidad_entregada']-$recibido;
+                if($pedidos[$detalle]>$pendiente)
+                    api_error($multiple
+                        ? 'La devolución de «'.$renglones[$detalle]['nombre_comercial'].'» supera las unidades pendientes ('.max(0,$pendiente).').'
+                        : 'La devolución supera las unidades pendientes.','DEVOLUCION_EXCEDIDA',422,['id_detalle_prestamo'=>$detalle,'pendiente'=>max(0,$pendiente)]);
+            }
+
+            $socio=$p['id_socio']===null?null:(int)$p['id_socio'];
+            $ahora=date('Y-m-d H:i:s');
+            $insert=$db->prepare('INSERT INTO medicamentos_prestamos_devoluciones (id_detalle_prestamo,fecha_recepcion,cantidad,estado,observaciones) VALUES (?,?,?,\'APROBADA\',?)');
+            $registradas=[];
+            // Se conserva el orden en que el operador cargó los renglones.
+            foreach($pedidos as $detalle=>$cantidad){
+                $insert->execute([$detalle,$ahora,$cantidad,$nota]);
+                $devolucion=(int)$db->lastInsertId();
+                self::inventory($db,(int)$renglones[$detalle]['id_medicamento'],'DEVOLUCION_LIBERADA',$cantidad,$cantidad,$detalle,$devolucion,$socio,null,null,'Devolución de préstamo'.($nota?' · '.$nota:''));
+                self::audit($db,$auth,'REGISTRAR_DEVOLUCION','medicamentos_prestamos_devoluciones',$devolucion,null,
+                    ['prestamo'=>$prestamo,'detalle'=>$detalle,'medicamento'=>(int)$renglones[$detalle]['id_medicamento'],'cantidad'=>$cantidad,'multiple'=>$multiple]);
+                $registradas[]=['id_devolucion'=>$devolucion,'id_detalle_prestamo'=>$detalle,'cantidad'=>$cantidad];
+            }
+            if(!$multiple)return ['id_devolucion'=>$registradas[0]['id_devolucion']];
+            return ['id_prestamo'=>$prestamo,'id_devoluciones'=>array_column($registradas,'id_devolucion'),
+                'devoluciones'=>$registradas,'unidades_devueltas'=>array_sum($pedidos)];
         },$auth,$b,'devolverMedicamento');
     }
 
     /** Cierre: lo no devuelto ya fue descontado al entregar. La seña pendiente se dona sin doble cobro. */
+    /**
+     * Único flujo de cierre (Trello: "quitaría lo del candado"). La seña pendiente se
+     * resuelve en la misma transacción que el cierre:
+     * - resolucion_sena=EFECTIVO: reintegra TODO el saldo en efectivo (egreso contable).
+     * - resolucion_sena=DONACION (predeterminado, compatible con el contrato anterior):
+     *   conserva el saldo como donación, sin egreso de dinero.
+     * Los reintegros parciales se registran con medicamentos_sena y el préstamo sigue
+     * abierto: nunca se cierra dejando dinero sin resolver. Cerrar no devuelve stock:
+     * las unidades no devueltas quedan registradas en el detalle.
+     */
     protected static function cerrarPrestamo(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
             $id=positive_id($b['id_prestamo']??null,'préstamo');
-            $q=$db->prepare('SELECT estado FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
-            $q->execute([$id]);if($q->fetchColumn()!=='ABIERTO')api_error('El préstamo no está abierto.');
+            $resolucion=self::enum($b['resolucion_sena']??'DONACION',['DONACION','EFECTIVO'],'destino de la seña');
+            $q=$db->prepare('SELECT * FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
+            $q->execute([$id]);$p=$q->fetch(PDO::FETCH_ASSOC);
+            if(!$p || $p['estado']!=='ABIERTO')api_error('El préstamo no está abierto.');
             $q=$db->prepare('SELECT d.cantidad_entregada,COALESCE(SUM(r.cantidad),0) devuelto FROM medicamentos_prestamos_detalle d LEFT JOIN medicamentos_prestamos_devoluciones r ON r.id_detalle_prestamo=d.id_detalle_prestamo WHERE d.id_prestamo=? GROUP BY d.id_detalle_prestamo');
             $q->execute([$id]);$faltantes=0;
             foreach($q->fetchAll() as $r){$faltante=(int)$r['cantidad_entregada']-(int)$r['devuelto'];if($faltante<0)api_error('Devolución inválida.');$faltantes+=$faltante;}
             $q=$db->prepare("SELECT COALESCE(SUM(CASE WHEN tipo='COBRO_SENA' THEN monto ELSE -monto END),0) FROM medicamentos_prestamos_senas_movimientos WHERE id_prestamo=?");
             $q->execute([$id]);$centavos=(int)round((float)$q->fetchColumn()*100);
             if($centavos<0)api_error('Saldo de seña inválido.');
-            $donacion=number_format($centavos/100,2,'.','');
-            if($centavos>0){
-                $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,observaciones) VALUES (?,?,'SENA_DONADA',?,'CIERRE DEFINITIVO: SEÑA CONSERVADA COMO DONACIÓN')")->execute([$id,date('Y-m-d H:i:s'),$donacion]);
-                self::audit($db,$auth,'SENA_DONADA','medicamentos_prestamos_senas_movimientos',(int)$db->lastInsertId(),null,['prestamo'=>$id,'monto'=>$donacion]);
+            $saldo=number_format($centavos/100,2,'.','');
+            // El operador confirma el importe que vio; si cambió en el medio, no se cierra.
+            if(array_key_exists('monto_reintegro',$b) && $resolucion==='EFECTIVO'
+                && (int)round((float)self::money($b['monto_reintegro'],true)*100)!==$centavos)
+                api_error('La seña pendiente cambió. Volvé a abrir el préstamo.','SENA_DESACTUALIZADA',409);
+            $donacion='0.00';$reintegro='0.00';
+            if($centavos>0 && $resolucion==='EFECTIVO'){
+                $medio=self::medioEfectivo($db,$b['id_medio_pago']??null);
+                $nombre=($p['nombre_receptor'] && $p['apellido_receptor'])
+                    ? trim($p['nombre_receptor'].' '.$p['apellido_receptor'])
+                    : self::nombreSocioPrestamo($db,(int)$p['id_socio']);
+                $egreso=self::egresoContable($db,date('Y-m-d'),$medio,'DEVOLUCIONES DE SEÑAS','DEVOLUCIÓN DE SEÑA',$saldo,'Devolución seña préstamo #'.$id,$nombre);
+                $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,id_medio_pago,id_egreso_contable,observaciones) VALUES (?,?,'DEVOLUCION_SENA',?,?,?,?)")
+                    ->execute([$id,date('Y-m-d H:i:s'),$saldo,$medio,$egreso,self::str($b,'observaciones',500) ?? 'CIERRE DEFINITIVO: SEÑA REINTEGRADA EN EFECTIVO']);
+                self::audit($db,$auth,'DEVOLUCION_SENA','medicamentos_prestamos_senas_movimientos',(int)$db->lastInsertId(),null,['prestamo'=>$id,'monto'=>$saldo,'egreso'=>$egreso,'cierre'=>true]);
+                $reintegro=$saldo;
+            } elseif($centavos>0){
+                $db->prepare("INSERT INTO medicamentos_prestamos_senas_movimientos (id_prestamo,fecha_movimiento,tipo,monto,observaciones) VALUES (?,?,'SENA_DONADA',?,'CIERRE DEFINITIVO: SEÑA CONSERVADA COMO DONACIÓN')")->execute([$id,date('Y-m-d H:i:s'),$saldo]);
+                self::audit($db,$auth,'SENA_DONADA','medicamentos_prestamos_senas_movimientos',(int)$db->lastInsertId(),null,['prestamo'=>$id,'monto'=>$saldo]);
+                $donacion=$saldo;
             }
             $db->prepare("UPDATE medicamentos_prestamos SET estado='CERRADO',fecha_cierre=? WHERE id_prestamo=?")->execute([date('Y-m-d H:i:s'),$id]);
-            self::audit($db,$auth,'CERRAR_PRESTAMO','medicamentos_prestamos',$id,['estado'=>'ABIERTO'],['estado'=>'CERRADO','unidades_sin_devolver'=>$faltantes,'sena_donada'=>$donacion]);
-            return ['estado'=>'CERRADO','unidades_sin_devolver'=>$faltantes,'sena_donada'=>$donacion];
+            self::audit($db,$auth,'CERRAR_PRESTAMO','medicamentos_prestamos',$id,['estado'=>'ABIERTO'],['estado'=>'CERRADO','unidades_sin_devolver'=>$faltantes,'sena_donada'=>$donacion,'sena_reintegrada'=>$reintegro]);
+            return ['estado'=>'CERRADO','unidades_sin_devolver'=>$faltantes,'sena_donada'=>$donacion,'sena_reintegrada'=>$reintegro];
         },$auth,$b,'cerrarPrestamo');
+    }
+
+    /**
+     * Entrega cobrada de Tratamiento del dolor (Trello: "igual que préstamos, pero sí se
+     * cobra; medio de pago transferencia o efectivo"). Varios tratamientos en una sola
+     * solicitud y transacción: un movimiento SALIDA_VENTA por tratamiento (marcado con
+     * origen ENTREGA COBRADA e id_entrega) y UN solo ingreso contable por el total,
+     * vinculado a la entrega y no a cada renglón. Si algo falla no se guarda nada.
+     */
+    protected static function entregarDolor(array $auth,array $b): array {
+        return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
+            if(!self::entregasCobradasDisponibles($db))
+                api_error('Falta ejecutar la migración de Entregas de Tratamiento del dolor. Ejecutá el SQL incluido en el ZIP.','MIGRACION_PENDIENTE',503);
+            $paciente=self::textoLimitado($b,'paciente_nombre',160,'nombre y apellido del paciente');
+            if($paciente===null || self::largo($paciente)<3)
+                api_error('Ingresá nombre y apellido del paciente (mínimo 3 caracteres).','VALIDATION_ERROR',422,['campo'=>'paciente_nombre']);
+            $pacienteDni=self::documentoTexto($b,'paciente_dni','DNI del paciente',true);
+            $nombre=self::textoLimitado($b,'nombre_receptor',160,'nombre de quien retira');
+            $apellido=self::textoLimitado($b,'apellido_receptor',160,'apellido de quien retira');
+            if(!$nombre || !$apellido || self::largo($nombre)<2 || self::largo($apellido)<2)
+                api_error('Ingresá nombre y apellido de la persona que retira (mínimo 2 caracteres por campo).','VALIDATION_ERROR',422);
+            $dni=self::documentoTexto($b,'dni_receptor','DNI de quien retira',true);
+            $celular=self::celularTexto($b,'celular_receptor','celular de contacto',true);
+            $items=$b['items']??null;
+            if(!is_array($items) || !array_is_list($items) || count($items)<1 || count($items)>30)
+                api_error('Agregá entre 1 y 30 tratamientos.','VALIDATION_ERROR',422);
+            $pedidos=[];
+            foreach($items as $item){
+                if(!is_array($item))api_error('Tratamiento inválido.','VALIDATION_ERROR',422);
+                $id=positive_id($item['id_medicamento']??null,'tratamiento');
+                if(isset($pedidos[$id]))api_error('No repitas el mismo tratamiento en la entrega.','ENTREGA_DUPLICADA',422);
+                $pedidos[$id]=self::qty($item['cantidad']??null);
+            }
+            $importe=self::money($b['importe']??null);
+            $nota=self::str($b,'observaciones',450);
+            $ids=array_keys($pedidos);
+            self::bloquearMedicamentos($db,$ids);
+            $meds=[];
+            foreach($pedidos as $id=>$cantidad){
+                $m=self::medicamentoBloqueado($db,$id);
+                if(!MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
+                    api_error('«'.$m['nombre_comercial'].'» no corresponde a Tratamiento del dolor.','VALIDATION_ERROR',422);
+                self::verificarVigenciaParaEntrega($m);
+                if((int)$m['stock_actual']<$cantidad)api_error('Stock insuficiente de '.$m['nombre_comercial'].'.','STOCK_INSUFICIENTE',422);
+                $meds[$id]=$m;
+            }
+            $medio=self::medioEntrega($db,$b['id_medio_pago']??null);
+            $ahora=date('Y-m-d H:i:s');
+            $db->prepare('INSERT INTO medicamentos_entregas (fecha,paciente_nombre,paciente_dni,nombre_receptor,apellido_receptor,dni_receptor,celular_receptor,importe,id_medio_pago,observaciones) VALUES (?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$ahora,$paciente,$pacienteDni,$nombre,$apellido,$dni,$celular,$importe,$medio,$nota]);
+            $entrega=(int)$db->lastInsertId();
+            $receptor=trim($nombre.' '.$apellido);
+            $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'ENTREGAS TRATAMIENTO DEL DOLOR','COBRO DE ENTREGA',$importe,
+                'Entrega Tratamiento del dolor #'.$entrega.': '.implode(', ',array_map(static fn($id)=>$meds[$id]['nombre_comercial'].' x'.$pedidos[$id],$ids)),$receptor);
+            $db->prepare('UPDATE medicamentos_entregas SET id_ingreso_contable=? WHERE id_entrega=?')->execute([$ingreso,$entrega]);
+            $marcar=$db->prepare('UPDATE medicamentos_movimientos SET id_entrega=? WHERE id_movimiento=?');
+            $movimientos=[];
+            foreach($pedidos as $id=>$cantidad){
+                // Sin id_ingreso_contable propio: así anular un renglón jamás devuelve el total.
+                $mov=self::inventory($db,$id,'SALIDA_VENTA',$cantidad,-$cantidad,null,null,null,null,null,$nota,'ENTREGA COBRADA',$receptor);
+                $marcar->execute([$entrega,$mov]);
+                $movimientos[]=$mov;
+            }
+            self::audit($db,$auth,'ENTREGA_DOLOR','medicamentos_entregas',$entrega,null,
+                ['items'=>$pedidos,'importe'=>$importe,'medio'=>$medio,'ingreso'=>$ingreso,'movimientos'=>$movimientos,'receptor'=>$receptor,'paciente'=>$paciente]);
+            return ['id_entrega'=>$entrega,'id_movimientos'=>$movimientos,'id_ingreso_contable'=>$ingreso,'importe'=>$importe];
+        },$auth,$b,'entregarDolor');
     }
 
     protected static function anularOperacionEconomica(array $auth,array $b): array {

@@ -13,6 +13,8 @@ trait MedicamentosConsultas {
             WHEN mov.tipo='INGRESO_COMPRA' AND (mov.id_egreso_contable IS NULL
                 OR NOT EXISTS (SELECT 1 FROM contable_egresos ce WHERE ce.id_egreso=mov.id_egreso_contable))
                 THEN 'No se encontró el egreso contable original.'
+            WHEN mov.tipo='SALIDA_VENTA' AND mov.id_ingreso_contable IS NULL AND mov.origen='ENTREGA COBRADA'
+                THEN 'Forma parte de una entrega cobrada de Tratamiento del dolor: su cobro es único para toda la entrega y no se anula por renglón.'
             WHEN mov.tipo='SALIDA_VENTA' AND (mov.id_ingreso_contable IS NULL
                 OR NOT EXISTS (SELECT 1 FROM contable_ingresos ci WHERE ci.id_ingreso=mov.id_ingreso_contable))
                 THEN 'No se encontró el ingreso contable original.'
@@ -56,27 +58,74 @@ trait MedicamentosConsultas {
      * Registros históricos de una entrega sin receptor conservan procedencia NULL.
      * Se filtra en SQL antes de paginar, nunca sólo en el navegador.
      */
+    /**
+     * Historial de Entregas de Tratamiento del dolor:
+     * - Entregas cobradas (medicamentos_entregas): una fila por entrega con todos sus
+     *   tratamientos, importe total y medio de pago.
+     * - Entregas históricas sin cargo (ENTREGA_DONACION de presentaciones de Dolor):
+     *   se conservan visibles, una fila por movimiento, con su significado original.
+     */
     protected static function entregasDolorDatos(PDO $db, array $filter): array {
         $pagina=max(1,min(100000,(int)($filter['pagina']??1)));$porPagina=20;
         $buscar=trim((string)($filter['buscar']??''));
         $buscar=function_exists('mb_substr') ? mb_substr($buscar,0,80,'UTF-8') : substr($buscar,0,80);
-        $donde=" FROM medicamentos_movimientos mov JOIN medicamentos m ON m.id_medicamento=mov.id_medicamento
-            WHERE mov.tipo='ENTREGA_DONACION' AND m.presentacion IN (".MedicamentosOpciones::presentacionesDolorSql($db).")";
+        $dolor=MedicamentosOpciones::presentacionesDolorSql($db);
+        $like='%'.$buscar.'%';
+        $historicas="SELECT 'HISTORICA' AS tipo_registro,mov.id_movimiento AS id_registro,mov.id_movimiento,NULL AS id_entrega,
+                mov.fecha_movimiento,mov.procedencia AS receptor,NULL AS paciente_nombre,NULL AS dni_receptor,NULL AS celular_receptor,
+                NULL AS importe,NULL AS medio_pago,mov.detalle,mov.cantidad,m.nombre_comercial,m.droga,m.presentacion,m.unidad_stock
+            FROM medicamentos_movimientos mov JOIN medicamentos m ON m.id_medicamento=mov.id_medicamento
+            WHERE mov.tipo='ENTREGA_DONACION' AND m.presentacion IN ({$dolor})";
         $params=[];
         if($buscar!==''){
-            $donde.=" AND (m.nombre_comercial LIKE ? OR m.droga LIKE ? OR mov.procedencia LIKE ?)";
-            $params=array_fill(0,3,'%'.$buscar.'%');
+            $historicas.=" AND (m.nombre_comercial LIKE ? OR m.droga LIKE ? OR mov.procedencia LIKE ?)";
+            array_push($params,$like,$like,$like);
         }
-        $q=$db->prepare('SELECT COUNT(*)'.$donde);$q->execute($params);$total=(int)$q->fetchColumn();
+        $union=$historicas;
+        if(self::entregasCobradasDisponibles($db)){
+            $cobradas="SELECT 'COBRADA',e.id_entrega,NULL,e.id_entrega,e.fecha,
+                    TRIM(CONCAT_WS(' ',e.nombre_receptor,e.apellido_receptor)),e.paciente_nombre,e.dni_receptor,e.celular_receptor,
+                    e.importe,mp.nombre,e.observaciones,
+                    (SELECT COALESCE(SUM(x.cantidad),0) FROM medicamentos_movimientos x WHERE x.id_entrega=e.id_entrega),
+                    NULL,NULL,NULL,NULL
+                FROM medicamentos_entregas e LEFT JOIN medios_pago mp ON mp.id_medio_pago=e.id_medio_pago";
+            if($buscar!==''){
+                $cobradas.=" WHERE (e.nombre_receptor LIKE ? OR e.apellido_receptor LIKE ? OR e.paciente_nombre LIKE ?
+                    OR e.paciente_dni LIKE ? OR e.dni_receptor LIKE ?
+                    OR EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos mx ON mx.id_medicamento=x.id_medicamento
+                        WHERE x.id_entrega=e.id_entrega AND (mx.nombre_comercial LIKE ? OR mx.droga LIKE ?)))";
+                array_push($params,...array_fill(0,7,$like));
+            }
+            $union.=' UNION ALL '.$cobradas;
+        }
+        $q=$db->prepare("SELECT COUNT(*) FROM ({$union}) t");$q->execute($params);$total=(int)$q->fetchColumn();
         $pagina=min($pagina,max(1,(int)ceil($total/$porPagina)));
-        $q=$db->prepare('SELECT mov.id_movimiento,mov.fecha_movimiento,mov.cantidad,
-             mov.procedencia AS receptor,mov.detalle,m.nombre_comercial,m.droga,m.presentacion,m.unidad_stock'
-             .$donde.' ORDER BY mov.id_movimiento DESC LIMIT ? OFFSET ?');
+        $q=$db->prepare("SELECT * FROM ({$union}) t ORDER BY t.fecha_movimiento DESC,t.id_registro DESC LIMIT ? OFFSET ?");
         foreach($params as $i=>$valor)$q->bindValue($i+1,$valor,PDO::PARAM_STR);
         $q->bindValue(count($params)+1,$porPagina,PDO::PARAM_INT);
         $q->bindValue(count($params)+2,($pagina-1)*$porPagina,PDO::PARAM_INT);
         $q->execute();
-        return ['registros'=>$q->fetchAll(),'total'=>$total,'pagina'=>$pagina,'por_pagina'=>$porPagina];
+        $registros=$q->fetchAll(PDO::FETCH_ASSOC);
+        // Tratamientos de cada entrega cobrada (consulta única para la página).
+        $ids=array_values(array_map(static fn($r)=>(int)$r['id_entrega'],array_filter($registros,static fn($r)=>$r['tipo_registro']==='COBRADA')));
+        $items=[];
+        if($ids){
+            $q=$db->prepare('SELECT x.id_entrega,x.id_movimiento,x.id_medicamento,x.cantidad,m.nombre_comercial,m.presentacion,m.unidad_stock
+                FROM medicamentos_movimientos x JOIN medicamentos m ON m.id_medicamento=x.id_medicamento
+                WHERE x.id_entrega IN ('.implode(',',array_fill(0,count($ids),'?')).') ORDER BY x.id_movimiento');
+            $q->execute($ids);
+            foreach($q->fetchAll(PDO::FETCH_ASSOC) as $it)$items[(int)$it['id_entrega']][]=$it;
+        }
+        foreach($registros as &$r){
+            if($r['tipo_registro']==='COBRADA'){
+                $r['items']=$items[(int)$r['id_entrega']]??[];
+            } else {
+                $r['items']=[['id_movimiento'=>$r['id_movimiento'],'cantidad'=>$r['cantidad'],'nombre_comercial'=>$r['nombre_comercial'],
+                    'presentacion'=>$r['presentacion'],'unidad_stock'=>$r['unidad_stock']]];
+            }
+        }
+        unset($r);
+        return ['registros'=>$registros,'total'=>$total,'pagina'=>$pagina,'por_pagina'=>$porPagina];
     }
     /** Buscar procedencias sin duplicar registros: proveedores activos de Contable y SOCIOS ACTIVOS.
      * Los socios inactivos o eliminados no se ofrecen como donantes/proveedores.
@@ -126,24 +175,49 @@ trait MedicamentosConsultas {
         $q->execute(array_fill(0,7,'%'.(function_exists('mb_substr') ? mb_substr($buscar,0,70,'UTF-8') : substr($buscar,0,70)).'%'));
         return $q->fetchAll();
     }
+    /** Unidades entregadas menos devueltas del préstamo `p` (mismo criterio que la validación de devolución). */
+    protected static function pendientesPrestamoSql(): string {
+        return "(COALESCE((SELECT SUM(dx.cantidad_entregada) FROM medicamentos_prestamos_detalle dx WHERE dx.id_prestamo=p.id_prestamo),0)
+            -COALESCE((SELECT SUM(rx.cantidad) FROM medicamentos_prestamos_devoluciones rx JOIN medicamentos_prestamos_detalle dr ON dr.id_detalle_prestamo=rx.id_detalle_prestamo WHERE dr.id_prestamo=p.id_prestamo),0))";
+    }
+    /**
+     * Nivel de alerta por antigüedad (meses calendario desde la entrega) para
+     * préstamos ABIERTOS con unidades pendientes: AMARILLA al mes, ROJA a los 3.
+     * $hoy se calcula en PHP para que la zona horaria sea la misma que la de fecha_entrega.
+     */
+    protected static function nivelAntiguedadSql(PDO $db,string $hoy): string {
+        $h=$db->quote($hoy);
+        $pend=self::pendientesPrestamoSql();
+        return "CASE WHEN p.estado='ABIERTO' AND {$pend}>0 THEN
+            CASE WHEN DATE_ADD(DATE(p.fecha_entrega),INTERVAL 3 MONTH)<={$h} THEN 'ROJA'
+                 WHEN DATE_ADD(DATE(p.fecha_entrega),INTERVAL 1 MONTH)<={$h} THEN 'AMARILLA' END END";
+    }
+    /** Saldo de seña: cobrado − reintegrado − donado (idéntico a cierre y reintegro). */
+    protected static function senaPendienteSql(): string {
+        return "GREATEST(0,COALESCE((SELECT SUM(CASE WHEN sx.tipo='COBRO_SENA' THEN sx.monto ELSE -sx.monto END) FROM medicamentos_prestamos_senas_movimientos sx WHERE sx.id_prestamo=p.id_prestamo),0))";
+    }
     protected static function prestamosDatos(PDO $db,array $filter): array {
         $status=(string)($filter['estado']??'');
         $search=trim((string)($filter['buscar']??''));
         $search=function_exists('mb_substr')?mb_substr($search,0,90,'UTF-8'):substr($search,0,90);
         $page=max(1,min(100000,(int)($filter['pagina']??1)));$perPage=20;
+        $nuevas=self::columnasPacienteDisponibles($db);
         $from=" FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio";
         $nombreSocio="COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio))";
-        $documentoSocio="COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento)";
+        $documentoSocio=$nuevas
+            ? "COALESCE(NULLIF(p.dni_receptor,''),NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento)"
+            : "COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento)";
         $where=[];$params=[];
         if(in_array($status,['ABIERTO','CERRADO','ANULADO'],true)){$where[]='p.estado=?';$params[]=$status;}
         if($search!==''){
-            $where[]="({$nombreSocio} LIKE ? OR {$documentoSocio} LIKE ? OR CAST(p.id_prestamo AS CHAR) LIKE ?)";
-            array_push($params,...array_fill(0,3,'%'.$search.'%'));
+            $extra=$nuevas?' OR p.paciente_nombre LIKE ? OR p.paciente_dni LIKE ?':'';
+            $where[]="({$nombreSocio} LIKE ? OR {$documentoSocio} LIKE ? OR CAST(p.id_prestamo AS CHAR) LIKE ?{$extra})";
+            array_push($params,...array_fill(0,$nuevas?5:3,'%'.$search.'%'));
         }
         $suffix=$where?' WHERE '.implode(' AND ',$where):'';
         $q=$db->prepare('SELECT COUNT(*)'.$from.$suffix);$q->execute($params);$total=(int)$q->fetchColumn();
         $page=min($page,max(1,(int)ceil($total/$perPage)));
-        $sql="SELECT p.*,{$nombreSocio} AS socio,{$documentoSocio} AS documento,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='COBRO_SENA'),0) AS sena_cobrada,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='DEVOLUCION_SENA'),0) AS sena_devuelta,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='SENA_DONADA'),0) AS sena_donada,(SELECT COUNT(*) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo) renglones,COALESCE((SELECT SUM(d.cantidad_entregada) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo),0) AS unidades_entregadas,COALESCE((SELECT SUM(r.cantidad) FROM medicamentos_prestamos_devoluciones r INNER JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo WHERE d.id_prestamo=p.id_prestamo AND r.estado='APROBADA'),0) AS unidades_devueltas";
+        $sql="SELECT p.*,{$nombreSocio} AS socio,{$documentoSocio} AS documento,".self::senaPendienteSql()." AS sena_pendiente,(".self::nivelAntiguedadSql($db,date('Y-m-d')).") AS alerta_devolucion,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='COBRO_SENA'),0) AS sena_cobrada,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='DEVOLUCION_SENA'),0) AS sena_devuelta,COALESCE((SELECT SUM(s.monto) FROM medicamentos_prestamos_senas_movimientos s WHERE s.id_prestamo=p.id_prestamo AND s.tipo='SENA_DONADA'),0) AS sena_donada,(SELECT COUNT(*) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo) renglones,COALESCE((SELECT SUM(d.cantidad_entregada) FROM medicamentos_prestamos_detalle d WHERE d.id_prestamo=p.id_prestamo),0) AS unidades_entregadas,COALESCE((SELECT SUM(r.cantidad) FROM medicamentos_prestamos_devoluciones r INNER JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo WHERE d.id_prestamo=p.id_prestamo AND r.estado='APROBADA'),0) AS unidades_devueltas";
         $q=$db->prepare($sql.$from.$suffix.' ORDER BY p.id_prestamo DESC LIMIT ? OFFSET ?');
         foreach($params as $index=>$param)$q->bindValue($index+1,$param,PDO::PARAM_STR);
         $q->bindValue(count($params)+1,$perPage,PDO::PARAM_INT);
@@ -152,13 +226,18 @@ trait MedicamentosConsultas {
         return ['registros'=>$q->fetchAll(),'total'=>$total,'pagina'=>$page,'por_pagina'=>$perPage];
     }
     protected static function prestamoDatos(PDO $db,int $id): array {
-        $q=$db->prepare("SELECT p.*,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) socio,COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento) documento FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio WHERE p.id_prestamo=?");
+        // socio/documento conservan su significado histórico (persona que retira o
+        // socio vinculado). Los datos manuales del paciente viajan en p.* tras la migración.
+        $q=$db->prepare("SELECT p.*,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.nombre_receptor,p.apellido_receptor)),''),NULLIF(TRIM(CONCAT_WS(' ',sp.apellido,sp.nombre)),''),NULLIF(se.razon_social,''),NULLIF(sdel.denominacion,''),CONCAT('SOCIO #',p.id_socio)) socio,COALESCE(NULLIF(sp.dni,''),NULLIF(se.cuit,''),sdel.documento) documento,
+            ".self::senaPendienteSql()." AS sena_pendiente,(".self::nivelAntiguedadSql($db,date('Y-m-d')).") AS alerta_devolucion
+            FROM medicamentos_prestamos p LEFT JOIN socios_personas sp ON sp.id_socio=p.id_socio LEFT JOIN socios_empresas se ON se.id_socio=p.id_socio LEFT JOIN socios_eliminados sdel ON sdel.id_socio=p.id_socio WHERE p.id_prestamo=?");
         $q->execute([$id]);$prestamo=$q->fetch();if(!$prestamo)api_error('Préstamo no encontrado.','NOT_FOUND',404);
-        $q=$db->prepare("SELECT d.*,m.nombre_comercial,m.droga,m.dosis,m.unidad_dosis,
+        $q=$db->prepare("SELECT d.*,m.nombre_comercial,m.droga,m.dosis,m.unidad_dosis,m.unidad_stock,
             COALESCE((SELECT SUM(r.cantidad) FROM medicamentos_prestamos_devoluciones r WHERE r.id_detalle_prestamo=d.id_detalle_prestamo),0) AS cantidad_recibida
-            FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=?");
+            FROM medicamentos_prestamos_detalle d JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=? ORDER BY d.id_detalle_prestamo");
         $q->execute([$id]);$detalle=$q->fetchAll();
-        $q=$db->prepare('SELECT r.* FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo WHERE d.id_prestamo=? ORDER BY r.id_devolucion DESC');
+        // Cada devolución identifica el medicamento al que corresponde.
+        $q=$db->prepare('SELECT r.*,d.id_medicamento,m.nombre_comercial,m.dosis,m.unidad_dosis,m.unidad_stock FROM medicamentos_prestamos_devoluciones r JOIN medicamentos_prestamos_detalle d ON d.id_detalle_prestamo=r.id_detalle_prestamo JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE d.id_prestamo=? ORDER BY r.id_devolucion DESC');
         $q->execute([$id]);$devoluciones=$q->fetchAll();
         $q=$db->prepare('SELECT sm.*,mp.nombre AS medio_pago FROM medicamentos_prestamos_senas_movimientos sm LEFT JOIN medios_pago mp ON mp.id_medio_pago=sm.id_medio_pago WHERE sm.id_prestamo=? ORDER BY sm.id_movimiento_sena DESC');
         $q->execute([$id]);

@@ -1267,5 +1267,80 @@ html[data-theme="oscuro"] .med-loan-create__medicine-row .med-field > select {
 
 /* Listado de entregas de Tratamiento del dolor. */
 .med-table .med-grid--entregas { grid-template-columns: 110px minmax(160px,1.4fr) minmax(150px,1fr) minmax(110px,.7fr) minmax(180px,1.3fr); }
+/* Entregas cobradas: varios tratamientos por fila y persona + paciente. */
+.med-table .med-grid--entregas .med-entrega-items,
+.med-table .med-grid--entregas .med-entrega-persona { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
 .med-table .med-grid--entregas.global-divTable__row > .mov-gridCell { padding:10px 12px; min-width:0; overflow-wrap:anywhere; }
 @media (max-width:900px) { .med-table .med-grid--entregas { min-width:720px; } }
+
+/* ===== Préstamos: avisos de devolución al mes (amarillo) y a los 3 meses (rojo) ===== */
+.med-status-chip--alerta-amarilla {
+  --med-chip-bg: #fff8db;
+  --med-chip-fg: #8a5a00;
+  --med-chip-border: #f5dc8a;
+}
+.med-status-chip--alerta-roja {
+  --med-chip-bg: #fff0ec;
+  --med-chip-fg: #a63127;
+  --med-chip-border: #f2c4bc;
+}
+.med-table .med-grid--loans .med-loan-dates .med-status-chip { margin-top: 4px; font-size: 10.5px; padding: 3px 8px; white-space: nowrap; }
+.med-table .med-grid--loans.med-loan-row--amarilla { box-shadow: inset 3px 0 0 var(--warning-500, #eab308); }
+.med-table .med-grid--loans.med-loan-row--roja { box-shadow: inset 3px 0 0 var(--danger-500, #dc2626); }
+.med-alertas__item--amarilla { --alert-accent: var(--warning-500, #eab308); }
+.med-alertas__item--roja { --alert-accent: var(--danger-500, #dc2626); }
+.med-alertas__item--amarilla .med-alertas__contenido strong { color: var(--warning-600, #a16207); }
+.med-alertas__item--roja .med-alertas__contenido strong { color: var(--danger-600, #b91c1c); }
+html[data-theme="oscuro"] .med-alertas__item--amarilla .med-alertas__contenido strong { color: var(--warning-400, #facc15); }
+html[data-theme="oscuro"] .med-alertas__item--roja .med-alertas__contenido strong { color: var(--danger-400, #f87171); }
+html[data-theme="oscuro"] .med-status-chip--alerta-amarilla { --med-chip-bg: #3a2f0b; --med-chip-fg: #fde68a; --med-chip-border: #6b5413; }
+html[data-theme="oscuro"] .med-status-chip--alerta-roja { --med-chip-bg: #3d1714; --med-chip-fg: #fecaca; --med-chip-border: #7f2a22; }
+
+/* ===== Préstamos: alta con paciente y persona que retira ===== */
+.med-loan-cash-note {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 16px 0 0; padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--success-500, #16a34a) 25%, var(--entity-modal-border, #e2e8f0));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--success-500, #16a34a) 6%, var(--surface-color, #fff));
+  color: var(--text-primary, #1e293b); font-size: 12.5px; font-weight: 650;
+}
+.med-loan-cash-note svg { color: var(--success-600, #15803d); }
+.med-modal .med-fields .med-loan-cash-note { grid-column: 1 / -1; justify-self: start; margin: 0; }
+.med-inline-danger.med-loan-field-error { margin: 8px 0 0; font-size: 12px; }
+
+/* ===== Préstamos: devolución de varios medicamentos en una sola operación ===== */
+.med-loan-return-modal .med-loan-create__card + .med-loan-create__notes { margin-top: 16px; }
+.med-loan-return__row { display: flex; flex-direction: column; min-width: 0; }
+.med-loan-return__row .med-loan-field-error { margin: 6px 0 0 40px; }
+.med-loan-create__medicine-row.is-invalid {
+  border-color: color-mix(in srgb, var(--danger-500, #dc2626) 45%, var(--entity-modal-border, #e2e8f0));
+}
+.med-loan-return__all { align-self: flex-end; border-style: solid; }
+@media (max-width: 720px) {
+  .med-loan-return__all { align-self: stretch; }
+  .med-loan-return__row .med-loan-field-error { margin-left: 0; }
+}
+
+/* ===== Préstamos: detalle (personas e importes de seña) ===== */
+.med-loan-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.med-loan-person-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid #e3e9f0; border-radius: 10px; background: #fff; }
+.med-loan-person-block > strong { color: #14233a; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.med-loan-person-block > span { color: #53647b; font-size: 12px; overflow-wrap: anywhere; }
+.med-loan-person-block > .med-loan-person-block__role { color: #8091a7; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
+.med-loan-detail-modal .med-loan-detail-summary.med-loan-sena-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.med-loan-detail-modal .med-loan-detail-stat--date .med-status-chip { padding: 3px 9px; font-size: 10.5px; }
+.med-sena-estado { font-size: 12px; }
+html[data-theme="oscuro"] .med-loan-person-block { background: var(--surface-color, #202b3c); border-color: var(--entity-modal-border, #455369); }
+html[data-theme="oscuro"] .med-loan-person-block > strong { color: var(--text-primary, #f1f5f9); }
+@media (max-width: 720px) {
+  .med-loan-people { grid-template-columns: minmax(0, 1fr); }
+  .med-loan-detail-modal .med-loan-detail-summary.med-loan-sena-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .med-loan-detail-modal .med-loan-detail-summary.med-loan-sena-summary { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ===== Préstamos: flujo único para finalizar ===== */
+.med-loan-finalizar { display: grid; gap: 4px; margin: 4px 0 14px; }
+.med-loan-finalizar .med-loan-muted { margin: 0; }

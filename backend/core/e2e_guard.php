@@ -381,7 +381,7 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
     $db = $auth['db'];
     $body = request_body();
 
-    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture', 'e2e_medicamentos_contable_fixture'], true)) return;
+    if (in_array($action, ['e2e_cleanup', 'e2e_cleanup_scope', 'e2e_saldo_favor_fixture', 'e2e_medicamentos_contable_fixture', 'e2e_prestamo_antiguedad_fixture'], true)) return;
 
     switch ($action) {
         case 'medicamentos_opcion_guardar': {
@@ -447,10 +447,40 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
             }
             return;
         }
-        case 'medicamentos_devolver':
-            e2e_require_target_or_missing($db,$action,$body['id_detalle_prestamo']??null,
-                'e2e_detalle_medicamento','medicamentos_prestamos_detalle','id_detalle_prestamo');
+        case 'medicamentos_entregar': {
+            // Entrega cobrada de Tratamiento del dolor: receptor marcado y TODOS los
+            // tratamientos E2E. Uno solo de prueba nunca autoriza tocar stock real.
+            if(!e2e_marker_text($body['nombre_receptor']??''))
+                e2e_scope_error($action,'La entrega requiere nombre de receptor E2E.');
+            if (!is_array($body['items']??null) || $body['items']===[])
+                e2e_scope_error($action,'La entrega requiere tratamientos E2E.');
+            foreach ($body['items'] as $item) {
+                if (!is_array($item)) e2e_scope_error($action,'Detalle de entrega inválido.');
+                $med=e2e_positive_int($item['id_medicamento']??null);
+                if ($med===null || !e2e_medicamento($db,$med))
+                    e2e_scope_error($action,'La entrega incluye un tratamiento que no es E2E.');
+            }
             return;
+        }
+        case 'medicamentos_devolver': {
+            // Formato individual histórico.
+            if (array_key_exists('id_detalle_prestamo',$body))
+                e2e_require_target_or_missing($db,$action,$body['id_detalle_prestamo'],
+                    'e2e_detalle_medicamento','medicamentos_prestamos_detalle','id_detalle_prestamo');
+            // Formato múltiple: TODOS los renglones y el préstamo deben ser E2E.
+            // Que uno solo sea de prueba nunca autoriza modificar otro real.
+            if (array_key_exists('items',$body)) {
+                e2e_require_target_or_missing($db,$action,$body['id_prestamo']??null,
+                    'e2e_prestamo','medicamentos_prestamos','id_prestamo');
+                if (!is_array($body['items'])) return; // La validación funcional devolverá el 422.
+                foreach ($body['items'] as $item) {
+                    if (!is_array($item)) continue;
+                    e2e_require_target_or_missing($db,$action,$item['id_detalle_prestamo']??null,
+                        'e2e_detalle_medicamento','medicamentos_prestamos_detalle','id_detalle_prestamo');
+                }
+            }
+            return;
+        }
         case 'medicamentos_sena':
         case 'medicamentos_cerrar':
             e2e_require_target_or_missing($db,$action,$body['id_prestamo']??null,

@@ -134,6 +134,7 @@ const E2E_INFRA_ACTIONS = new Set([
   'e2e_cleanup_scope',
   'e2e_saldo_favor_fixture',
   'e2e_medicamentos_contable_fixture',
+  'e2e_prestamo_antiguedad_fixture',
   'e2e_guard_probe',
   'e2e_snapshot',
   'e2e_status',
@@ -240,9 +241,12 @@ const REQUIRED_UI_ACTION_MARKERS = [
   'Agregar stock',
   'Restar stock',
   'Motivo de baja',
-  'AGREGAR OPCIÓN',
-  'Agregar presentación',
-  'Agregar unidad de stock',
+  // El alta rápida dentro de los selectores ("+ AGREGAR OPCIÓN") se quitó a pedido
+  // de Trello: 51-medicamentos-opciones verifica su ausencia (__MED_AGREGAR__).
+  '__MED_AGREGAR__',
+  'Registrar devolución de medicamentos',
+  'Agregar otro medicamento',
+  'Devolver todos los pendientes',
   'Configuración de medicamentos',
   'Unidades de stock',
   'Nuevo préstamo',
@@ -576,7 +580,9 @@ test.describe('Contrato de cobertura total del sistema administrativo', () => {
     const medicationOptionsSpec = read(path.join(__dirname, '51-medicamentos-opciones.spec.js'));
     expect(medicationOptionsSpec).toContain('/configuracion/medicamentos');
     expect(medicationOptionsSpec).toContain('medicamentos_catalogo');
-    expect(medicationOptionsSpec).toContain('Agregar unidad de stock');
+    // Sin alta rápida: el contrato vigente es que el selector NO ofrece agregar opciones.
+    expect(medicationOptionsSpec).toContain('sin alta rápida');
+    expect(medicationOptionsSpec).toContain('option[value=\"__MED_AGREGAR__\"]');
     expect(contableUiSpec).toContain('Monto personalizado');
     expect(contableUiSpec).toContain('Desc. familiar 12,5%');
 

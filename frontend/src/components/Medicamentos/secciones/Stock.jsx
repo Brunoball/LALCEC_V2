@@ -44,7 +44,9 @@ const UNIDADES_STOCK_TRELLO = ['BLÍSTER', 'AMPOLLA', 'CAJA'];
 // Las opciones compartidas siguen intactas en Configuración; este formulario
 // sólo presenta las alternativas específicas pedidas para Banco de Drogas.
 // Los motivos del sistema conservan sus códigos y reglas contables.
-const opcionesSalida = (catalogos, fechaVence) => soloSalidasTrello(catalogos, vigenteParaEntrega(fechaVence), descartablePorVencimiento(fechaVence))
+// Tratamiento del dolor: la entrega se cobra y se registra en Dolor → Entregas
+// (Trello). Desde Restar stock quedan solo el descarte y el ajuste por error de carga.
+const opcionesSalida = (catalogos, fechaVence, esDolor = false) => soloSalidasTrello(catalogos, !esDolor && vigenteParaEntrega(fechaVence), descartablePorVencimiento(fechaVence))
   .map(o => op(o.codigo_sistema, SALIDAS_TRELLO[o.codigo_sistema]));
 const salidaInicial = (lista, fechaVence) =>
   (lista.find(o => o.value === (vigenteParaEntrega(fechaVence) ? 'ENTREGA_DONACION' : 'BAJA_DESCARTE')) || lista[0])?.value || '';
@@ -255,7 +257,7 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
   // Misma regla que el backend: la entrega exige vencimiento vigente, el descarte
   // por vencimiento exige stock vencido y el ajuste por error de carga siempre está.
   const entregable = vigenteParaEntrega(selected?.fecha_vencimiento);
-  const tiposSalida = opcionesSalida(catalogos, selected?.fecha_vencimiento);
+  const tiposSalida = opcionesSalida(catalogos, selected?.fecha_vencimiento, esDolor);
   const esEntrega = movement.tipo === 'ENTREGA_DONACION';
   const esAjuste = movement.tipo === 'AJUSTE_SALIDA';
   const requiereProcedencia = ['DONACION', 'COMPRA'].includes(movement.origen);
@@ -264,10 +266,10 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
   // una opción válida al abrir Restar stock o refrescar los catálogos.
   useEffect(() => {
     if (modal !== 'editar' || !selected || movement.direccion !== 'SALIDA') return;
-    const disponibles = opcionesSalida(catalogos, selected.fecha_vencimiento);
+    const disponibles = opcionesSalida(catalogos, selected.fecha_vencimiento, esDolor);
     setMovement(v => disponibles.some(o => o.value === v.tipo) ? v :
       { ...v, tipo: salidaInicial(disponibles, selected.fecha_vencimiento) });
-  }, [catalogos, modal, selected, movement.direccion]);
+  }, [catalogos, modal, selected, movement.direccion, esDolor]);
   const fieldsMovement = <Campos>
     <Campo label="Cantidad" quantity type="number" min="1" step="1" required value={movement.cantidad} onChange={v => updateMovement('cantidad', v)} />
     {entrada ? <>
@@ -284,6 +286,7 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
     </> : <>
       <Campo label="Motivo de salida" required value={movement.tipo} options={tiposSalida}
         onChange={v => updateMovement('tipo',v)} />
+      {esDolor ? <p className="med-inline-note" role="note">Las entregas se cobran y se registran en Tratamiento del dolor → Entregas.</p> : null}
       {!tiposSalida.length ? <p role="alert" className="med-inline-danger">No hay motivos de salida disponibles (Entrega sin cargo, Descarte por vencimiento, Ajuste por error de carga). Revisá su estado en Configuración → Medicamentos.</p> : null}
       {esEntrega ? <Campo
         label="Nombre y apellido de quien recibe" required maxLength={160}

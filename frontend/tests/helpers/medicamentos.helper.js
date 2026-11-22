@@ -129,7 +129,42 @@ async function assertError(request, action, data, matcher = /./) {
   return result;
 }
 
+/**
+ * Datos manuales de un préstamo (Trello): paciente y persona que retira, sin socio.
+ * El nombre de quien retira lleva la marca PW E2E exigida por el escudo de Playwright.
+ */
+function loanPeople(overrides = {}) {
+  const suffix = uniqueSuffix();
+  return {
+    nombre_receptor: `PW E2E RETIRA ${suffix}`,
+    apellido_receptor: 'PRUEBA',
+    dni_receptor: '30111222',
+    celular_receptor: '+54 9 351 555-0101',
+    paciente_nombre: `PW E2E PACIENTE ${suffix}`,
+    paciente_dni: '07123456',
+    ...overrides,
+  };
+}
+
+/** Fecha ISO desplazada en meses calendario (con el mismo recorte de fin de mes que MySQL). */
+function monthsAgoIso(months, extraDays = 0) {
+  const [y, m, d] = todayIso().split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1 - months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, lastDay) + extraDays);
+  return target.toISOString().slice(0, 10);
+}
+
+/** Fixture protegido: retrotrae la entrega de un préstamo E2E para probar alertas por antigüedad. */
+async function backdateLoan(request, idPrestamo, fechaEntrega) {
+  return apiCall(request, 'e2e_prestamo_antiguedad_fixture', {
+    method: 'POST',
+    data: { confirmacion: 'LIMPIAR_PLAYWRIGHT', id_prestamo: idPrestamo, fecha_entrega: fechaEntrega },
+  });
+}
+
 module.exports = {
   futureIso, medFixture, entryFixture, medioPago, accountingNames, requireAccountingOptions,
   createMedicine, createBorrower, stockOf, movementsOf, assertError,
+  loanPeople, monthsAgoIso, backdateLoan,
 };

@@ -105,11 +105,11 @@ final class TestingCleanup
             ],
             'CATEGORIA_INGRESO' => [
                 'VENTA DE MEDICAMENTOS', 'SEÑAS DE MEDICAMENTOS',
-                'REINTEGROS DE COMPRAS DE MEDICAMENTOS',
+                'REINTEGROS DE COMPRAS DE MEDICAMENTOS', 'ENTREGAS TRATAMIENTO DEL DOLOR',
             ],
             'CONCEPTO_INGRESO' => [
                 'VENTA DE MEDICAMENTOS', 'COBRO DE SEÑA',
-                'REINTEGRO DE COMPRA DE MEDICAMENTOS',
+                'REINTEGRO DE COMPRA DE MEDICAMENTOS', 'COBRO DE ENTREGA',
             ],
         ];
         $db = $auth['db'];
@@ -147,6 +147,45 @@ final class TestingCleanup
         }
         api_success(['creadas' => $creadas, 'existentes' => $existentes],
             'Opciones contables de Medicamentos preparadas para Playwright.');
+    }
+
+    /**
+     * Retrotrae la fecha de entrega de un préstamo E2E para probar las alertas
+     * de devolución al mes (amarilla) y a los tres meses (roja) sin esperar.
+     * Solo afecta préstamos cuyo receptor y medicamentos son E2E; nunca datos reales.
+     */
+    public static function prestamoAntiguedadFixture(): never
+    {
+        $auth = self::requireE2EAdmin();
+        $body = request_body();
+        self::requireConfirmation($body);
+        $id = filter_var($body['id_prestamo'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($id === false) api_error('Préstamo E2E inválido.', 'E2E_PRESTAMO_INVALIDO', 422);
+        $fecha = trim((string)($body['fecha_entrega'] ?? ''));
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
+        $hoy = new DateTimeImmutable(date('Y-m-d'));
+        if (!$date || $date->format('Y-m-d') !== $fecha || $date > $hoy || $date < $hoy->modify('-2 years')) {
+            api_error('Fecha de entrega E2E inválida.', 'E2E_FECHA_INVALIDA', 422);
+        }
+        $db = $auth['db'];
+        if (!self::verificarEscudoE2E('e2e_prestamo', $db, (int)$id)) {
+            api_error('El préstamo no pertenece al conjunto E2E.', 'E2E_SCOPE_BLOCKED', 409);
+        }
+        $db->beginTransaction();
+        try {
+            $q = $db->prepare('SELECT fecha_entrega FROM medicamentos_prestamos WHERE id_prestamo=? FOR UPDATE');
+            $q->execute([(int)$id]);
+            $anterior = $q->fetchColumn();
+            $db->prepare('UPDATE medicamentos_prestamos SET fecha_entrega=? WHERE id_prestamo=?')
+                ->execute([$fecha . ' 10:00:00', (int)$id]);
+            audit_change($db, $auth, 'TESTING', 'E2E_PRESTAMO_ANTIGUEDAD', 'medicamentos_prestamos', (int)$id,
+                'PW E2E ANTIGUEDAD DE PRESTAMO', ['fecha_entrega' => $anterior], ['fecha_entrega' => $fecha . ' 10:00:00']);
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $error;
+        }
+        api_success(['id_prestamo' => (int)$id, 'fecha_entrega' => $fecha], 'Fecha de entrega E2E actualizada.');
     }
 
     public static function saldoFavorFixture(): never
@@ -329,6 +368,7 @@ final class TestingCleanup
             'medicamentos_prestamos_detalle' => 0,
             'medicamentos_prestamos_devoluciones' => 0,
             'medicamentos_prestamos_senas_movimientos' => 0,
+            'medicamentos_entregas' => 0,
             'medicamentos_solicitudes' => 0,
             'medicamentos_alertas_descartadas' => 0,
             'medicamentos_opciones' => 0,
@@ -414,6 +454,7 @@ final class TestingCleanup
             $testDetallesMedicamentos = [];
             $testDevolucionesMedicamentos = [];
             $testSenasMedicamentos = [];
+            $testEntregasMedicamentos = [];
             if (self::tableExists($db,'medicamentos')) {
                 $testMedicamentos=self::ids($db,
                     "SELECT id_medicamento FROM medicamentos WHERE nombre_comercial LIKE 'PW E2E %' OR nombre_comercial LIKE 'PW EE %'");
@@ -430,6 +471,22 @@ final class TestingCleanup
                     "SELECT DISTINCT id_egreso_contable FROM medicamentos_movimientos WHERE id_medicamento IN ({$in}) AND id_egreso_contable IS NOT NULL",$testMedicamentos);
                 $testIncomeIds=array_values(array_unique(array_merge($testIncomeIds,$linkedIncome)));
                 $testExpenseIds=array_values(array_unique(array_merge($testExpenseIds,$linkedExpense)));
+                // Entregas cobradas de Tratamiento del dolor: el cobro único vive en la entrega.
+                if (self::tableExists($db,'medicamentos_entregas')) {
+                    $testEntregasMedicamentos=self::ids($db,
+                        "SELECT DISTINCT id_entrega FROM medicamentos_movimientos WHERE id_medicamento IN ({$in}) AND id_entrega IS NOT NULL",$testMedicamentos);
+                }
+            }
+            if ($testEntregasMedicamentos !== []) {
+                $in=self::placeholders(count($testEntregasMedicamentos));
+                // Fail closed si una entrega E2E incluye tratamientos reales.
+                $otrosEntrega=self::ids($db,
+                    "SELECT DISTINCT id_medicamento FROM medicamentos_movimientos WHERE id_entrega IN ({$in})",$testEntregasMedicamentos);
+                if(array_diff($otrosEntrega,$testMedicamentos)!==[])
+                    api_error('Una entrega E2E incluye tratamientos reales. Limpieza cancelada.', 'E2E_CLEANUP_INTEGRIDAD', 409);
+                $entregaIngreso=self::ids($db,
+                    "SELECT DISTINCT id_ingreso_contable FROM medicamentos_entregas WHERE id_entrega IN ({$in}) AND id_ingreso_contable IS NOT NULL",$testEntregasMedicamentos);
+                $testIncomeIds=array_values(array_unique(array_merge($testIncomeIds,$entregaIngreso)));
             }
             if ($testPrestamosMedicamentos !== []) {
                 $in=self::placeholders(count($testPrestamosMedicamentos));
@@ -478,6 +535,7 @@ final class TestingCleanup
                 }
             }
             $counts['medicamentos_movimientos'] += self::deleteByIds($db,'medicamentos_movimientos','id_movimiento',$testMovimientosMedicamentos);
+            $counts['medicamentos_entregas'] += self::deleteByIds($db,'medicamentos_entregas','id_entrega',$testEntregasMedicamentos);
             $counts['medicamentos_prestamos_senas_movimientos'] += self::deleteByIds($db,'medicamentos_prestamos_senas_movimientos','id_movimiento_sena',$testSenasMedicamentos);
             $counts['medicamentos_prestamos_devoluciones'] += self::deleteByIds($db,'medicamentos_prestamos_devoluciones','id_devolucion',$testDevolucionesMedicamentos);
             $counts['medicamentos_prestamos_detalle'] += self::deleteByIds($db,'medicamentos_prestamos_detalle','id_detalle_prestamo',$testDetallesMedicamentos);
@@ -651,6 +709,7 @@ final class TestingCleanup
                 'medicamentos_prestamos_detalle' => $testDetallesMedicamentos,
                 'medicamentos_prestamos_devoluciones' => $testDevolucionesMedicamentos,
                 'medicamentos_prestamos_senas_movimientos' => $testSenasMedicamentos,
+                'medicamentos_entregas' => $testEntregasMedicamentos,
                 'medios_pago' => $testMeans,
                 'condiciones_iva' => $testIva,
                 'sis_usuarios' => $testUsers,
@@ -951,6 +1010,11 @@ final class TestingCleanup
             // etiqueta en el texto: se identifican por sus FK de stock/señas.
             $testIncome = "(EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos m ON m.id_medicamento=x.id_medicamento WHERE x.id_ingreso_contable=i.id_ingreso AND {$isTestMed}) OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm JOIN medicamentos_prestamos_detalle d ON d.id_prestamo=sm.id_prestamo JOIN medicamentos m ON m.id_medicamento=d.id_medicamento WHERE sm.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";
             $testExpense = str_replace(['i.id_ingreso','id_ingreso_contable'],['e.id_egreso','id_egreso_contable'],$testIncome);
+            // Cobro único de las entregas E2E de Tratamiento del dolor (solo ingresos).
+            if (self::tableExists($db,'medicamentos_entregas')) {
+                $testIncome="({$testIncome} OR EXISTS (SELECT 1 FROM medicamentos_entregas ent JOIN medicamentos_movimientos xe ON xe.id_entrega=ent.id_entrega JOIN medicamentos m ON m.id_medicamento=xe.id_medicamento WHERE ent.id_ingreso_contable=i.id_ingreso AND {$isTestMed}))";
+                $queries['medicamentos_entregas']="SELECT ent.* FROM medicamentos_entregas ent WHERE NOT EXISTS (SELECT 1 FROM medicamentos_movimientos xe JOIN medicamentos m ON m.id_medicamento=xe.id_medicamento WHERE xe.id_entrega=ent.id_entrega AND {$isTestMed}) ORDER BY ent.id_entrega";
+            }
             $queries['contable_ingresos']=preg_replace('/ ORDER BY i\\.id_ingreso$/'," AND NOT {$testIncome} ORDER BY i.id_ingreso",$queries['contable_ingresos']);
             $queries['contable_egresos']=preg_replace('/ ORDER BY e\\.id_egreso$/'," AND NOT {$testExpense} ORDER BY e.id_egreso",$queries['contable_egresos']);
         }

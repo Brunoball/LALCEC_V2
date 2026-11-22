@@ -36,7 +36,12 @@ test.describe('Medicamentos: interfaz simplificada',()=>{
     await dialog.getByRole('tab',{name:/Stock/}).click();
     await expect(dialog.getByRole('button',{name:'Agregar stock'})).toBeVisible();
     await expect(dialog.getByRole('button',{name:'Restar stock'})).toBeVisible();
-    await expect(dialog.getByText('Motivo del ingreso')).toBeVisible();
+    // El campo antiguo «Motivo del ingreso» fue reemplazado por Origen (Donante/Proveedor).
+    const origen = dialog.getByLabel('Origen *');
+    await expect(origen).toBeVisible();
+    await expect(origen.locator('option[value="DONACION"]')).toHaveCount(1);
+    await expect(origen.locator('option[value="COMPRA"]')).toHaveCount(1);
+    await expect(dialog.getByLabel('Nombre y apellido del donante (manual) *')).toBeVisible();
   });
 
   test('baja solicita motivo y lo muestra en la pestaña Bajas',async ({request,page})=>{

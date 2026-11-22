@@ -20,6 +20,50 @@ trait MedicamentosSoporte {
         if(self::largo($v)>$max) api_error('El campo '.$etiqueta.' admite hasta '.$max.' caracteres.','VALIDATION_ERROR',422,['campo'=>$key]);
         return $v;
     }
+    /**
+     * DNI / documento como TEXTO (conserva ceros y letras de documentos extranjeros).
+     * Se quitan espacios y puntos de formato; se admiten letras, números y guiones.
+     */
+    private static function documentoTexto(array $b,string $key,string $etiqueta,bool $requerido): ?string {
+        $valor=$b[$key]??null;
+        if($valor!==null && !is_scalar($valor))api_error('El '.$etiqueta.' no es válido.','VALIDATION_ERROR',422,['campo'=>$key]);
+        $v=preg_replace('/[\s.]+/u','',(string)($valor??''))??'';
+        $v=function_exists('mb_strtoupper')?mb_strtoupper($v,'UTF-8'):strtoupper($v);
+        if($v===''){
+            if($requerido)api_error('Ingresá el '.$etiqueta.'.','VALIDATION_ERROR',422,['campo'=>$key]);
+            return null;
+        }
+        if(!preg_match('/^[A-Z0-9-]{5,20}$/D',$v))
+            api_error('El '.$etiqueta.' debe tener entre 5 y 20 caracteres (números, letras o guiones).','VALIDATION_ERROR',422,['campo'=>$key]);
+        return $v;
+    }
+    /** Celular de contacto como texto: +, espacios, guiones y paréntesis, con 6 a 20 dígitos. */
+    private static function celularTexto(array $b,string $key,string $etiqueta,bool $requerido): ?string {
+        $valor=$b[$key]??null;
+        if($valor!==null && !is_scalar($valor))api_error('El '.$etiqueta.' no es válido.','VALIDATION_ERROR',422,['campo'=>$key]);
+        $v=clean_text((string)($valor??''),100,false);
+        if($v===''){
+            if($requerido)api_error('Ingresá el '.$etiqueta.'.','VALIDATION_ERROR',422,['campo'=>$key]);
+            return null;
+        }
+        $digitos=strlen(preg_replace('/\D+/','',$v)??'');
+        if(strlen($v)>30 || !preg_match('/^\+?[0-9()\s-]+$/D',$v) || $digitos<6 || $digitos>20)
+            api_error('El '.$etiqueta.' debe contener entre 6 y 20 números (se admiten +, espacios, guiones y paréntesis).','VALIDATION_ERROR',422,['campo'=>$key]);
+        return $v;
+    }
+    /**
+     * Columnas de paciente/contacto agregadas por la migración de préstamos.
+     * Se verifica una vez por petición para no romper préstamos históricos ni
+     * lecturas si la migración todavía no se ejecutó.
+     */
+    private static function columnasPacienteDisponibles(PDO $db): bool {
+        static $cache=null;
+        if($cache!==null) return $cache;
+        $q=$db->query("SELECT COUNT(DISTINCT COLUMN_NAME) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_prestamos'
+              AND COLUMN_NAME IN ('paciente_nombre','paciente_dni','dni_receptor','celular_receptor')");
+        return $cache=((int)$q->fetchColumn()===4);
+    }
     private static function qty(mixed $v): int { $n=filter_var($v,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>100000000]]); if($n===false) api_error('La cantidad debe ser un entero positivo.'); return (int)$n; }
     private static function money(mixed $v,bool $allowZero=false): string {
         if(!is_string($v)&&!is_int($v)&&!is_float($v)) api_error('Importe inválido.');
@@ -52,14 +96,42 @@ trait MedicamentosSoporte {
         $id=positive_id($id,'medio de pago'); $s=$db->prepare('SELECT id_medio_pago FROM medios_pago WHERE id_medio_pago=? AND activo=1 FOR UPDATE'); $s->execute([$id]);
         if(!$s->fetchColumn()) api_error('Seleccioná un medio de pago activo.'); return $id;
     }
-    /** Préstamos y reintegros: EFECTIVO exclusivamente, sin tocar medios globales. */
+    /**
+     * Préstamos y reintegros: EFECTIVO exclusivamente, sin tocar medios globales.
+     * Si el cliente no informa el medio se usa automáticamente el EFECTIVO activo;
+     * si informa otro medio, se rechaza (el frontend no es la única barrera).
+     * Nunca crea registros: si EFECTIVO falta, se pide ejecutar la migración.
+     */
     private static function medioEfectivo(PDO $db,mixed $id): int {
+        if($id===null || (is_string($id) && trim($id)==='')){
+            $q=$db->query("SELECT id_medio_pago FROM medios_pago WHERE UPPER(TRIM(nombre))='EFECTIVO' AND activo=1 ORDER BY id_medio_pago LIMIT 1 FOR UPDATE");
+            $auto=(int)$q->fetchColumn();
+            if($auto<1)api_error('No existe el medio de pago EFECTIVO activo. Ejecutá el SQL de migración incluido en el ZIP.','MEDIO_EFECTIVO_FALTANTE',422);
+            return $auto;
+        }
         $medio=self::medio($db,$id);
         $q=$db->prepare('SELECT nombre FROM medios_pago WHERE id_medio_pago=?');
         $q->execute([$medio]);
         if (strtoupper(trim((string)$q->fetchColumn())) !== 'EFECTIVO')
             api_error('Las señas y sus reintegros deben registrarse en EFECTIVO.', 'MEDIO_EFECTIVO', 422);
         return $medio;
+    }
+    /** Entregas cobradas de Tratamiento del dolor: solo EFECTIVO o TRANSFERENCIA (Trello). */
+    private static function medioEntrega(PDO $db,mixed $id): int {
+        $medio=self::medio($db,$id);
+        $q=$db->prepare('SELECT nombre FROM medios_pago WHERE id_medio_pago=?');
+        $q->execute([$medio]);
+        if(!in_array(strtoupper(trim((string)$q->fetchColumn())),['EFECTIVO','TRANSFERENCIA'],true))
+            api_error('Las entregas se cobran en EFECTIVO o TRANSFERENCIA.','MEDIO_ENTREGA',422);
+        return $medio;
+    }
+    /** Tabla y columna creadas por la migración de Entregas cobradas (verificado una vez por petición). */
+    private static function entregasCobradasDisponibles(PDO $db): bool {
+        static $cache=null;
+        if($cache!==null) return $cache;
+        $tabla=(int)$db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_entregas'")->fetchColumn();
+        $columna=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_movimientos' AND COLUMN_NAME='id_entrega'")->fetchColumn();
+        return $cache=($tabla===1 && $columna===1);
     }
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.

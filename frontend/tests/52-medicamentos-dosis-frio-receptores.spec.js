@@ -38,6 +38,8 @@ test.describe('Medicamentos: dosis, cadena de frío y personas no socias', () =>
     const nombre = `PW E2E EXTERNO ${uniqueSuffix()}`;
     const apellido = 'PRUEBA MANUAL';
     const body = { nombre_receptor: nombre, apellido_receptor: apellido,
+      dni_receptor: '30.111.222', celular_receptor: '351 555-0101',
+      paciente_nombre: `PW E2E PACIENTE ${uniqueSuffix()}`, paciente_dni: '07123456',
       items: [{ id_medicamento: fx.id, cantidad: 2 }], sena: '50.00', id_medio_pago: medio };
     // El guardián de Playwright exige un nombre de prueba marcado E2E: si se
     // vacía también ese nombre, se bloquea ANTES de llegar a la validación de negocio.
@@ -51,6 +53,10 @@ test.describe('Medicamentos: dosis, cadena de frío y personas no socias', () =>
     const data = await apiCall(request, 'medicamentos_prestamo_detalle', { params: { id: loan.id_prestamo } });
     expect(data.prestamo.socio).toBe(`${nombre} ${apellido}`);
     expect(data.prestamo.id_socio).toBeNull();
+    // DNI y celular se guardan como texto (sin puntos de formato y conservando ceros).
+    expect(data.prestamo.dni_receptor).toBe('30111222');
+    expect(data.prestamo.celular_receptor).toBe('351 555-0101');
+    expect(data.prestamo.paciente_dni).toBe('07123456');
     const lista = await apiCall(request, 'medicamentos_prestamos', { params: { buscar: nombre } });
     expect(lista.registros.some(p => Number(p.id_prestamo) === Number(loan.id_prestamo) && p.socio === `${nombre} ${apellido}`)).toBe(true);
     expect(Number((await stockOf(request, fx.id)).stock_actual)).toBe(3);
@@ -100,8 +106,12 @@ test.describe('Medicamentos: dosis, cadena de frío y personas no socias', () =>
     await page.getByRole('button', { name: 'Nuevo préstamo' }).click();
     const modal = page.getByRole('dialog', { name: 'Registrar préstamo de medicamentos' });
     await expect(modal.getByLabel('Socio que retira')).toHaveCount(0);
+    await modal.getByLabel(/Nombre y apellido del paciente/).fill(`PW E2E PACIENTE UI ${uniqueSuffix()}`);
+    await modal.getByLabel(/DNI del paciente/).fill('07123456');
     await modal.getByLabel(/Nombre de quien retira/).fill(nombre);
     await modal.getByLabel(/Apellido de quien retira/).fill('PRUEBA');
+    await modal.getByLabel(/DNI de quien retira/).fill('30111222');
+    await modal.getByLabel(/Celular de contacto/).fill('3515550101');
     await modal.getByRole('tab', { name: 'Medicamentos' }).click();
     await modal.getByLabel('Medicamento 1 *').selectOption(String(fx.id));
     await modal.getByLabel('Cantidad *').fill('1');
@@ -110,6 +120,7 @@ test.describe('Medicamentos: dosis, cadena de frío y personas no socias', () =>
     await page.getByRole('textbox', { name: 'Búsqueda' }).fill(nombre);
     const row = page.getByRole('table', { name: 'Préstamos de medicamentos' }).getByRole('row').filter({ hasText: nombre });
     await expect(row).toContainText(`${nombre} PRUEBA`);
-    await expect(row).toContainText('Registrado manualmente');
+    await expect(row).toContainText('DNI: 30111222');
+    await expect(row).toContainText('Paciente: PW E2E PACIENTE UI');
   });
 });

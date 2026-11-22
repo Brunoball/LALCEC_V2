@@ -5,6 +5,28 @@ import ModalEliminarGlobal from '../../Global/Modales/ModalEliminarGlobal';
 import { medicamentosApi as api } from '../api/medicamentosApi';
 import { fecha } from '../utils/medicamentosUtils';
 
+// Préstamos: aviso por antigüedad desde la entrega (meses calendario) o por fecha prevista.
+const NIVEL_PRESTAMO = {
+  ROJA: { clase: 'med-alertas__item--roja', mensaje: '3 meses o más sin devolver' },
+  AMARILLA: { clase: 'med-alertas__item--amarilla', mensaje: '1 mes o más sin devolver' },
+};
+const mensajePrevista = valor => {
+  const dias = Number(valor);
+  if (dias < 0) return `Devolución prevista vencida hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`;
+  if (dias === 0) return 'Devolución prevista para hoy';
+  return `Faltan ${dias} ${dias === 1 ? 'día' : 'días'} para la devolución prevista`;
+};
+const pendientesTexto = n => Number(n) > 0 ? ` · ${n} ${Number(n) === 1 ? 'unidad pendiente' : 'unidades pendientes'}` : '';
+const claseAlerta = a => NIVEL_PRESTAMO[a.nivel]?.clase
+  || (Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo');
+const mensajeAlerta = (a, esMedicamento) => esMedicamento ? mensajeDias(a.dias_restantes)
+  : NIVEL_PRESTAMO[a.nivel]?.mensaje || mensajePrevista(a.dias_restantes);
+const pieAlerta = (a, esMedicamento) => esMedicamento
+  ? `${fecha(a.fecha_objetivo)} · Ver / editar medicamento`
+  : NIVEL_PRESTAMO[a.nivel]
+    ? `Entregado el ${fecha(a.fecha_entrega || a.detalle)}${pendientesTexto(a.unidades_pendientes)} · Ver préstamo`
+    : `Prevista: ${fecha(a.fecha_objetivo)}${pendientesTexto(a.unidades_pendientes)} · Ver préstamo`;
+
 const mensajeDias = valor => {
   const dias = Number(valor);
   if (dias < 0) return `Venció hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`;
@@ -97,12 +119,12 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0,
           <span className="med-alertas__minimizar" aria-hidden="true"><FontAwesomeIcon icon={faChevronDown} /></span>
         </button>
         {visibles.length ? <div className="med-alertas__scroll">
-          {visibles.map(a => <div className={`med-alertas__item ${Number(a.dias_restantes) < 0 ? 'med-alertas__item--vencido' : 'med-alertas__item--proximo'}`} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
+          {visibles.map(a => <div className={`med-alertas__item ${claseAlerta(a)}`} data-nivel={a.nivel || undefined} key={`${a.tipo}-${a.id_referencia}-${a.fecha_objetivo}`}>
             <button type="button" className="med-alertas__contenido" onClick={() => void verAlerta(a)}
-              title={esMedicamento ? "Abrir medicamento para gestionarlo" : "Abrir préstamo para gestionarlo"}>
+              title={esMedicamento ? "Abrir medicamento para gestionarlo" : "Abrir el detalle del préstamo"}>
               <span className="med-alertas__nombre">{a.titulo}</span>
-              <strong>{mensajeDias(a.dias_restantes)}</strong>
-              <small>{fecha(a.fecha_objetivo)} · {esMedicamento ? "Ver / editar medicamento" : "Ver / finalizar préstamo"}</small>
+              <strong>{mensajeAlerta(a, esMedicamento)}</strong>
+              <small>{pieAlerta(a, esMedicamento)}</small>
             </button>
             <button type="button" className="med-alertas__descartar" aria-label={`Descartar permanentemente alerta de ${a.titulo}`} title="Descartar esta alerta (requiere confirmación)" onClick={() => setADescartar(a)}>
               <FontAwesomeIcon icon={faXmark} />
@@ -122,10 +144,11 @@ export default function AlertasVencimientos({ tipo, onSelect, actualizacion = 0,
       message={esMedicamento ? "¿Querés dejar de ver este aviso de vencimiento?" : "¿Querés dejar de ver este aviso de devolución?"}
       warning={esMedicamento
         ? "El medicamento y su stock no se modifican. La alerta se descarta para esta fecha y usuario; podría reaparecer si cambia la fecha."
-        : "El préstamo no se modifica. El aviso se descarta para esta fecha y usuario; podría reaparecer si cambia la fecha prevista."}
+        : "El préstamo no se modifica. El aviso se descarta solo para este usuario y esta etapa: si el préstamo cumple 3 meses sin devolverse, aparecerá el aviso rojo."}
       details={aDescartar ? [
         { label: 'Registro', value: aDescartar.titulo },
         { label: 'Fecha', value: fecha(aDescartar.fecha_objetivo) },
+        ...(aDescartar.nivel && NIVEL_PRESTAMO[aDescartar.nivel] ? [{ label: 'Aviso', value: NIVEL_PRESTAMO[aDescartar.nivel].mensaje }] : []),
       ] : []}
       confirmLabel="Sí, descartar alerta"
       loadingLabel="Descartando..."
