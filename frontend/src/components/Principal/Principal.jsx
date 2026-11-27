@@ -4,8 +4,8 @@ import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBars,
-  faChevronDown,
   faChartLine,
+  faChevronDown,
   faGear,
   faPills,
   faReceipt,
@@ -53,23 +53,6 @@ const NAV_ITEMS = [
   },
   { key: "cuotas", label: "Cuotas", path: "/cuotas", icon: faReceipt },
   {
-    key: "medicamentos",
-    label: "Banco de Drogas",
-    path: "/medicamentos",
-    defaultPath: "/medicamentos/stock",
-    icon: faPills,
-    children: [
-      { key: "med-seccion", label: "Medicamentos", children: [
-        { key: "med-stock", label: "Stock", path: "/medicamentos/stock" },
-        { key: "med-prestamos", label: "Préstamos", path: "/medicamentos/prestamos" },
-      ] },
-      { key: "dolor-seccion", label: "Tratamiento del dolor", children: [
-        { key: "dolor-stock", label: "Stock", path: "/medicamentos/dolor/stock" },
-        { key: "dolor-entregas", label: "Entregas", path: "/medicamentos/dolor/entregas" },
-      ] },
-    ],
-  },
-  {
     key: "categorias",
     label: "Categorías",
     path: "/categorias",
@@ -85,27 +68,37 @@ const NAV_ITEMS = [
     ],
   },
   {
+    key: "bot-whatsapp",
+    label: "Bot WhatsApp",
+    path: BOT_PANEL_ROUTE,
+    icon: faRobot,
+    external: true,
+  },
+  {
+    key: "medicamentos",
+    label: "Medicamentos",
+    path: "/medicamentos",
+    defaultPath: "/medicamentos/stock",
+    icon: faPills,
+    // Sectores plegables con los mismos enlaces visuales del menú global.
+    children: [
+      { key: "med-stock", label: "Stock", path: "/medicamentos/stock", section: "Medicamentos" },
+      { key: "med-prestamos", label: "Préstamos", path: "/medicamentos/prestamos" },
+      { key: "dolor-stock", label: "Stock", path: "/medicamentos/dolor/stock", section: "Tratamiento del dolor" },
+      { key: "dolor-entregas", label: "Entregas", path: "/medicamentos/dolor/entregas" },
+    ],
+  },
+  {
     key: "contable",
     label: "Contabilidad",
     path: "/contable",
     defaultPath: "/contable/ingresos",
     icon: faWallet,
     children: [
-      {
-        key: "contable-ingresos",
-        label: "Ingresos",
-        path: "/contable/ingresos",
-      },
+      { key: "contable-ingresos", label: "Ingresos", path: "/contable/ingresos" },
       { key: "contable-egresos", label: "Egresos", path: "/contable/egresos" },
       { key: "contable-resumen", label: "Resumen", path: "/contable/resumen" },
     ],
-  },
-  {
-    key: "bot-whatsapp",
-    label: "Bot WhatsApp",
-    path: BOT_PANEL_ROUTE,
-    icon: faRobot,
-    external: true,
   },
 ];
 
@@ -266,15 +259,10 @@ export default function Principal() {
   const [openGroupKey, setOpenGroupKey] = useState(() =>
     getGroupKeyForPath(location.pathname),
   );
-  // Cada sector conserva sus dos pantallas; las presentaciones se filtran en Stock.
-  const [openDrugBranches, setOpenDrugBranches] = useState({});
-  const toggleDrugBranch = key => setOpenDrugBranches(current => ({ ...current, [key]: !current[key] }));
-  const drugBranchOpen = key => {
-    if (Object.prototype.hasOwnProperty.call(openDrugBranches, key)) return openDrugBranches[key];
-    if (key === 'med-seccion') return location.pathname.startsWith('/medicamentos/stock') || location.pathname.startsWith('/medicamentos/prestamos');
-    if (key === 'dolor-seccion') return location.pathname.startsWith('/medicamentos/dolor');
-    return false;
-  };
+  const [openMedicationSections, setOpenMedicationSections] = useState(() => ({
+    med: location.pathname.startsWith("/medicamentos/") && !location.pathname.startsWith("/medicamentos/dolor"),
+    dolor: location.pathname.startsWith("/medicamentos/dolor"),
+  }));
   const groupClickTimer = useRef(null);
   const logoutInProgress = useRef(false);
 
@@ -293,8 +281,10 @@ export default function Principal() {
   useEffect(() => {
     setDrawerOpen(false);
     setOpenGroupKey(getGroupKeyForPath(location.pathname));
-    // Abrir automáticamente la rama de la ruta activa tras navegar o entrar por URL.
-    setOpenDrugBranches({});
+    if (location.pathname.startsWith("/medicamentos/")) {
+      const section = location.pathname.startsWith("/medicamentos/dolor") ? "dolor" : "med";
+      setOpenMedicationSections((previous) => ({ ...previous, [section]: true }));
+    }
   }, [location.pathname]);
 
   useEffect(
@@ -702,7 +692,7 @@ export default function Principal() {
             );
             return (
               <div
-                className={`pp-navGroup ${item.children ? "has-sub" : ""} ${groupOpen ? "is-open" : ""} ${item.key === "medicamentos" ? "pp-navGroup--banco" : ""}`}
+                className={`pp-navGroup ${item.children ? "has-sub" : ""} ${groupOpen ? "is-open" : ""} ${item.key === "medicamentos" ? "pp-navGroup--medicamentos" : ""}`}
                 key={item.key}
               >
                 {item.external ? (
@@ -791,27 +781,46 @@ export default function Principal() {
                 )}
                 {item.children ? (
                   <div className="pp-navSub" aria-hidden={!groupOpen}>
-                    {item.children.map(child => child.children ? (
-                      <div className="pp-navBranch" key={child.key}>
-                        <button type="button" className="pp-navBranch__button" aria-expanded={drugBranchOpen(child.key)}
-                          onClick={() => toggleDrugBranch(child.key)}>
-                          <span>{child.label}</span>
-                          <FontAwesomeIcon icon={faChevronDown} className={drugBranchOpen(child.key) ? 'pp-navBranch__chevron--open' : ''} />
-                        </button>
-                        {drugBranchOpen(child.key) ? (
-                          <div className="pp-navBranch__children">
-                            {child.children.map(section => (
-                              <NavLink key={section.key} to={section.path} end
-                                className={({isActive}) => `pp-navBranch__link ${isActive ? 'is-active' : ''}`}>
-                                {section.label}
-                              </NavLink>
-                            ))}
+                    {item.key === "medicamentos" ? (
+                      [
+                        { key: "med", label: "Medicamentos" },
+                        { key: "dolor", label: "Tratamiento del dolor" },
+                      ].map((section) => {
+                        const children = item.children.filter((child) => child.key.startsWith(`${section.key}-`));
+                        const sectionOpen = openMedicationSections[section.key];
+                        const sectionActive = children.some((child) => location.pathname === child.path || location.pathname.startsWith(`${child.path}/`));
+                        return (
+                          <div className={`pp-navSection ${sectionOpen ? "is-open" : ""}`} key={section.key}>
+                            <button
+                              type="button"
+                              className={`pp-navSub__item pp-navSection__toggle ${sectionActive ? "is-active" : ""}`}
+                              aria-expanded={sectionOpen}
+                              aria-controls={`pp-nav-section-${section.key}`}
+                              onClick={() => setOpenMedicationSections((previous) => ({ ...previous, [section.key]: !previous[section.key] }))}
+                            >
+                              <span className="pp-navSub__label">{section.label}</span>
+                              <FontAwesomeIcon className="pp-navSection__chevron" icon={faChevronDown} />
+                            </button>
+                            <div id={`pp-nav-section-${section.key}`} className="pp-navSection__body" aria-hidden={!sectionOpen}>
+                              <div className="pp-navSection__clip">
+                                <div className="pp-navSection__links">
+                                  {children.map((child) => (
+                                    <NavLink key={child.key} end={false} tabIndex={groupOpen && sectionOpen ? undefined : -1}
+                                      className={({ isActive }) => `pp-navSub__item ${isActive ? "is-active" : ""}`} to={child.path}>
+                                      <span className="pp-navSub__dot" />
+                                      <span className="pp-navSub__label">{child.label}</span>
+                                    </NavLink>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <NavLink end className={({ isActive }) => `pp-navSub__item ${isActive ? "is-active" : ""}`}
-                        to={child.path} key={child.key}>
+                        );
+                      })
+                    ) : item.children.map((child) => (
+                      <NavLink key={child.key} end
+                        className={({ isActive }) => `pp-navSub__item ${isActive ? "is-active" : ""}`}
+                        to={child.path}>
                         <span className="pp-navSub__dot" />
                         <span className="pp-navSub__label">{child.label}</span>
                       </NavLink>

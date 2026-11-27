@@ -261,6 +261,9 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
   const esEntrega = movement.tipo === 'ENTREGA_DONACION';
   const esAjuste = movement.tipo === 'AJUSTE_SALIDA';
   const requiereProcedencia = ['DONACION', 'COMPRA'].includes(movement.origen);
+  const conStockInicial = num(stockInicial) > 0;
+  const compraInicial = conStockInicial && movement.origen === 'COMPRA';
+  const procedenciaInicial = conStockInicial && requiereProcedencia;
   const faltaProcedencia = requiereProcedencia && movement.procedencia.trim().length < 3;
   // Si el motivo quedó inactivo o no está permitido por vencimiento, elegir
   // una opción válida al abrir Restar stock o refrescar los catálogos.
@@ -301,11 +304,11 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
   </Campos>;
 
   return <>
-    <ModulePage title={`${nombreSector} · Stock`} tabsInTitle filters={[
+    <ModulePage title={`${nombreSector} · Stock`} tabsInTitle headFiltersClassName="med-stock-filters" filters={[
       { type: 'tabs', label: 'Estado', value: section, onChange: v => { setSection(v);setPage(1); }, options: [
         { value: 'ACTIVOS', label: 'Activos', count: active.length },{ value: 'BAJAS', label: 'Bajas', count: bajas.length },
       ] },
-      { type: 'select', label: 'Presentación', value: filtroPresentacion, onChange: cambiarFiltroPresentacion, placeholder: 'Todas las presentaciones', options: PRESENTACIONES_SECTOR[sector].map(v => op(v, v)) },
+      { type: 'select', className: 'med-filter--presentacion', label: 'Presentación', value: filtroPresentacion, onChange: cambiarFiltroPresentacion, placeholder: 'Todas las presentaciones', options: PRESENTACIONES_SECTOR[sector].map(v => op(v, v)) },
       { type: 'search', label: 'Búsqueda', value: query, onChange: v => { setQuery(v);setPage(1); }, placeholder: ' ' },
     ]} primaryActionLabel={esDolor ? 'Nuevo tratamiento' : 'Nuevo medicamento'} onPrimaryAction={() => openMed()} canCreate={write}>
       {error ? <div className="med-inline-danger">{error}</div> : null}
@@ -338,7 +341,7 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
       </div>
     </ModulePage>
 
-    <CrudModal modalClassName={`med-modal ${med.id_medicamento ? 'med-stock-edit-modal' : ''}`} open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}
+    <CrudModal modalClassName={`med-modal ${med.id_medicamento ? 'med-stock-edit-modal' : 'med-stock-create-modal'}`} open={modal==='editar'} wide closeOnBackdrop={false} saving={saving}
       title={<MedModalInfo info={tab === 'DATOS'
         ? (med.id_medicamento ? 'Si el medicamento tiene movimientos registrados, no se puede cambiar su presentación, dosis, droga ni unidad de stock. Podés actualizar el nombre, laboratorio y observaciones.' : null)
         : [
@@ -373,24 +376,20 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
             value={med.dosis} unidad={med.unidad_dosis} onChange={v => updateMed('dosis',v)} onUnidadChange={v => updateMed('unidad_dosis',v)} />
           <Campo label="Fecha de vencimiento" type="date" required={Boolean(num(med.id_medicamento ? selected?.stock_actual : stockInicial) > 0)} value={med.fecha_vencimiento} onChange={v => { updateMed('fecha_vencimiento',v); if(!med.id_medicamento) updateMovement('fecha_vencimiento',v); }} />
           <Campo label="Unidad de stock" required disabled={Boolean(med.id_medicamento && num(selected?.tiene_movimientos) === 1)} value={med.unidad_stock} options={opcionesSelector('UNIDAD_STOCK', med.unidad_stock)} onChange={v => updateMed('unidad_stock',v)} />
-          <label className="entity-field med-cadena-frio-field">
+          <label className={`entity-check-option med-cadena-frio-field ${num(med.cadena_frio) === 1 ? 'is-selected' : ''}`}>
             <input type="checkbox" checked={num(med.cadena_frio) === 1} onChange={e => updateMed('cadena_frio', e.target.checked ? 1 : 0)} />
             <span>Requiere cadena de frío</span>
           </label>
           <Campo label="Observaciones del medicamento" wide textarea maxLength={3000} value={med.observaciones} onChange={v => updateMed('observaciones',v)} />
           {!med.id_medicamento ? <>
             <Campo label="Stock inicial (opcional)" quantity type="number" min="0" step="1" value={stockInicial} onChange={setStockInicial} />
-            {num(stockInicial)>0 ? <>
-              <Campo label="Origen" required options={opcionesOrigen()} value={movement.origen} onChange={cambiarOrigen} />
-              <Campo label="Fecha de ingreso" required type="date" max={fechaHoy()} value={movement.fecha_ingreso} onChange={v => updateMovement('fecha_ingreso',v)} />
-              {requiereProcedencia ? <Campo required
-                label={movement.origen === 'DONACION' ? 'Nombre y apellido del donante (manual)' : 'Datos del proveedor (manual)'}
-                maxLength={160} value={movement.procedencia} onChange={v => updateMovement('procedencia',v)} /> : null}
-              {movement.origen === 'COMPRA' ? <>
-                <Campo label="Costo unitario ($)" money required type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
-                <Campo label="Medio de pago" required options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
-              </> : null}
-            </> : null}
+            <Campo label="Origen" required={conStockInicial} disabled={!conStockInicial} options={opcionesOrigen()} value={movement.origen} onChange={cambiarOrigen} />
+            <Campo label="Fecha de ingreso" required={conStockInicial} disabled={!conStockInicial} type="date" max={fechaHoy()} value={movement.fecha_ingreso} onChange={v => updateMovement('fecha_ingreso',v)} />
+            <Campo required={procedenciaInicial} disabled={!procedenciaInicial}
+              label={movement.origen === 'DONACION' ? 'Nombre y apellido del donante (manual)' : movement.origen === 'COMPRA' ? 'Datos del proveedor (manual)' : 'Procedencia (manual)'}
+              maxLength={160} value={movement.procedencia} onChange={v => updateMovement('procedencia',v)} />
+            <Campo label="Costo unitario ($)" money required={compraInicial} disabled={!compraInicial} type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
+            <Campo label="Medio de pago" required={compraInicial} disabled={!compraInicial} options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
           </> : null}
         </Campos>
       </> : <>

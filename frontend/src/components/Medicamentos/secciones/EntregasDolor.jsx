@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faIdCard, faMoneyBill, faPills, faPlus, faXmark, faCommentDots, faHandHoldingMedical } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faIdCard, faMoneyBill, faPills, faPlus, faXmark, faCommentDots, faHandHoldingMedical, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import GlobalDivTable from '../../Global/GlobalDivTable';
 import GlobalPagination from '../../Global/GlobalPagination';
 import CrudModal from '../../Global/Modales/CrudModal';
-import ModuleFeedback from '../../Global/ModuleFeedback';
+import Toast from '../../Global/Toast';
 import { canWrite } from '../../_shared/auth/session';
 import { medicamentosApi as api } from '../api/medicamentosApi';
 import { useMedicamentos } from '../hooks/useMedicamentos';
@@ -34,6 +34,41 @@ const celularValido = v => {
 };
 const importeValido = v => /^\d{1,10}(?:\.\d{1,2})?$/.test(String(v ?? '').trim()) && num(v) > 0;
 
+// Mide el espacio real de la columna, incluso al cambiar el ancho del menú lateral.
+function ObservacionEntrega({ detalle, onVer }) {
+  const texto = String(detalle ?? '').trim();
+  const contenedor = useRef(null);
+  const contenido = useRef(null);
+  const [recortado, setRecortado] = useState(false);
+
+  useLayoutEffect(() => {
+    const caja = contenedor.current;
+    const linea = contenido.current;
+    if (!caja || !linea) return;
+    // Comparar con el ancho total evita que el propio botón mantenga el recorte.
+    const medir = () => setRecortado(Boolean(texto) && linea.scrollWidth > caja.clientWidth);
+    medir();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null;
+    observer?.observe(caja);
+    window.addEventListener('resize', medir);
+    document.fonts?.addEventListener?.('loadingdone', medir);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', medir);
+      document.fonts?.removeEventListener?.('loadingdone', medir);
+    };
+  }, [texto]);
+
+  return <div className="med-entrega-observacion" ref={contenedor}>
+    <span ref={contenido} className="med-entrega-observacion__texto" title={recortado ? texto : undefined}>{texto || '—'}</span>
+    {recortado && <button type="button" className="mov-iconBtn med-entrega-observacion__ver"
+      title="Ver observación completa" aria-label="Ver observación completa"
+      onClick={event => onVer(texto, event.currentTarget)}>
+      <FontAwesomeIcon icon={faCircleInfo} aria-hidden="true" />
+    </button>}
+  </div>;
+}
+
 /** Entregas definitivas y cobradas de Tratamiento del dolor: no crean préstamos ni señas. */
 export default function EntregasDolor() {
   const [query, setQuery] = useState('');
@@ -46,12 +81,20 @@ export default function EntregasDolor() {
   const loader = useCallback(() => api.entregas({ pagina: page, buscar: queryAplicada }), [page, queryAplicada]);
   const { registros, loading, error, cargar, total, pagina, por_pagina } = useMedicamentos(loader);
   const [modal, setModal] = useState(false);
+  const [observacion, setObservacion] = useState(null);
+  const botonObservacion = useRef(null);
+  const cerrarObservacion = () => {
+    setObservacion(null);
+    botonObservacion.current?.focus();
+  };
   const [medicamentos, setMedicamentos] = useState([]);
   const [medios, setMedios] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [form, setForm] = useState(nuevo);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const feedbackId = useRef(0);
+  const notificar = (type, message) => setFeedback({ type, message, id: ++feedbackId.current });
   const solicitud = useRef(0);
   const guardando = useRef(false);
   const write = canWrite();
@@ -65,7 +108,7 @@ export default function EntregasDolor() {
 
   const abrir = async () => {
     const token = ++solicitud.current;
-    setForm(nuevo()); setMedicamentos([]); setCargando(true); setModal(true);
+    setFeedback(null); setForm(nuevo()); setMedicamentos([]); setMedios([]); setCargando(true); setModal(true);
     try {
       const [datos, mediosPago] = await Promise.all([api.catalogo(), api.medios()]);
       if (token !== solicitud.current) return;
@@ -75,13 +118,13 @@ export default function EntregasDolor() {
       const efectivo = lista.find(m => normalizarMedio(m.nombre) === 'EFECTIVO');
       if (efectivo) setForm(f => (f.id_medio_pago ? f : { ...f, id_medio_pago: String(efectivo.id_medio_pago) }));
     } catch (e) {
-      if (token === solicitud.current) setFeedback({ type: 'error', message: e.message || 'No se pudo consultar el stock.' });
+      if (token === solicitud.current) notificar('error', e.message || 'No se pudo consultar el stock.');
     } finally { if (token === solicitud.current) setCargando(false); }
   };
   const cerrar = () => {
     if (guardando.current) return;
     ++solicitud.current;
-    setModal(false);
+    setModal(false); setFeedback(null);
   };
 
   const opciones = [op('', 'Seleccionar tratamiento'), ...disponibles.map(m => op(m.id_medicamento,
@@ -96,20 +139,30 @@ export default function EntregasDolor() {
     const seleccionado = disponibles.find(m => String(m.id_medicamento) === String(item.id_medicamento));
     return seleccionado && Number(item.cantidad) > num(seleccionado.stock_actual);
   });
-  const erroresPersona = [
-    form.paciente_dni.trim() && !dniValido(form.paciente_dni) ? 'El DNI del paciente debe tener entre 5 y 20 caracteres (números, letras o guiones).' : null,
-    form.dni_receptor.trim() && !dniValido(form.dni_receptor) ? 'El DNI de quien retira debe tener entre 5 y 20 caracteres (números, letras o guiones).' : null,
-    form.celular_receptor.trim() && !celularValido(form.celular_receptor) ? 'El celular debe tener entre 6 y 20 números (se admiten +, espacios, guiones y paréntesis).' : null,
-    String(form.importe).trim() && !importeValido(form.importe) ? 'Ingresá un importe mayor que cero, con hasta dos decimales.' : null,
-  ].filter(Boolean);
-  const personasValidas = form.paciente_nombre.trim().length >= 3 && dniValido(form.paciente_dni)
-    && form.nombre_receptor.trim().length >= 2 && form.apellido_receptor.trim().length >= 2
-    && dniValido(form.dni_receptor) && celularValido(form.celular_receptor);
-  const cobroValido = importeValido(form.importe) && mediosEntrega.some(m => String(m.id_medio_pago) === String(form.id_medio_pago));
+  // La validación de ambas pestañas se ejecuta únicamente al confirmar.
+  const validarEntrega = () => {
+    if (form.paciente_nombre.trim().length < 3) return 'Ingresá el nombre y apellido del paciente (mínimo 3 caracteres).';
+    if (!dniValido(form.paciente_dni)) return 'Ingresá un DNI del paciente válido (5 a 20 caracteres).';
+    if (form.nombre_receptor.trim().length < 2) return 'Ingresá el nombre de quien retira.';
+    if (form.apellido_receptor.trim().length < 2) return 'Ingresá el apellido de quien retira.';
+    if (!dniValido(form.dni_receptor)) return 'Ingresá un DNI de quien retira válido (5 a 20 caracteres).';
+    if (!celularValido(form.celular_receptor)) return 'Ingresá un celular válido (6 a 20 números).';
+    if (!importeValido(form.importe)) return 'Ingresá un importe mayor que cero, con hasta dos decimales.';
+    if (!mediosEntrega.length) return 'No hay medios de pago habilitados. Revisá Configuración.';
+    if (!mediosEntrega.some(m => String(m.id_medio_pago) === String(form.id_medio_pago))) return 'Seleccioná un medio de pago válido.';
+    if (!disponibles.length) return 'No hay tratamientos activos con stock y vencimiento vigente.';
+    if (!form.items.length || form.items.some(item => !item.id_medicamento)) return 'Seleccioná todos los tratamientos de la entrega.';
+    if (!sinDuplicados) return 'No repitas el mismo tratamiento en la entrega.';
+    if (excedidos.length) return 'La cantidad supera el stock disponible.';
+    if (!filasValidas) return 'Ingresá una cantidad entera mayor a cero para cada tratamiento disponible.';
+    return null;
+  };
 
   const registrar = async event => {
     event.preventDefault();
-    if (guardando.current || !personasValidas || !cobroValido || !filasValidas || !sinDuplicados) return;
+    if (guardando.current || cargando) return;
+    const mensaje = validarEntrega();
+    if (mensaje) { notificar('warning', mensaje); return; }
     guardando.current = true; setSaving(true);
     try {
       // Una sola solicitud y una sola transacción para todos los tratamientos.
@@ -122,41 +175,46 @@ export default function EntregasDolor() {
         items: form.items.map(item => ({ id_medicamento: Number(item.id_medicamento), cantidad: Number(item.cantidad) })),
       });
       ++solicitud.current; setModal(false);
-      setFeedback({ type: 'success', message: 'Entrega registrada: cobro contabilizado y stock actualizado.' });
+      notificar('success', 'Entrega registrada: cobro contabilizado y stock actualizado.');
       await cargar({ silencioso: true });
     } catch (e) {
-      setFeedback({ type: 'error', message: e.message || 'No se pudo registrar la entrega.' });
+      notificar('error', e.message || 'No se pudo registrar la entrega.');
     } finally { guardando.current = false; setSaving(false); }
   };
 
   return <>
-    <ModulePage title="Tratamiento del dolor · Entregas"
-      description="Entregas cobradas, registradas directamente contra el stock de Tratamiento del dolor. No son préstamos."
+    <ModulePage className="med-entregas-page" title="Tratamiento del dolor · Entregas"
+      description="Registro de entregas cobradas y descuento de stock."
       filters={[{ type: 'search', label: 'Búsqueda', value: query, onChange: setQuery, placeholder: ' ' }]}
       primaryActionLabel="Registrar entrega" onPrimaryAction={abrir} canCreate={write}>
       {error ? <p className="med-inline-danger" role="alert">{error}</p> : null}
       <GlobalDivTable ariaLabel="Entregas de Tratamiento del dolor" className="med-table"
         gridClassName="med-grid--entregas" loading={loading} empty={!loading && !error && !registros.length}
-        skeletonActionColumn={false} columns={['Fecha', 'Tratamientos', 'Persona que retira', 'Cobro', 'Observaciones']}>
+        skeletonActionColumn={false} columns={[{ label: 'Fecha', align: 'center' }, 'Tratamientos', 'Persona que retira', { label: 'Cobro', align: 'right' }, 'Observaciones']}>
         {registros.map(entrega => <div role="row" key={`${entrega.tipo_registro}-${entrega.id_registro}`}
           className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--entregas">
-          <div role="cell" className="mov-gridCell">{fecha(entrega.fecha_movimiento)}</div>
+          <div role="cell" className="mov-gridCell is-center">{fecha(entrega.fecha_movimiento)}</div>
           <div role="cell" className="mov-gridCell entity-main-cell med-entrega-items">
             {(entrega.items || []).map((item, i) => <span key={item.id_movimiento || i}>
               <strong>{item.nombre_comercial}</strong>
-              <span className="med-cell-secondary"> · {item.presentacion} · {item.cantidad} {unidadStockPlural(item.unidad_stock, item.cantidad)}</span>
+              <span className="med-cell-secondary">{[String(item.presentacion ?? '').trim(), `${item.cantidad} ${unidadStockPlural(item.unidad_stock, item.cantidad)}`].filter(Boolean).join(' · ')}</span>
             </span>)}
           </div>
           <div role="cell" className="mov-gridCell med-entrega-persona">
             <span>{entrega.receptor || 'No informado (histórico)'}</span>
             {entrega.paciente_nombre ? <span className="med-cell-secondary">Paciente: {entrega.paciente_nombre}</span> : null}
           </div>
-          <div role="cell" className="mov-gridCell">
+          <div role="cell" className="mov-gridCell med-entrega-cobro is-right">
             {entrega.tipo_registro === 'COBRADA'
-              ? <><strong>{dinero(entrega.importe)}</strong><span className="med-cell-secondary"> · {entrega.medio_pago || '—'}</span></>
+              ? <><strong>{dinero(entrega.importe)}</strong><span className="med-cell-secondary"> {entrega.medio_pago || '—'}</span></>
               : <span className="med-cell-secondary">Sin cargo (histórico)</span>}
           </div>
-          <div role="cell" className="mov-gridCell">{entrega.detalle || '—'}</div>
+          <div role="cell" className="mov-gridCell">
+            <ObservacionEntrega detalle={entrega.detalle} onVer={(texto, boton) => {
+              botonObservacion.current = boton;
+              setObservacion(texto);
+            }} />
+          </div>
         </div>)}
       </GlobalDivTable>
       {!loading && !error && !registros.length ? <p className="med-empty">Todavía no hay entregas registradas para este sector.</p> : null}
@@ -168,7 +226,7 @@ export default function EntregasDolor() {
         'Los datos del paciente y de quien retira se cargan a mano: no necesitan ser socios.',
       ]}>Registrar entrega · Tratamiento del dolor</MedModalInfo>} submitLabel="Confirmar entrega"
       modalClassName="med-modal med-loan-create-modal" saving={saving} loading={cargando} closeOnBackdrop={false}
-      submitDisabled={cargando || !personasValidas || !cobroValido || !filasValidas || !sinDuplicados}
+      noValidate submitDisabled={cargando}
       onSubmit={registrar} onClose={cerrar}>
       <MedicamentosTabs disabled={saving} tabs={[{ label: 'Personas y pago', icon: faUser }, { label: 'Tratamientos', icon: faPills }]}>
         <div className="med-loan-create__content">
@@ -211,9 +269,6 @@ export default function EntregasDolor() {
                   options={[op('', 'Seleccionar medio'), ...mediosEntrega.map(m => op(m.id_medio_pago, m.nombre))]}
                   onChange={v => cambiar('id_medio_pago', v)} />
               </Campos></div>
-              {!cargando && mediosEntrega.length < MEDIOS_ENTREGA.length ? <p className="med-inline-danger" role="alert">
-                Falta el medio {MEDIOS_ENTREGA.filter(n => !mediosEntrega.some(m => normalizarMedio(m.nombre) === n)).join(' y ')} activo. Revisá Configuración o ejecutá el SQL incluido en el ZIP.</p> : null}
-              {erroresPersona.map(mensaje => <p className="med-inline-danger med-loan-field-error" role="alert" key={mensaje}>{mensaje}</p>)}
             </div>
           </section>
         </div>
@@ -225,7 +280,6 @@ export default function EntregasDolor() {
               <span className="med-loan-create__count">{form.items.length} {form.items.length === 1 ? 'tratamiento' : 'tratamientos'}</span>
             </div>
             <div className="med-loan-create__card-body med-loan-create__card-body--medicines">
-              {!cargando && !disponibles.length ? <p className="med-inline-danger" role="alert">No hay tratamientos activos con stock y vencimiento vigente. Revisá Tratamiento del dolor → Stock.</p> : null}
               <div className="med-loan-create__items">
                 {form.items.map((item, i) => <div className={`med-loan-create__medicine-row${form.items.length > 1 ? ' has-remove' : ''}`} key={i}>
                   <span className="med-loan-create__medicine-number" aria-hidden="true">{i + 1}</span>
@@ -237,8 +291,6 @@ export default function EntregasDolor() {
                     onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}><FontAwesomeIcon icon={faXmark} aria-hidden="true" /></button> : null}
                 </div>)}
               </div>
-              {!sinDuplicados && form.items.every(item => item.id_medicamento) ? <p className="med-inline-danger" role="status">No repitas el mismo tratamiento en la entrega.</p> : null}
-              {excedidos.length ? <p className="med-inline-danger" role="status">La cantidad supera el stock disponible.</p> : null}
               <button type="button" className="med-loan-create__add" disabled={form.items.length >= 30 || form.items.length >= disponibles.length}
                 onClick={() => setForm(f => ({ ...f, items: [...f.items, nuevaFila()] }))}>
                 <FontAwesomeIcon icon={faPlus} aria-hidden="true" /> Agregar otro tratamiento
@@ -255,6 +307,12 @@ export default function EntregasDolor() {
         </div>
       </MedicamentosTabs>
     </CrudModal>
-    {feedback ? <ModuleFeedback {...feedback} onClose={() => setFeedback(null)} /> : null}
+    <CrudModal open={observacion !== null} title="Observación de la entrega"
+      modalClassName="med-modal med-entrega-observacion-modal" hideSubmit cancelLabel="Cerrar"
+      closeOnBackdrop={false} onClose={cerrarObservacion}>
+      <p className="med-entrega-observacion__completa">{observacion}</p>
+    </CrudModal>
+    {feedback ? <Toast key={feedback.id} tipo={feedback.type} mensaje={feedback.message}
+      duracion={2800} cerrarConInteraccion={false} onClose={() => setFeedback(actual => actual?.id === feedback.id ? null : actual)} /> : null}
   </>;
 }

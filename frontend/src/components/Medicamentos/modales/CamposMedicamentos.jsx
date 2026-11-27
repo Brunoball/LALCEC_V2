@@ -19,10 +19,10 @@ export function Campo({ label, value, onChange, options, textarea, blurOnEnter=f
 }
 /** Número y unidad de dosis en una única caja; la abreviatura es editable. */
 export function CampoDosis({ label, value, unidad, onChange, onUnidadChange, disabled = false, required = false }) {
-  return <div className="entity-field med-dosis-field">
-    <label className="med-dosis-label" htmlFor="med-dosis-cantidad">{label}{required ? ' *' : ''}</label>
+  return <div className={`entity-field entity-floating-field med-dosis-field ${String(value ?? '').length > 0 ? 'is-active' : ''}`}>
+    <span className="med-dosis-label" id="med-dosis-label">{label}{required ? ' *' : ''}</span>
     <div className="med-dosis-control">
-      <input id="med-dosis-cantidad" type="text" autoComplete="off" aria-label={label} required={required}
+      <input id="med-dosis-cantidad" type="text" autoComplete="off" aria-labelledby="med-dosis-label" required={required}
         maxLength={100} value={value ?? ''} disabled={disabled} placeholder="Ej.: 500"
         onChange={e => onChange(e.target.value)} />
       <input type="text" className="med-dosis-unidad" aria-label="Unidad de dosis" title="Unidad de dosis (editable)"

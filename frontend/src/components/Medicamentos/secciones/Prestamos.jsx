@@ -605,9 +605,17 @@ export default function Prestamos() {
       submitDisabled={!finalizacionValida}
       onSubmit={e => run(e, finalizacion.metodo, finalizacion.payload)}>
       <MedSection icon={faFlagCheckered}>Resumen</MedSection>
-      <div className="med-loan-finalizar">
-        <p className="med-loan-muted">Unidades sin devolver: <strong>{remaining}</strong>{remaining > 0 ? ' · quedan registradas como no devueltas' : ''}</p>
-        <p className="med-loan-muted">Seña pendiente: <strong>{balance >= 0.01 ? dinero(balance) : 'Sin seña pendiente'}</strong></p>
+      <div className="med-loan-finalizar med-finalizar-card">
+        <div className="med-finalizar-item">
+          <span className="med-finalizar-label">Unidades sin devolver</span>
+          <strong>{remaining}</strong>
+          {remaining > 0 ? <small>Quedan registradas como no devueltas</small> : null}
+        </div>
+        <div className="med-finalizar-item">
+          <span className="med-finalizar-label">Seña pendiente</span>
+          <strong>{balance >= 0.01 ? dinero(balance) : 'Sin seña pendiente'}</strong>
+          {balance >= 0.01 && moneyForm.destino === 'EFECTIVO' ? <p className="med-loan-cash-note" role="note"><FontAwesomeIcon icon={faMoneyBill} aria-hidden="true" /> Reintegro: únicamente en efectivo</p> : null}
+        </div>
       </div>
       {balance >= 0.01 ? <Campos>
         <Campo label="Destino de la seña" required value={moneyForm.destino}
@@ -616,7 +624,6 @@ export default function Prestamos() {
         {moneyForm.destino === 'EFECTIVO' ? <>
           <Campo label="Monto a reintegrar ($)" type="number" money min="0.01" step="0.01" max={balance.toFixed(2)} required value={moneyForm.monto}
             onChange={v => setMoneyForm(f => ({ ...f, monto: v }))} />
-          <p className="med-loan-cash-note" role="note"><FontAwesomeIcon icon={faMoneyBill} aria-hidden="true" /> Reintegro: únicamente en efectivo</p>
           {!efectivoId ? <p className="med-inline-danger" role="alert">Falta el medio EFECTIVO. Ejecutá el SQL incluido en el ZIP.</p> : null}
           {reintegroParcial ? <p className="med-loan-muted" role="status">Reintegro parcial: el préstamo sigue abierto con {dinero(balance - num(moneyForm.monto))} de seña pendiente.</p> : null}
           {num(moneyForm.monto) > balance ? <p className="med-inline-danger" role="alert">El monto supera la seña pendiente.</p> : null}

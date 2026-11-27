@@ -1592,21 +1592,15 @@ body.pp-lockScroll{ overflow:hidden !important; }
   }
 }
 
-/* Banco de Drogas: un submenú por sector; las presentaciones están en el filtro del Stock. */
-.pp-navGroup--banco { --sub-open-h: 470px; }
-.pp-navGroup--banco .pp-navSub { gap: 5px; }
-.pp-navBranch { min-width: 0; }
-.pp-navBranch__button, .pp-navBranch__link {
-  display:flex; align-items:center; justify-content:space-between;
-  width:100%; min-width:0; border:0; border-radius:9px;
-  padding:8px 9px; background:transparent; color:var(--text-primary,#0f172a);
-  font:inherit; font-size:13px; text-align:left; text-decoration:none;
-}
-.pp-navBranch__button { cursor:pointer; font-weight:750; background:color-mix(in srgb,var(--primary-color) 9%,white); }
-.pp-navBranch__button span { min-width:0; white-space:normal; }
-.pp-navBranch__button svg { flex:0 0 auto; margin-left:6px; font-size:11px; }
-.pp-navBranch__chevron--open { transform:rotate(180deg); }
-.pp-navBranch__children { padding:4px 0 4px 10px; border-left:2px solid color-mix(in srgb,var(--primary-color) 25%,transparent); margin-left:8px; }
-.pp-navBranch__link { display:block; padding:7px 10px; min-height:33px; cursor:pointer; }
-.pp-navBranch__link:hover,.pp-navBranch__button:hover { background:var(--balto-hover); }
-.pp-navBranch__link.is-active { background:color-mix(in srgb,var(--primary-color) 16%,white); color:var(--balto-action); font-weight:700; }
+/* Sectores de medicamentos: plegado independiente, sin cambiar la estética global. */
+.pp-navGroup--medicamentos { --sub-open-h: 420px; }
+.pp-navSection { min-width: 0; }
+.pp-navSection__toggle { width: 100%; justify-content: space-between; gap: 6px; font: inherit; }
+.pp-navSection__toggle .pp-navSub__label { font-size: 12px; white-space: normal; overflow-wrap: normal; text-align: left; }
+.pp-navSection__chevron { flex: 0 0 auto; font-size: 10px; color: var(--balto-muted); transition: transform 200ms ease; }
+.pp-navSection.is-open .pp-navSection__chevron { transform: rotate(180deg); }
+.pp-navSection__body { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 240ms ease, opacity 180ms ease, visibility 0s linear 240ms; }
+.pp-navSection.is-open .pp-navSection__body { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition-delay: 0s; }
+.pp-navSection__clip { min-height: 0; overflow: hidden; }
+.pp-navSection__links { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px 10px; }
+@media (prefers-reduced-motion: reduce) { .pp-navSection__body, .pp-navSection__chevron { transition: none; } }

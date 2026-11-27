@@ -1342,5 +1342,177 @@ html[data-theme="oscuro"] .med-loan-person-block > strong { color: var(--text-pr
 }
 
 /* ===== Préstamos: flujo único para finalizar ===== */
-.med-loan-finalizar { display: grid; gap: 4px; margin: 4px 0 14px; }
+.med-loan-finalizar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 14px; }
+.med-finalizar-card {
+  --med-finalizar-accent: var(--balto-action, #e87912);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  min-width: 0; padding: 12px 14px; border-radius: 11px;
+  border: 1px solid var(--entity-modal-border, #e2e8f0);
+  border-left: 3px solid var(--med-finalizar-accent);
+  background: color-mix(in srgb, var(--med-finalizar-accent) 5%, var(--surface-color, #fff));
+  color: var(--text-primary, #14233a);
+}
+.med-finalizar-card--balance { --med-finalizar-accent: var(--success-600, #15803d); }
+.med-finalizar-card > strong { font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.med-finalizar-card > small, .med-finalizar-label { color: var(--mov-muted, #64748b); font-size: 12px; line-height: 1.4; }
+.med-finalizar-card .med-loan-cash-note { margin: 2px 0 0; padding: 5px 8px; font-size: 11px; font-weight: 500; max-width: 100%; box-sizing: border-box; }
+.med-finalizar-card .med-loan-cash-note svg { flex-shrink: 0; }
+html[data-theme="oscuro"] .med-finalizar-card { background: color-mix(in srgb, var(--med-finalizar-accent) 9%, var(--surface-color, #202b3c)); border-top-color: var(--entity-modal-border, #455369); border-right-color: var(--entity-modal-border, #455369); border-bottom-color: var(--entity-modal-border, #455369); color: var(--text-primary, #f1f5f9); }
+html[data-theme="oscuro"] .med-finalizar-card > small, html[data-theme="oscuro"] .med-finalizar-label { color: var(--text-secondary, #b5c2d4); }
+@media (max-width: 520px) { .med-loan-finalizar { grid-template-columns: minmax(0, 1fr); } }
 .med-loan-finalizar .med-loan-muted { margin: 0; }
+
+/* Stock: ancho natural del filtro (incluida la opción vacía), grupo a la derecha. */
+.module-headFilters.med-stock-filters {
+  display:flex; justify-content:flex-end; align-items:flex-end;
+  margin-left:auto; min-width:0; flex-wrap:wrap;
+}
+.med-stock-filters .med-filter--presentacion {
+  flex:0 1 auto; width:max-content; max-width:100%; min-width:0;
+}
+.med-stock-filters .med-filter--presentacion > select {
+  width:auto; max-width:100%; min-width:0; box-sizing:border-box;
+  padding-right:30px;
+}
+.med-stock-filters .module-filter--search {
+  flex:0 1 250px; min-width:0; margin-left:0;
+}
+/* Grilla estable: todos los controles de alta y edición comparten ancho y altura. */
+.med-stock-create-modal .med-fields > .med-fields__row,
+.med-stock-edit-modal .med-fields > .med-fields__row {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start;
+}
+.med-stock-create-modal .med-field > select,
+.med-stock-edit-modal .med-field > select { width:100%; min-width:0; height:47px; }
+.med-dosis-field { gap:0; }
+.med-dosis-field > .med-dosis-label { margin:0; max-width:calc(100% - 90px); }
+.med-dosis-control {
+  box-sizing:border-box; height:47px; min-height:47px;
+  border-color:color-mix(in srgb,var(--text-primary) 13%,transparent);
+  border-radius:var(--entity-modal-field-radius,9px);
+}
+.med-dosis-control > input { min-height:0; box-sizing:border-box; }
+.med-dosis-control > input:first-child::placeholder { color:transparent; }
+.med-dosis-field:focus-within .med-dosis-control > input:first-child::placeholder { color:var(--text-secondary,#64748b); }
+.med-dosis-control:focus-within {
+  outline:none; border-color:color-mix(in srgb,var(--primary-color) 40%,transparent);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--primary-color) 10%,transparent);
+}
+.med-cadena-frio-field {
+  box-sizing:border-box; min-height:47px; width:100%; padding:8px 12px;
+  flex-direction:row; justify-content:flex-start; font-weight:500;
+}
+.med-cadena-frio-field > input { accent-color:var(--entity-modal-action,var(--primary-color)); }
+.med-cadena-frio-field:focus-within { outline:2px solid var(--entity-modal-action,var(--primary-color)); outline-offset:2px; }
+html[data-theme="oscuro"] .med-dosis-control,
+html[data-theme="oscuro"] .med-cadena-frio-field { background:#232e3d; border-color:#485568; color:#e2e8f0; }
+html[data-theme="oscuro"] .med-dosis-field.is-active > .med-dosis-label,
+html[data-theme="oscuro"] .med-dosis-field:focus-within > .med-dosis-label { background:#17202e; color:#f3be7b; }
+html[data-theme="oscuro"] .med-dosis-field:not(.is-active):not(:focus-within) > .med-dosis-label { color:#cbd5e1; }
+html[data-theme="oscuro"] .med-dosis-control > input { color:#e2e8f0; }
+html[data-theme="oscuro"] .med-dosis-control > .med-dosis-unidad { background:#303e4e; border-left-color:#485568!important; }
+html[data-theme="oscuro"] .med-cadena-frio-field.is-selected { background:color-mix(in srgb,var(--primary-color) 16%,#232e3d); border-color:var(--primary-color); }
+@media (max-width:600px) {
+  .med-stock-create-modal .med-fields > .med-fields__row,
+  .med-stock-edit-modal .med-fields > .med-fields__row { grid-template-columns:minmax(0,1fr); }
+  .med-stock-filters .med-filter--presentacion { max-width:100%; }
+}
+
+/* Checklist de cadena de frío: control explícito, compartido por alta y edición. */
+.med-modal .med-fields .med-cadena-frio-field {
+  --med-check-accent: var(--entity-modal-action, var(--primary-color, #f97316));
+  --med-check-border: var(--entity-modal-border, #cbd5e1);
+  --med-check-bg: var(--surface-color, #fff);
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: 10px; width: 100%; min-width: 0; min-height: 47px;
+  padding: 10px 12px; margin: 0; box-sizing: border-box;
+  border: 1px solid var(--med-check-border); border-radius: 10px;
+  background: var(--med-check-bg); color: var(--text-primary, #334155);
+  font-size: 13px; font-weight: 500; line-height: 1.4; cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.med-modal .med-fields .med-cadena-frio-field:hover,
+.med-modal .med-fields .med-cadena-frio-field.is-selected {
+  border-color: var(--med-check-accent);
+  background: color-mix(in srgb, var(--med-check-accent) 8%, var(--med-check-bg));
+}
+.med-modal .med-fields .med-cadena-frio-field > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  display: grid; place-items: center; position: static;
+  flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px;
+  margin: 0; padding: 0; box-sizing: border-box;
+  border: 1.5px solid #94a3b8; border-radius: 5px;
+  background: var(--med-check-bg); box-shadow: none; cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.med-modal .med-fields .med-cadena-frio-field > input[type="checkbox"]:checked {
+  background: var(--med-check-accent); border-color: var(--med-check-accent);
+}
+.med-modal .med-fields .med-cadena-frio-field > input[type="checkbox"]:checked::after {
+  content: ""; display: block; width: 5px; height: 10px;
+  border: solid #fff; border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+.med-modal .med-fields .med-cadena-frio-field > span { position: static; flex: 1; min-width: 0; color: inherit; transform: none; cursor: pointer; }
+.med-modal .med-fields .med-cadena-frio-field:focus-within { outline: none; }
+.med-modal .med-fields .med-cadena-frio-field:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--med-check-accent) 22%, transparent);
+}
+html[data-theme="oscuro"] .med-modal .med-fields .med-cadena-frio-field {
+  --med-check-bg: #232e3d; --med-check-border: #485568; color: #e2e8f0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .med-modal .med-fields .med-cadena-frio-field,
+  .med-modal .med-fields .med-cadena-frio-field > input[type="checkbox"] { transition: none; }
+}
+
+/* Stock inicial: campos visibles aun cuando no corresponde completarlos. */
+.med-stock-create-modal .med-field:has(> :disabled) { opacity: .58; cursor: not-allowed; }
+.med-stock-create-modal .med-field > :disabled { cursor: not-allowed; }
+
+/* Entregas: aprovechar el espacio del encabezado y separar importe/medio. */
+.med-entregas-page .module-description { max-width: none; }
+@media (min-width: 1021px) {
+  .med-entregas-page .module-card__headLeft { grid-template-columns: max-content minmax(0, 1fr); }
+  .med-entregas-page .module-description { white-space: nowrap; }
+}
+.med-table .med-grid--entregas .med-entrega-cobro {
+  display: flex; flex-direction: column; align-items: flex-end; text-align: right; justify-content: center; gap: 3px;
+}
+
+/* Resumen de finalización: una sola tarjeta, dos bloques internos sin bordes. */
+.med-loan-finalizar.med-finalizar-card { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.med-finalizar-item { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; }
+.med-finalizar-item > strong { font-size:18px; font-weight:600; line-height:1.25; overflow-wrap:anywhere; max-width:100%; font-variant-numeric:tabular-nums; }
+.med-finalizar-item > small { color:var(--mov-muted,#64748b); font-size:12px; line-height:1.4; }
+html[data-theme="oscuro"] .med-finalizar-item > small { color:var(--text-secondary,#b5c2d4); }
+@media(max-width:520px) { .med-loan-finalizar.med-finalizar-card { grid-template-columns:minmax(0,1fr); } }
+
+/* Entregas: vista previa en una línea y acción solamente cuando hay recorte. */
+.med-entrega-observacion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.med-entrega-observacion__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.med-entrega-observacion__ver { flex: 0 0 26px; }
+.med-entrega-observacion__ver:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+.med-entrega-observacion__completa {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  max-height: 50vh;
+  overflow-y: auto;
+}
