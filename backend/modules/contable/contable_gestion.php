@@ -18,11 +18,7 @@ trait ContableGestion
     protected static function protegerMovimientoMedicamentos(PDO $db, string $tipo, int $id): void
     {
         $columna = $tipo === 'ingreso' ? 'id_ingreso_contable' : 'id_egreso_contable';
-        foreach (['medicamentos_movimientos', 'medicamentos_prestamos_senas_movimientos'] as $tabla) {
-            // Permite mantener Contabilidad en una instalación aún sin el módulo.
-            $st = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
-            $st->execute([$tabla]);
-            if (!(int)$st->fetchColumn()) continue;
+        foreach (self::tablasVinculoMedicamentos($db, $columna) as $tabla) {
             $st = $db->prepare("SELECT 1 FROM {$tabla} WHERE {$columna} = ? LIMIT 1");
             $st->execute([$id]);
             if ($st->fetchColumn()) {
@@ -211,11 +207,8 @@ trait ContableGestion
             default => [],
         };
         if ($targets === []) return;
-        foreach (['medicamentos_movimientos', 'medicamentos_prestamos_senas_movimientos'] as $related) {
-            $hasTable = $db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
-            $hasTable->execute([$related]);
-            if (!(int)$hasTable->fetchColumn()) continue;
-            foreach ($targets as [$table, $pk, $fk, $field]) {
+        foreach ($targets as [$table, $pk, $fk, $field]) {
+            foreach (self::tablasVinculoMedicamentos($db, $fk) as $related) {
                 $q = $db->prepare("SELECT 1 FROM {$table} c WHERE c.{$field}=? AND EXISTS
                     (SELECT 1 FROM {$related} m WHERE m.{$fk}=c.{$pk}) LIMIT 1");
                 $q->execute([$name]);

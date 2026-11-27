@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faIdCard, faMoneyBill, faPills, faPlus, faXmark, faCommentDots, faHandHoldingMedical, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faIdCard, faPenToSquare, faPills, faPlus, faXmark, faCommentDots, faHandHoldingMedical, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import GlobalDivTable from '../../Global/GlobalDivTable';
 import GlobalPagination from '../../Global/GlobalPagination';
@@ -13,16 +13,14 @@ import { Campos, Campo, op } from '../modales/CamposMedicamentos';
 import MedicamentosTabs from '../modales/MedicamentosTabs';
 import MedModalInfo from '../modales/MedModalInfo';
 import { fecha, dinero, num, vigenteParaEntrega, unidadStockPlural } from '../utils/medicamentosUtils';
-import { PRESENTACIONES_SECTOR, normalizarMedio } from '../utils/medicamentosSelectores';
+import { PRESENTACIONES_SECTOR } from '../utils/medicamentosSelectores';
 import '../Medicamentos.css';
 
-// Trello: "Entrega: igual que préstamos, pero sí se cobra; medio de pago transferencia o efectivo".
-const MEDIOS_ENTREGA = ['EFECTIVO', 'TRANSFERENCIA'];
 const nuevaFila = () => ({ id_medicamento: '', cantidad: '' });
 const nuevo = () => ({
   paciente_nombre: '', paciente_dni: '',
   nombre_receptor: '', apellido_receptor: '', dni_receptor: '', celular_receptor: '',
-  importe: '', id_medio_pago: '', observaciones: '', items: [nuevaFila()],
+  observaciones: '', motivo_correccion: '', stock_confirmado: false, items: [nuevaFila()],
 });
 // Mismas reglas de texto que Préstamos y que el backend.
 const normalizarDni = v => String(v || '').replace(/[\s.]+/g, '').toUpperCase();
@@ -32,7 +30,6 @@ const celularValido = v => {
   const digitos = t.replace(/\D/g, '').length;
   return t.length <= 30 && /^\+?[0-9()\s-]+$/.test(t) && digitos >= 6 && digitos <= 20;
 };
-const importeValido = v => /^\d{1,10}(?:\.\d{1,2})?$/.test(String(v ?? '').trim()) && num(v) > 0;
 
 // Mide el espacio real de la columna, incluso al cambiar el ancho del menú lateral.
 function ObservacionEntrega({ detalle, onVer }) {
@@ -69,7 +66,7 @@ function ObservacionEntrega({ detalle, onVer }) {
   </div>;
 }
 
-/** Entregas definitivas y cobradas de Tratamiento del dolor: no crean préstamos ni señas. */
+/** Entregas gratuitas de Tratamiento del dolor: no crean préstamos ni señas. */
 export default function EntregasDolor() {
   const [query, setQuery] = useState('');
   const [queryAplicada, setQueryAplicada] = useState('');
@@ -88,7 +85,7 @@ export default function EntregasDolor() {
     botonObservacion.current?.focus();
   };
   const [medicamentos, setMedicamentos] = useState([]);
-  const [medios, setMedios] = useState([]);
+  const [editando, setEditando] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [form, setForm] = useState(nuevo);
   const [saving, setSaving] = useState(false);
@@ -99,24 +96,27 @@ export default function EntregasDolor() {
   const guardando = useRef(false);
   const write = canWrite();
 
-  // Mismo catálogo que Tratamiento del dolor → Stock: activos, con stock y vencimiento vigente.
-  const disponibles = medicamentos.filter(m => Number(m.activo) === 1 && Number(m.stock_actual) > 0 &&
-    vigenteParaEntrega(m.fecha_vencimiento) && PRESENTACIONES_SECTOR.DOLOR.includes(m.presentacion));
-  const mediosEntrega = medios.filter(m => MEDIOS_ENTREGA.includes(normalizarMedio(m.nombre)));
+  // En edición se conserva la cantidad original incluso si el stock libre es cero.
+  const previos = new Map((editando?.items || []).map(i => [String(i.id_medicamento), Number(i.cantidad)]));
+  const elegible = m => Number(m.activo) === 1 && vigenteParaEntrega(m.fecha_vencimiento) && PRESENTACIONES_SECTOR.DOLOR.includes(m.presentacion);
+  const disponibles = medicamentos.filter(m => previos.has(String(m.id_medicamento)) || (elegible(m) && Number(m.stock_actual) > 0));
+  const maximo = m => (previos.get(String(m.id_medicamento)) || 0) + (elegible(m) ? num(m.stock_actual) : 0);
+  const reduceStock = [...previos].some(([id, cantidad]) => cantidad > (Number(form.items.find(i => String(i.id_medicamento) === id)?.cantidad) || 0));
   const cambiar = (campo, valor) => setForm(actual => ({ ...actual, [campo]: valor }));
-  const cambiarFila = (i, cambios) => setForm(f => ({ ...f, items: f.items.map((r, k) => k === i ? { ...r, ...cambios } : r) }));
+  const cambiarFila = (i, cambios) => setForm(f => ({ ...f, stock_confirmado: false, items: f.items.map((r, k) => k === i ? { ...r, ...cambios } : r) }));
 
-  const abrir = async () => {
+  const abrir = async (entrega = null) => {
     const token = ++solicitud.current;
-    setFeedback(null); setForm(nuevo()); setMedicamentos([]); setMedios([]); setCargando(true); setModal(true);
+    setFeedback(null); setEditando(entrega); setForm(entrega ? {
+      ...nuevo(), paciente_nombre: entrega.paciente_nombre || '', paciente_dni: entrega.paciente_dni || '',
+      nombre_receptor: entrega.nombre_receptor || '', apellido_receptor: entrega.apellido_receptor || '',
+      dni_receptor: entrega.dni_receptor || '', celular_receptor: entrega.celular_receptor || '', observaciones: entrega.detalle || '',
+      items: entrega.items.map(i => ({ id_medicamento: String(i.id_medicamento), cantidad: String(i.cantidad) })),
+    } : nuevo()); setMedicamentos([]); setCargando(true); setModal(true);
     try {
-      const [datos, mediosPago] = await Promise.all([api.catalogo(), api.medios()]);
+      const datos = await api.catalogo();
       if (token !== solicitud.current) return;
       setMedicamentos(datos.registros || []);
-      const lista = mediosPago.registros || [];
-      setMedios(lista);
-      const efectivo = lista.find(m => normalizarMedio(m.nombre) === 'EFECTIVO');
-      if (efectivo) setForm(f => (f.id_medio_pago ? f : { ...f, id_medio_pago: String(efectivo.id_medio_pago) }));
     } catch (e) {
       if (token === solicitud.current) notificar('error', e.message || 'No se pudo consultar el stock.');
     } finally { if (token === solicitud.current) setCargando(false); }
@@ -128,16 +128,16 @@ export default function EntregasDolor() {
   };
 
   const opciones = [op('', 'Seleccionar tratamiento'), ...disponibles.map(m => op(m.id_medicamento,
-    `${m.nombre_comercial} · ${m.presentacion} · ${m.stock_actual} ${unidadStockPlural(m.unidad_stock, m.stock_actual)} disponibles`))];
+    `${m.nombre_comercial} · ${m.presentacion} · ${maximo(m)} ${unidadStockPlural(m.unidad_stock, maximo(m))} ${editando ? 'máximo para corregir' : 'disponibles'}`))];
   const filasValidas = form.items.every(item => {
     const seleccionado = disponibles.find(m => String(m.id_medicamento) === String(item.id_medicamento));
     const cantidad = Number(item.cantidad);
-    return seleccionado && Number.isInteger(cantidad) && cantidad > 0 && cantidad <= num(seleccionado.stock_actual);
+    return seleccionado && Number.isInteger(cantidad) && cantidad > 0 && cantidad <= maximo(seleccionado);
   });
   const sinDuplicados = new Set(form.items.map(item => String(item.id_medicamento))).size === form.items.length;
   const excedidos = form.items.filter(item => {
     const seleccionado = disponibles.find(m => String(m.id_medicamento) === String(item.id_medicamento));
-    return seleccionado && Number(item.cantidad) > num(seleccionado.stock_actual);
+    return seleccionado && Number(item.cantidad) > maximo(seleccionado);
   });
   // La validación de ambas pestañas se ejecuta únicamente al confirmar.
   const validarEntrega = () => {
@@ -147,14 +147,13 @@ export default function EntregasDolor() {
     if (form.apellido_receptor.trim().length < 2) return 'Ingresá el apellido de quien retira.';
     if (!dniValido(form.dni_receptor)) return 'Ingresá un DNI de quien retira válido (5 a 20 caracteres).';
     if (!celularValido(form.celular_receptor)) return 'Ingresá un celular válido (6 a 20 números).';
-    if (!importeValido(form.importe)) return 'Ingresá un importe mayor que cero, con hasta dos decimales.';
-    if (!mediosEntrega.length) return 'No hay medios de pago habilitados. Revisá Configuración.';
-    if (!mediosEntrega.some(m => String(m.id_medio_pago) === String(form.id_medio_pago))) return 'Seleccioná un medio de pago válido.';
     if (!disponibles.length) return 'No hay tratamientos activos con stock y vencimiento vigente.';
     if (!form.items.length || form.items.some(item => !item.id_medicamento)) return 'Seleccioná todos los tratamientos de la entrega.';
     if (!sinDuplicados) return 'No repitas el mismo tratamiento en la entrega.';
     if (excedidos.length) return 'La cantidad supera el stock disponible.';
     if (!filasValidas) return 'Ingresá una cantidad entera mayor a cero para cada tratamiento disponible.';
+    if (editando && form.motivo_correccion.trim().length < 10) return 'Ingresá un motivo de corrección de al menos 10 caracteres.';
+    if (reduceStock && !form.stock_confirmado) return 'Confirmá que las unidades que se reincorporan nunca salieron del stock físico.';
     return null;
   };
 
@@ -170,12 +169,12 @@ export default function EntregasDolor() {
         paciente_nombre: form.paciente_nombre.trim(), paciente_dni: normalizarDni(form.paciente_dni),
         nombre_receptor: form.nombre_receptor.trim(), apellido_receptor: form.apellido_receptor.trim(),
         dni_receptor: normalizarDni(form.dni_receptor), celular_receptor: form.celular_receptor.trim(),
-        importe: String(form.importe).trim(), id_medio_pago: Number(form.id_medio_pago),
+        ...(editando ? { id_entrega: Number(editando.id_entrega), revision: Number(editando.revision), motivo_correccion: form.motivo_correccion.trim(), stock_confirmado: form.stock_confirmado } : {}),
         observaciones: form.observaciones.trim(),
         items: form.items.map(item => ({ id_medicamento: Number(item.id_medicamento), cantidad: Number(item.cantidad) })),
       });
       ++solicitud.current; setModal(false);
-      notificar('success', 'Entrega registrada: cobro contabilizado y stock actualizado.');
+      notificar('success', editando ? 'Entrega corregida y stock actualizado.' : 'Entrega sin cargo registrada y stock actualizado.');
       await cargar({ silencioso: true });
     } catch (e) {
       notificar('error', e.message || 'No se pudo registrar la entrega.');
@@ -184,13 +183,13 @@ export default function EntregasDolor() {
 
   return <>
     <ModulePage className="med-entregas-page" title="Tratamiento del dolor · Entregas"
-      description="Registro de entregas cobradas y descuento de stock."
+      description="Registro de entregas sin cargo y control de stock."
       filters={[{ type: 'search', label: 'Búsqueda', value: query, onChange: setQuery, placeholder: ' ' }]}
-      primaryActionLabel="Registrar entrega" onPrimaryAction={abrir} canCreate={write}>
+      primaryActionLabel="Registrar entrega" onPrimaryAction={() => abrir()} canCreate={write}>
       {error ? <p className="med-inline-danger" role="alert">{error}</p> : null}
       <GlobalDivTable ariaLabel="Entregas de Tratamiento del dolor" className="med-table"
         gridClassName="med-grid--entregas" loading={loading} empty={!loading && !error && !registros.length}
-        skeletonActionColumn={false} columns={[{ label: 'Fecha', align: 'center' }, 'Tratamientos', 'Persona que retira', { label: 'Cobro', align: 'right' }, 'Observaciones']}>
+        skeletonActionColumn={write} columns={[{ label: 'Fecha', align: 'center' }, 'Tratamientos', 'Persona que retira', 'Modalidad', 'Observaciones', { label: 'Acciones', align: 'center' }]}>
         {registros.map(entrega => <div role="row" key={`${entrega.tipo_registro}-${entrega.id_registro}`}
           className="mov-gridTable mov-gridTable--row global-divTable__row med-grid--entregas">
           <div role="cell" className="mov-gridCell is-center">{fecha(entrega.fecha_movimiento)}</div>
@@ -206,14 +205,17 @@ export default function EntregasDolor() {
           </div>
           <div role="cell" className="mov-gridCell med-entrega-cobro is-right">
             {entrega.tipo_registro === 'COBRADA'
-              ? <><strong>{dinero(entrega.importe)}</strong><span className="med-cell-secondary"> {entrega.medio_pago || '—'}</span></>
-              : <span className="med-cell-secondary">Sin cargo (histórico)</span>}
+              ? <><strong>Cobro histórico: {dinero(entrega.importe)}</strong><span className="med-cell-secondary"> {entrega.medio_pago || '—'}</span></>
+              : <span className="med-cell-secondary">{entrega.tipo_registro === 'GRATUITA' ? 'Sin cargo' : 'Sin cargo (histórico)'}</span>}
           </div>
           <div role="cell" className="mov-gridCell">
             <ObservacionEntrega detalle={entrega.detalle} onVer={(texto, boton) => {
               botonObservacion.current = boton;
               setObservacion(texto);
             }} />
+          </div>
+          <div role="cell" className="mov-gridCell is-center">
+            {write && entrega.tipo_registro === 'GRATUITA' && entrega.revision ? <button type="button" className="mov-iconBtn" title="Editar entrega" aria-label="Editar entrega" onClick={() => abrir(entrega)}><FontAwesomeIcon icon={faPenToSquare} aria-hidden="true" /></button> : <span className="med-cell-secondary">—</span>}
           </div>
         </div>)}
       </GlobalDivTable>
@@ -222,19 +224,19 @@ export default function EntregasDolor() {
     </ModulePage>
 
     <CrudModal open={modal} wide title={<MedModalInfo icon={faHandHoldingMedical} info={[
-        'La entrega descuenta los tratamientos del stock y registra un solo cobro por el importe total.',
+        'La entrega descuenta los tratamientos del stock sin registrar ningún movimiento de dinero.',
         'Los datos del paciente y de quien retira se cargan a mano: no necesitan ser socios.',
-      ]}>Registrar entrega · Tratamiento del dolor</MedModalInfo>} submitLabel="Confirmar entrega"
+      ]}>{editando ? 'Editar entrega · Tratamiento del dolor' : 'Registrar entrega · Tratamiento del dolor'}</MedModalInfo>} submitLabel={editando ? 'Guardar corrección' : 'Confirmar entrega'}
       modalClassName="med-modal med-loan-create-modal" saving={saving} loading={cargando} closeOnBackdrop={false}
       noValidate submitDisabled={cargando}
       onSubmit={registrar} onClose={cerrar}>
-      <MedicamentosTabs disabled={saving} tabs={[{ label: 'Personas y pago', icon: faUser }, { label: 'Tratamientos', icon: faPills }]}>
+      <MedicamentosTabs disabled={saving} tabs={[{ label: 'Personas', icon: faUser }, { label: 'Tratamientos', icon: faPills }]}>
         <div className="med-loan-create__content">
           <section className="med-loan-create__card" aria-label="Datos del paciente">
             <div className="med-loan-create__card-heading">
               <span className="med-loan-create__heading-icon"><FontAwesomeIcon icon={faUser} aria-hidden="true" /></span>
               <div className="med-loan-create__heading-text"><h3>Datos del paciente</h3><p>No necesita ser socio.</p></div>
-              <span className="med-loan-create__step">01 / 03</span>
+              <span className="med-loan-create__step">01 / 02</span>
             </div>
             <div className="med-loan-create__card-body"><div className="med-loan-form-grid"><Campos>
               <Campo label="Nombre y apellido del paciente" required maxLength={160} value={form.paciente_nombre} onChange={v => cambiar('paciente_nombre', v)} />
@@ -245,7 +247,7 @@ export default function EntregasDolor() {
             <div className="med-loan-create__card-heading">
               <span className="med-loan-create__heading-icon"><FontAwesomeIcon icon={faIdCard} aria-hidden="true" /></span>
               <div className="med-loan-create__heading-text"><h3>Persona que retira</h3><p>Puede ser distinta del paciente.</p></div>
-              <span className="med-loan-create__step">02 / 03</span>
+              <span className="med-loan-create__step">02 / 02</span>
             </div>
             <div className="med-loan-create__card-body">
               <div className="med-loan-form-grid"><Campos>
@@ -253,21 +255,6 @@ export default function EntregasDolor() {
                 <Campo label="Apellido de quien retira" required maxLength={160} value={form.apellido_receptor} onChange={v => cambiar('apellido_receptor', v)} />
                 <Campo label="DNI de quien retira" required maxLength={20} value={form.dni_receptor} onChange={v => cambiar('dni_receptor', v)} />
                 <Campo label="Celular de contacto" type="tel" required maxLength={30} value={form.celular_receptor} onChange={v => cambiar('celular_receptor', v)} />
-              </Campos></div>
-            </div>
-          </section>
-          <section className="med-loan-create__card" aria-label="Datos del cobro">
-            <div className="med-loan-create__card-heading">
-              <span className="med-loan-create__heading-icon"><FontAwesomeIcon icon={faMoneyBill} aria-hidden="true" /></span>
-              <div className="med-loan-create__heading-text"><h3>Cobro</h3><p>Importe total de la entrega, en efectivo o por transferencia.</p></div>
-              <span className="med-loan-create__step">03 / 03</span>
-            </div>
-            <div className="med-loan-create__card-body">
-              <div className="med-loan-form-grid"><Campos>
-                <Campo label="Importe total ($)" type="number" money required min="0.01" step="0.01" value={form.importe} onChange={v => cambiar('importe', v)} />
-                <Campo label="Medio de pago" required value={form.id_medio_pago}
-                  options={[op('', 'Seleccionar medio'), ...mediosEntrega.map(m => op(m.id_medio_pago, m.nombre))]}
-                  onChange={v => cambiar('id_medio_pago', v)} />
               </Campos></div>
             </div>
           </section>
@@ -288,7 +275,7 @@ export default function EntregasDolor() {
                   <Campo className="med-med-editor__quantity" label="Cantidad" quantity required type="number" min="1" step="1" value={item.cantidad}
                     onChange={v => cambiarFila(i, { cantidad: v })} />
                   {form.items.length > 1 ? <button className="med-med-editor__remove" type="button" title={`Quitar tratamiento ${i + 1}`} aria-label={`Quitar tratamiento ${i + 1}`}
-                    onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, k) => k !== i) }))}><FontAwesomeIcon icon={faXmark} aria-hidden="true" /></button> : null}
+                    onClick={() => setForm(f => ({ ...f, stock_confirmado: false, items: f.items.filter((_, k) => k !== i) }))}><FontAwesomeIcon icon={faXmark} aria-hidden="true" /></button> : null}
                 </div>)}
               </div>
               <button type="button" className="med-loan-create__add" disabled={form.items.length >= 30 || form.items.length >= disponibles.length}
@@ -303,6 +290,10 @@ export default function EntregasDolor() {
               <small>Opcional</small>
             </div>
             <Campo label="Observaciones" wide textarea maxLength={450} value={form.observaciones} onChange={v => cambiar('observaciones', v)} />
+            {editando && <>
+              <Campo label="Motivo de corrección" required wide textarea maxLength={300} value={form.motivo_correccion} onChange={v => cambiar('motivo_correccion', v)} />
+              {reduceStock && <label className="med-inline-note"><input type="checkbox" checked={form.stock_confirmado} onChange={e => cambiar('stock_confirmado', e.target.checked)} /> Confirmo que las unidades que se reincorporan nunca salieron del stock físico. No es una devolución de medicamentos usados.</label>}
+            </>}
           </section>
         </div>
       </MedicamentosTabs>

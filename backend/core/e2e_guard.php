@@ -448,8 +448,19 @@ function e2e_guard_mutation(string $action, ?array $auth = null): void
             return;
         }
         case 'medicamentos_entregar': {
-            // Entrega cobrada de Tratamiento del dolor: receptor marcado y TODOS los
+            // Entrega de Tratamiento del dolor: receptor marcado y TODOS los
             // tratamientos E2E. Uno solo de prueba nunca autoriza tocar stock real.
+            if(array_key_exists('id_entrega',$body)){
+                $id=e2e_positive_int($body['id_entrega']);
+                if($id===null)e2e_scope_error($action,'Entrega inválida.');
+                $q=$db->prepare('SELECT nombre_receptor FROM medicamentos_entregas WHERE id_entrega=?');
+                $q->execute([$id]);$receptor=$q->fetchColumn();
+                if(!e2e_marker_text($receptor))e2e_scope_error($action,'La entrega no tiene receptor E2E.');
+                $q=$db->prepare('SELECT DISTINCT id_medicamento FROM medicamentos_movimientos WHERE id_entrega=?');
+                $q->execute([$id]);$meds=$q->fetchAll(PDO::FETCH_COLUMN);
+                if(!$meds)e2e_scope_error($action,'La entrega no es E2E.');
+                foreach($meds as $med)if(!e2e_medicamento($db,(int)$med))e2e_scope_error($action,'La entrega incluye stock real.');
+            }
             if(!e2e_marker_text($body['nombre_receptor']??''))
                 e2e_scope_error($action,'La entrega requiere nombre de receptor E2E.');
             if (!is_array($body['items']??null) || $body['items']===[])

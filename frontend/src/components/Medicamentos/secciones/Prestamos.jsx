@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCircleInfo, faRotateLeft, faFlagCheckered, faMoneyBillTransfer, faPills, faInbox, faXmark, faPlus, faClipboardList, faCommentDots, faUser, faIdCard, faCheckDouble, faMoneyBill } from '@fortawesome/free-solid-svg-icons';
+import { faCircleInfo, faRotateLeft, faMoneyBillTransfer, faPills, faInbox, faXmark, faPlus, faClipboardList, faCommentDots, faUser, faIdCard, faCheckDouble, faMoneyBill } from '@fortawesome/free-solid-svg-icons';
 import { ModulePage } from '../../Global/ModulePage';
 import GlobalDivTable from '../../Global/GlobalDivTable';
 import GlobalPagination from '../../Global/GlobalPagination';
@@ -326,7 +326,7 @@ export default function Prestamos() {
             {write && p.estado === 'ABIERTO' ? <>
               {sinDevolver > 0 || entregadas === 0 ? <IconAction icon={faRotateLeft} label="Registrar devolución de medicamentos" onClick={() => openAction(p.id_prestamo, 'devolucion')} disabled={fetchingId !== null || saving} /> : null}
               {/* Único flujo de cierre: resuelve la seña (efectivo o donación) y finaliza. */}
-              <IconAction icon={faFlagCheckered} label="Finalizar préstamo" onClick={() => openAction(p.id_prestamo, 'finalizar')} disabled={fetchingId !== null || saving} />
+              <IconAction icon={faMoneyBillTransfer} label="Finalizar préstamo" onClick={() => openAction(p.id_prestamo, 'finalizar')} disabled={fetchingId !== null || saving} />
             </> : null}
           </div>
         </div>;
@@ -595,7 +595,7 @@ export default function Prestamos() {
 
     {/* Único flujo de cierre (Trello: "quitaría lo del candado"). */}
     <CrudModal modalClassName="med-modal" closeOnBackdrop={false} open={modal === 'finalizar'} saving={saving}
-      title={tituloAccion(faFlagCheckered, 'Finalizar préstamo', [
+      title={tituloAccion(faMoneyBillTransfer, 'Finalizar préstamo', [
         'Con seña pendiente, elegí si se reintegra en efectivo o queda como donación.',
         'Un reintegro parcial deja el préstamo abierto con el resto de la seña pendiente.',
         'Finalizar no devuelve medicamentos al stock: las unidades sin devolver quedan registradas en el historial.',
@@ -604,7 +604,7 @@ export default function Prestamos() {
       onClose={() => setModal('')} submitLabel={etiquetaFinalizar}
       submitDisabled={!finalizacionValida}
       onSubmit={e => run(e, finalizacion.metodo, finalizacion.payload)}>
-      <MedSection icon={faFlagCheckered}>Resumen</MedSection>
+      <MedSection icon={faMoneyBillTransfer}>Resumen</MedSection>
       <div className="med-loan-finalizar med-finalizar-card">
         <div className="med-finalizar-item">
           <span className="med-finalizar-label">Unidades sin devolver</span>

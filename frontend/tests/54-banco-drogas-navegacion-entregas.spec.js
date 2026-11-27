@@ -1,17 +1,16 @@
 const { test, expect } = require('./fixtures/auth.fixture');
 const { apiCall, apiResult } = require('./helpers/api.helper');
-const { createMedicine, medFixture, entryFixture, stockOf, movementsOf, assertError, requireAccountingOptions, loanPeople, futureIso } = require('./helpers/medicamentos.helper');
+const { createMedicine, medFixture, entryFixture, stockOf, movementsOf, assertError, loanPeople, futureIso } = require('./helpers/medicamentos.helper');
 
-/** Medios reales de la base para entregas de Dolor: EFECTIVO y TRANSFERENCIA. */
-async function mediosEntrega(request) {
-  const medios = (await apiCall(request, 'medicamentos_medios')).registros || [];
-  const id = nombre => Number(medios.find(m => String(m.nombre).trim().toUpperCase() === nombre)?.id_medio_pago || 0);
-  const efectivo = id('EFECTIVO'); const transferencia = id('TRANSFERENCIA');
-  expect(efectivo, 'Debe existir EFECTIVO activo').toBeGreaterThan(0);
-  expect(transferencia, 'Debe existir TRANSFERENCIA activo: ejecutá el SQL de Entregas').toBeGreaterThan(0);
-  return { efectivo, transferencia };
+const { uniqueSuffix, todayIso } = require('./helpers/data.helper');
+
+async function sinDinero(request, buscar) {
+  const [anio, mes] = todayIso().split('-').map(Number);
+  for (const accion of ['contable_ingresos_listar','contable_egresos_listar']) {
+    const datos = await apiCall(request, accion, { params:{ anio, mes, buscar } });
+    expect(datos.items).toHaveLength(0);
+  }
 }
-const { uniqueSuffix } = require('./helpers/data.helper');
 
 test.describe('Banco de Drogas: navegación independiente y entregas', () => {
   test('UI: menú con Stock/Préstamos y Stock/Entregas, sin presentaciones en la barra', async ({ page }) => {
@@ -136,7 +135,7 @@ test.describe('Banco de Drogas: navegación independiente y entregas', () => {
     await expect(page.getByRole('table', { name: 'Stock de tratamiento del dolor' })).not.toContainText(dolor.medicine.nombre_comercial);
   });
 
-  test('UI: Restar stock de Dolor no ofrece entregas: se cobran desde Entregas', async ({ page, request }) => {
+  test('UI: Restar stock de Dolor no ofrece entregas: se registran desde Entregas', async ({ page, request }) => {
     const dolor = await createMedicine(request, {
       medicine: medFixture({ presentacion:'JARABE', dosis:'5', unidad_dosis:'ML' }),
       first: entryFixture({ cantidad: 3 }),
@@ -153,120 +152,127 @@ test.describe('Banco de Drogas: navegación independiente y entregas', () => {
     await expect(motivo.locator('option[value="ENTREGA_DONACION"]')).toHaveCount(0);
     await expect(motivo.locator('option[value="SALIDA_VENTA"]')).toHaveCount(0);
     await expect(motivo).toHaveValue('AJUSTE_SALIDA');
-    await expect(modal.getByText('Las entregas se cobran y se registran en Tratamiento del dolor → Entregas.')).toBeVisible();
+    await expect(modal.getByText('Las entregas sin cargo se registran en Tratamiento del dolor → Entregas.')).toBeVisible();
     await expect(modal.getByLabel('Nombre y apellido de quien recibe *')).toHaveCount(0);
   });
 
-  test('API: entrega cobrada de Dolor con varios tratamientos, un solo cobro y sin préstamos', async ({ request }) => {
-    await requireAccountingOptions(request, {
-      CATEGORIA_INGRESO: ['ENTREGAS TRATAMIENTO DEL DOLOR'], CONCEPTO_INGRESO: ['COBRO DE ENTREGA'],
-    });
-    const { efectivo, transferencia } = await mediosEntrega(request);
+  test('API: entrega gratuita de varios tratamientos, idempotencia, sin préstamos ni dinero', async ({ request }) => {
     const jarabe = await createMedicine(request, { medicine: medFixture({ presentacion: 'JARABE', unidad_dosis: 'ML' }), first: entryFixture({ cantidad: 5 }) });
     const concentrado = await createMedicine(request, { medicine: medFixture({ presentacion: 'CONCENTRADO' }), first: entryFixture({ cantidad: 6 }) });
-    const amitriptilina = await createMedicine(request, { medicine: medFixture({ presentacion: 'AMITRIPTILINA' }), first: entryFixture({ cantidad: 2 }) });
     const regular = await createMedicine(request, { medicine: medFixture({ presentacion: 'COMPRIMIDOS' }), first: entryFixture({ cantidad: 3 }) });
     const people = loanPeople();
-    const base = { ...people, importe: '1500.50', id_medio_pago: efectivo,
-      items: [{ id_medicamento: jarabe.id, cantidad: 2 }, { id_medicamento: concentrado.id, cantidad: 3 }, { id_medicamento: amitriptilina.id, cantidad: 1 }] };
-    const stocks = async () => Promise.all([jarabe, concentrado, amitriptilina, regular].map(async fx => Number((await stockOf(request, fx.id)).stock_actual)));
-    const before = await stocks();
-
-    // Validaciones: ninguna deja rastros (rollback completo).
+    const base = { ...people, items: [{ id_medicamento: jarabe.id, cantidad: 2 }, { id_medicamento: concentrado.id, cantidad: 3 }] };
+    const stocks = async () => Promise.all([jarabe, concentrado, regular].map(async fx => Number((await stockOf(request, fx.id)).stock_actual)));
     await assertError(request, 'medicamentos_entregar', { ...base, items: [...base.items, { id_medicamento: regular.id, cantidad: 1 }] }, /no corresponde a Tratamiento del dolor/i);
     await assertError(request, 'medicamentos_entregar', { ...base, items: [{ id_medicamento: jarabe.id, cantidad: 6 }] }, /stock insuficiente/i);
-    await assertError(request, 'medicamentos_entregar', { ...base, items: [{ id_medicamento: jarabe.id, cantidad: 1 }, { id_medicamento: jarabe.id, cantidad: 1 }] }, /no repitas/i);
-    await assertError(request, 'medicamentos_entregar', { ...base, importe: '0' }, /importe/i);
-    await assertError(request, 'medicamentos_entregar', { ...base, importe: '' }, /importe/i);
+    await assertError(request, 'medicamentos_entregar', { ...base, items: [base.items[0], base.items[0]] }, /no repitas/i);
+    await assertError(request, 'medicamentos_entregar', { ...base, importe: '100' }, /gratuitas/i);
+    await assertError(request, 'medicamentos_entregar', { ...base, id_medio_pago: 1 }, /gratuitas/i);
     await assertError(request, 'medicamentos_entregar', { ...base, paciente_dni: '' }, /DNI del paciente/i);
     await assertError(request, 'medicamentos_entregar', { ...base, celular_receptor: '' }, /celular/i);
-    const otroMedio = (await apiCall(request, 'medicamentos_medios')).registros
-      .find(m => !['EFECTIVO', 'TRANSFERENCIA'].includes(String(m.nombre).trim().toUpperCase()));
-    if (otroMedio) await assertError(request, 'medicamentos_entregar', { ...base, id_medio_pago: Number(otroMedio.id_medio_pago) }, /EFECTIVO o TRANSFERENCIA/i);
-    expect(await stocks()).toEqual(before);
-
-    // Varios tratamientos juntos, en efectivo; el reintento con la misma clave no duplica.
+    expect(await stocks()).toEqual([5,6,3]);
     const key = `med-PWE2E-${uniqueSuffix()}-entrega-dolor-multiple`;
-    const entrega = await apiCall(request, 'medicamentos_entregar', { method: 'POST', data: { ...base, _idempotency_key: key } });
-    const retry = await apiCall(request, 'medicamentos_entregar', { method: 'POST', data: { ...base, _idempotency_key: key } });
-    expect(retry.id_entrega).toBe(entrega.id_entrega);
-    expect(entrega.id_movimientos).toHaveLength(3);
-    expect(await stocks()).toEqual([before[0] - 2, before[1] - 3, before[2] - 1, before[3]]);
-
-    // Un solo ingreso contable por el total, no uno por tratamiento.
-    const movimientos = (await Promise.all([jarabe, concentrado, amitriptilina].map(fx => movementsOf(request, fx.id))))
+    const data = { ...base, _idempotency_key: key };
+    const entrega = await apiCall(request, 'medicamentos_entregar', { method:'POST', data });
+    expect(await apiCall(request, 'medicamentos_entregar', { method:'POST', data })).toEqual(entrega);
+    expect(entrega.revision).toBe(1);
+    expect(entrega.id_ingreso_contable).toBeNull();
+    expect(entrega.id_movimientos).toHaveLength(2);
+    expect(await stocks()).toEqual([3,3,3]);
+    const movimientos = (await Promise.all([jarabe, concentrado].map(fx => movementsOf(request, fx.id))))
       .flat().filter(m => entrega.id_movimientos.map(Number).includes(Number(m.id_movimiento)));
-    expect(movimientos).toHaveLength(3);
+    expect(movimientos).toHaveLength(2);
     for (const m of movimientos) {
-      expect(m.tipo).toBe('SALIDA_VENTA');
-      expect(m.origen).toBe('ENTREGA COBRADA');
-      expect(m.id_ingreso_contable).toBeNull();
-      expect(m.motivo_no_anulable).toMatch(/entrega cobrada/i);
+      expect(m.tipo).toBe('ENTREGA_DONACION');
+      expect(m.origen).toBe('ENTREGA SIN CARGO');
+      expect(m.id_ingreso_contable).toBeNull(); expect(m.id_egreso_contable).toBeNull();
+      expect(m.motivo_no_anulable).toBeTruthy();
     }
-    const anular = await apiResult(request, 'medicamentos_anular', { method: 'POST', data: {
-      id_movimiento: entrega.id_movimientos[0], motivo: 'PW E2E INTENTO DE ANULAR UN RENGLON', devolucion_confirmada: 1, id_medio_pago: efectivo } });
-    expect(anular.ok).toBe(false);
-    expect(Number((await stockOf(request, jarabe.id)).stock_actual)).toBe(before[0] - 2);
-
-    // Historial: una fila con los tres tratamientos, importe y medio.
     const listado = await apiCall(request, 'medicamentos_entregas', { params: { buscar: people.nombre_receptor } });
-    const fila = listado.registros.find(r => r.tipo_registro === 'COBRADA' && Number(r.id_entrega) === Number(entrega.id_entrega));
-    expect(fila).toBeTruthy();
+    expect(listado.registros).toHaveLength(1);
+    const fila = listado.registros[0];
+    expect(fila.tipo_registro).toBe('GRATUITA');
+    expect(Number(fila.importe)).toBe(0); expect(fila.medio_pago).toBeNull();
     expect(fila.receptor).toBe(`${people.nombre_receptor} ${people.apellido_receptor}`);
-    expect(fila.paciente_nombre).toBe(people.paciente_nombre);
-    expect(Number(fila.importe)).toBe(1500.5);
-    expect(String(fila.medio_pago).toUpperCase()).toBe('EFECTIVO');
-    expect(fila.items.map(i => [i.nombre_comercial, Number(i.cantidad)])).toEqual([
-      [jarabe.medicine.nombre_comercial, 2], [concentrado.medicine.nombre_comercial, 3], [amitriptilina.medicine.nombre_comercial, 1]]);
-    const porTratamiento = await apiCall(request, 'medicamentos_entregas', { params: { buscar: concentrado.medicine.nombre_comercial } });
-    expect(porTratamiento.registros.some(r => Number(r.id_entrega) === Number(entrega.id_entrega))).toBe(true);
-    const hoy = new Date();
-    const contable = await apiCall(request, 'contable_ingresos_listar', {
-      params: { anio: hoy.getFullYear(), mes: hoy.getMonth() + 1, buscar: people.nombre_receptor },
-    });
-    const asientos = (contable.items || []).filter(r => Number(r.id_ingreso) === Number(entrega.id_ingreso_contable));
-    expect(asientos).toHaveLength(1);
-    expect(Number(asientos[0].importe)).toBe(1500.5);
-    // Ningún otro ingreso por la misma persona: el total no se repite por tratamiento.
-    expect((contable.items || []).filter(r => Number(r.importe) === 1500.5)).toHaveLength(1);
-
-    // Un tratamiento, por transferencia.
-    const unico = await apiCall(request, 'medicamentos_entregar', { method: 'POST', data: {
-      ...loanPeople(), importe: '300', id_medio_pago: transferencia, items: [{ id_medicamento: jarabe.id, cantidad: 1 }] } });
-    const filaUnica = (await apiCall(request, 'medicamentos_entregas', { params: { buscar: jarabe.medicine.nombre_comercial } }))
-      .registros.find(r => Number(r.id_entrega) === Number(unico.id_entrega));
-    expect(String(filaUnica.medio_pago).toUpperCase()).toBe('TRANSFERENCIA');
-    expect(Number((await stockOf(request, jarabe.id)).stock_actual)).toBe(before[0] - 3);
-
-    // Las entregas sin cargo de Dolor ya no se registran desde Restar stock.
-    await assertError(request, 'medicamentos_salida', { id_medicamento: concentrado.id, sector_destino: 'DOLOR', tipo: 'ENTREGA_DONACION', cantidad: 1, receptor: 'PW E2E RECEPTOR' }, /se cobran/i);
-    // Separación de sectores: Dolor no admite préstamos y Medicamentos no aparece en Entregas.
-    const prestamoDolor = await apiResult(request, 'medicamentos_prestar', { method: 'POST', data: {
-      ...loanPeople(), items: [{ id_medicamento: jarabe.id, cantidad: 1 }], sena: '0' } });
-    expect(prestamoDolor.ok).toBe(false);
-    expect(String(prestamoDolor.body?.mensaje || '')).toMatch(/Tratamiento del dolor/i);
+    expect(fila.paciente_dni).toBe(people.paciente_dni);
+    expect(fila.items.map(i => [Number(i.id_medicamento),Number(i.cantidad)])).toEqual([[jarabe.id,2],[concentrado.id,3]]);
+    await sinDinero(request, people.nombre_receptor);
+    await assertError(request, 'medicamentos_salida', { id_medicamento: concentrado.id, sector_destino: 'DOLOR', tipo: 'ENTREGA_DONACION', cantidad: 1, receptor: 'PW E2E RECEPTOR' }, /se registran/i);
+    await assertError(request, 'medicamentos_prestar', { ...people, items: [{ id_medicamento: jarabe.id, cantidad: 1 }], sena: '0' }, /Tratamiento del dolor/i);
     const fuera = await apiCall(request, 'medicamentos_entregas', { params: { buscar: regular.medicine.nombre_comercial } });
     expect(fuera.registros).toHaveLength(0);
   });
 
+  test('API: corrección de cantidades y tratamientos, historial compensatorio sin dinero', async ({ request }) => {
+    const uno = await createMedicine(request,{medicine:medFixture({presentacion:'JARABE'}),first:entryFixture({cantidad:5})});
+    const dos = await createMedicine(request,{medicine:medFixture({presentacion:'CONCENTRADO'}),first:entryFixture({cantidad:4})});
+    const tres = await createMedicine(request,{medicine:medFixture({presentacion:'AMITRIPTILINA'}),first:entryFixture({cantidad:6})});
+    const people = loanPeople();
+    const alta = await apiCall(request,'medicamentos_entregar',{method:'POST',data:{...people,items:[{id_medicamento:uno.id,cantidad:3},{id_medicamento:dos.id,cantidad:2}]}});
+    const correccion = {...people,id_entrega:alta.id_entrega,revision:alta.revision,motivo_correccion:'PW E2E ERROR DE CARGA',stock_confirmado:true,
+      items:[{id_medicamento:uno.id,cantidad:2},{id_medicamento:tres.id,cantidad:4}]};
+    const stocks = async () => Promise.all([uno,dos,tres].map(async fx => Number((await stockOf(request,fx.id)).stock_actual)));
+    await assertError(request,'medicamentos_entregar',{...correccion,stock_confirmado:false},/Confirmá/i);
+    await assertError(request,'medicamentos_entregar',{...correccion,motivo_correccion:''},/motivo/i);
+    await assertError(request,'medicamentos_entregar',{...correccion,items:[...correccion.items,{id_medicamento:dos.id,cantidad:9}]},/Stock insuficiente/i);
+    expect(await stocks()).toEqual([2,2,6]);
+    const key=`med-PWE2E-${uniqueSuffix()}-correccion-dolor`;
+    const data={...correccion,_idempotency_key:key};
+    const corregida=await apiCall(request,'medicamentos_entregar',{method:'POST',data});
+    expect(corregida.id_entrega).toBe(alta.id_entrega); expect(corregida.revision).toBe(2);
+    expect(await apiCall(request,'medicamentos_entregar',{method:'POST',data})).toEqual(corregida);
+    expect(await stocks()).toEqual([3,4,2]);
+    expect((await apiCall(request,'medicamentos_entregas',{params:{buscar:dos.medicine.nombre_comercial}})).registros).toHaveLength(0);
+    const fila=(await apiCall(request,'medicamentos_entregas',{params:{buscar:people.nombre_receptor}})).registros;
+    expect(fila).toHaveLength(1); expect(Number(fila[0].cantidad)).toBe(6);
+    expect(fila[0].items.map(i=>[Number(i.id_medicamento),Number(i.cantidad)])).toEqual([[uno.id,2],[tres.id,4]]);
+    const cambios=(await Promise.all([uno,dos,tres].map(fx=>movementsOf(request,fx.id)))).flat().filter(m=>corregida.id_movimientos.map(Number).includes(Number(m.id_movimiento)));
+    expect(cambios.map(m=>Number(m.variacion_disponible)).sort((a,b)=>a-b)).toEqual([-4,1,2]);
+    expect(cambios.every(m=>m.origen==='CORRECCION ENTREGA' && m.id_ingreso_contable===null && m.id_egreso_contable===null)).toBe(true);
+    const antigua=await assertError(request,'medicamentos_entregar',correccion,/La entrega cambió/i);
+    expect(antigua.status).toBe(409);
+    await sinDinero(request,people.nombre_receptor);
+  });
+
+  test('API: edición de datos sin tocar stock y rechazo de revisiones simultáneas', async ({ request }) => {
+    const fx=await createMedicine(request,{medicine:medFixture({presentacion:'JARABE'}),first:entryFixture({cantidad:2})});
+    const people=loanPeople(); const base={...people,items:[{id_medicamento:fx.id,cantidad:2}]};
+    const alta=await apiCall(request,'medicamentos_entregar',{method:'POST',data:base});
+    const corregir={...base,id_entrega:alta.id_entrega,revision:1,motivo_correccion:'PW E2E CORRECCION DE DATOS',observaciones:'PW E2E NOTA CORREGIDA'};
+    const results=await Promise.all([apiResult(request,'medicamentos_entregar',{method:'POST',data:corregir}),apiResult(request,'medicamentos_entregar',{method:'POST',data:{...corregir,observaciones:'PW E2E OTRA NOTA'}})]);
+    expect(results.filter(r=>r.ok)).toHaveLength(1); expect(results.filter(r=>r.status===409)).toHaveLength(1);
+    expect(Number((await stockOf(request,fx.id)).stock_actual)).toBe(0);
+    const fila=(await apiCall(request,'medicamentos_entregas',{params:{buscar:people.nombre_receptor}})).registros[0];
+    expect(Number(fila.revision)).toBe(2); expect(fila.items).toHaveLength(1);
+    expect((await movementsOf(request,fx.id)).filter(m=>Number(m.id_entrega)===Number(alta.id_entrega))).toHaveLength(1);
+    await sinDinero(request,people.nombre_receptor);
+  });
+
+  test('API: el escudo E2E bloquea correcciones de una entrega no identificada como prueba', async ({ request }) => {
+    const fx=await createMedicine(request,{medicine:medFixture({presentacion:'JARABE'}),first:entryFixture({cantidad:3})});
+    const datos=await apiCall(request,'medicamentos_entregas');
+    const real=datos.registros.find(r=>r.id_entrega && !/^PW (E2E|EE) /i.test(String(r.nombre_receptor||'')));
+    // Un identificador inexistente también debe fallar cerrado; no se crea ningún registro.
+    const id=real ? Number(real.id_entrega) : 4294967295;
+    const resultado=await apiResult(request,'medicamentos_entregar',{method:'POST',data:{...loanPeople(),id_entrega:id,revision:Number(real?.revision||1),motivo_correccion:'',items:[{id_medicamento:fx.id,cantidad:1}]}});
+    expect(resultado.status).toBe(409); expect(resultado.body.codigo).toBe('E2E_SCOPE_BLOCKED');
+    expect(Number((await stockOf(request,fx.id)).stock_actual)).toBe(3);
+  });
+
   test('API: entrega de Dolor rechaza tratamientos vencidos o sin fecha y no descuenta nada', async ({ request }) => {
-    const { efectivo } = await mediosEntrega(request);
     const vigente = await createMedicine(request, { medicine: medFixture({ presentacion: 'JARABE', unidad_dosis: 'ML' }), first: entryFixture({ cantidad: 4 }) });
     const vencido = await createMedicine(request, { medicine: medFixture({ presentacion: 'CONCENTRADO', fecha_vencimiento: futureIso(-2) }), first: entryFixture({ cantidad: 2, fecha_vencimiento: futureIso(-2) }) });
     // Sin fecha: alta sin stock inicial (el backend exige vencimiento si hay stock).
     const sinFechaDatos = medFixture({ presentacion: 'AMITRIPTILINA', fecha_vencimiento: '' });
     const sinFecha = { id: Number((await apiCall(request, 'medicamentos_guardar', { method: 'POST', data: sinFechaDatos })).id_medicamento) };
-    const base = { ...loanPeople(), importe: '100', id_medio_pago: efectivo };
+    const base = { ...loanPeople() };
     await assertError(request, 'medicamentos_entregar', { ...base, items: [{ id_medicamento: vigente.id, cantidad: 1 }, { id_medicamento: sinFecha.id, cantidad: 1 }] }, /fecha de vencimiento/i);
     await assertError(request, 'medicamentos_entregar', { ...base, items: [{ id_medicamento: vigente.id, cantidad: 1 }, { id_medicamento: vencido.id, cantidad: 1 }] }, /venció/i);
     expect(Number((await stockOf(request, vigente.id)).stock_actual)).toBe(4);
     expect(Number((await stockOf(request, vencido.id)).stock_actual)).toBe(2);
   });
 
-  test('UI: Entregas con dos pestañas, varios tratamientos y cobro en efectivo o transferencia', async ({ page, request }) => {
-    await requireAccountingOptions(request, {
-      CATEGORIA_INGRESO: ['ENTREGAS TRATAMIENTO DEL DOLOR'], CONCEPTO_INGRESO: ['COBRO DE ENTREGA'],
-    });
+  test('UI: Entregas gratuitas con dos pestañas, varios tratamientos y edición', async ({ page, request }) => {
     const uno = await createMedicine(request, { medicine: medFixture({ presentacion: 'CONCENTRADO' }), first: entryFixture({ cantidad: 3 }) });
     const dos = await createMedicine(request, { medicine: medFixture({ presentacion: 'JARABE', unidad_dosis: 'ML' }), first: entryFixture({ cantidad: 4 }) });
     const regular = await createMedicine(request, { medicine: medFixture({ presentacion: 'COMPRIMIDOS' }), first: entryFixture({ cantidad: 3 }) });
@@ -275,37 +281,54 @@ test.describe('Banco de Drogas: navegación independiente y entregas', () => {
     await page.getByRole('button', { name: 'Registrar entrega' }).click();
     const modal = page.getByRole('dialog', { name: /Registrar entrega · Tratamiento del dolor/ });
     await expect(modal.getByRole('tab')).toHaveCount(2);
-    await expect(modal.getByRole('tab', { name: 'Personas y pago' })).toBeVisible();
+    await expect(modal.getByRole('tab', { name: 'Personas' })).toBeVisible();
     await expect(modal.getByLabel(/socio/i)).toHaveCount(0);
     await expect(modal.getByRole('checkbox')).toHaveCount(0);
-    const medio = modal.getByLabel('Medio de pago *');
-    // Solo los dos medios pedidos en Trello, tomados de la base.
-    await expect(medio.locator('option:not([value=""])')).toHaveCount(2);
-    expect((await medio.locator('option:not([value=""])').evaluateAll(xs => xs.map(x => x.textContent.trim()))).sort()).toEqual(['EFECTIVO', 'TRANSFERENCIA']);
+    await expect(modal.getByLabel(/Medio de pago|Importe total/)).toHaveCount(0);
     await modal.getByLabel(/Nombre y apellido del paciente/).fill(people.paciente_nombre);
     await modal.getByLabel(/DNI del paciente/).fill(people.paciente_dni);
     await modal.getByLabel(/Nombre de quien retira/).fill(people.nombre_receptor);
     await modal.getByLabel(/Apellido de quien retira/).fill(people.apellido_receptor);
     await modal.getByLabel(/DNI de quien retira/).fill(people.dni_receptor);
     await modal.getByLabel(/Celular de contacto/).fill(people.celular_receptor);
-    await modal.getByLabel(/Importe total/).fill('850');
-    const transferencia = await medio.locator('option', { hasText: 'TRANSFERENCIA' }).getAttribute('value');
-    await medio.selectOption(transferencia);
     await modal.getByRole('tab', { name: 'Tratamientos' }).click();
     const primero = modal.getByLabel('Tratamiento 1 *');
     await expect(primero.locator('option').filter({ hasText: uno.medicine.nombre_comercial })).toHaveCount(1);
     await expect(primero.locator('option').filter({ hasText: regular.medicine.nombre_comercial })).toHaveCount(0);
+    const confirmar = modal.getByRole('button', { name: 'Confirmar entrega' });
+    const [anio, mes] = todayIso().split('-').map(Number);
+    // El formulario valida al confirmar, con un Toast renderizado fuera del diálogo.
+    // Cada intento inválido debe conservar el formulario, el stock y la contabilidad.
+    const verificarRechazo = async mensaje => {
+      await expect(confirmar).toBeEnabled();
+      await confirmar.click();
+      const aviso = page.getByRole('status').filter({ hasText: mensaje });
+      await expect(aviso.getByText(mensaje, { exact: true })).toBeVisible();
+      await expect(modal).toBeVisible();
+      await expect(confirmar).toBeEnabled();
+      expect(Number((await stockOf(request, uno.id)).stock_actual)).toBe(3);
+      expect(Number((await stockOf(request, dos.id)).stock_actual)).toBe(4);
+      const entregas = await apiCall(request, 'medicamentos_entregas', {
+        params: { buscar: people.nombre_receptor },
+      });
+      expect(entregas.registros).toHaveLength(0);
+      const ingresos = await apiCall(request, 'contable_ingresos_listar', {
+        params: { anio, mes, buscar: people.nombre_receptor },
+      });
+      expect(ingresos.items).toHaveLength(0);
+      await aviso.getByRole('button', { name: 'Cerrar notificación' }).click();
+      await expect(aviso).not.toBeVisible();
+    };
     await primero.selectOption(String(uno.id));
     await modal.getByLabel('Cantidad *').first().fill('9');
-    await expect(modal.getByText('La cantidad supera el stock disponible.')).toBeVisible();
-    await expect(modal.getByRole('button', { name: 'Confirmar entrega' })).toBeDisabled();
+    await verificarRechazo('La cantidad supera el stock disponible.');
     await modal.getByLabel('Cantidad *').first().fill('2');
     await modal.getByRole('button', { name: 'Agregar otro tratamiento' }).click();
     await modal.getByLabel('Tratamiento 2 *').selectOption(String(uno.id));
-    await expect(modal.getByText('No repitas el mismo tratamiento en la entrega.')).toBeVisible();
-    await modal.getByLabel('Tratamiento 2 *').selectOption(String(dos.id));
     await modal.getByLabel('Cantidad *').nth(1).fill('1');
-    await modal.getByRole('button', { name: 'Confirmar entrega' }).click();
+    await verificarRechazo('No repitas el mismo tratamiento en la entrega.');
+    await modal.getByLabel('Tratamiento 2 *').selectOption(String(dos.id));
+    await confirmar.click();
     await expect(modal).not.toBeVisible();
     expect(Number((await stockOf(request, uno.id)).stock_actual)).toBe(1);
     expect(Number((await stockOf(request, dos.id)).stock_actual)).toBe(3);
@@ -313,7 +336,21 @@ test.describe('Banco de Drogas: navegación independiente y entregas', () => {
     const fila = page.getByRole('table', { name: 'Entregas de Tratamiento del dolor' }).getByRole('row').filter({ hasText: people.nombre_receptor });
     await expect(fila).toContainText(uno.medicine.nombre_comercial);
     await expect(fila).toContainText(dos.medicine.nombre_comercial);
-    await expect(fila).toContainText('TRANSFERENCIA');
+    await expect(fila).toContainText('Sin cargo');
     await expect(fila).toContainText(people.paciente_nombre);
+    await fila.getByRole('button',{name:'Editar entrega'}).click();
+    const editor=page.getByRole('dialog',{name:/Editar entrega · Tratamiento del dolor/});
+    await expect(editor.getByLabel(/DNI del paciente/)).toHaveValue(people.paciente_dni);
+    await editor.getByRole('tab',{name:'Tratamientos'}).click();
+    await expect(editor.getByLabel('Cantidad *').first()).toHaveValue('2');
+    await editor.getByLabel('Cantidad *').first().fill('1');
+    await editor.getByLabel(/Motivo de corrección/).fill('PW E2E CANTIDAD CORREGIDA');
+    await editor.getByRole('checkbox',{name:/Confirmo que las unidades/}).check();
+    await editor.getByRole('button',{name:'Guardar corrección'}).click();
+    await expect(editor).not.toBeVisible();
+    expect(Number((await stockOf(request,uno.id)).stock_actual)).toBe(2);
+    expect(Number((await stockOf(request,dos.id)).stock_actual)).toBe(3);
+    await expect(fila).toContainText('Sin cargo');
+    await sinDinero(request,people.nombre_receptor);
   });
 });

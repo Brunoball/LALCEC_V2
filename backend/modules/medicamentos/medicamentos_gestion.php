@@ -229,12 +229,11 @@ trait MedicamentosGestion {
                 $tipo='AJUSTE_SALIDA';
                 $motivoPersonalizado=$motivo;
             }
-            // Trello: en Tratamiento del dolor la entrega SE COBRA (efectivo o
-            // transferencia) y se registra desde Entregas, con varios tratamientos.
+            // Las entregas gratuitas se registran desde Entregas, con varios tratamientos.
             // Desde Restar stock solo quedan el descarte y el ajuste por error de carga.
             if(($entregaDolor || MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
                 && in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true))
-                api_error('Las entregas de Tratamiento del dolor se cobran y se registran en Tratamiento del dolor > Entregas.','ENTREGA_DOLOR_COBRADA',422);
+                api_error('Las entregas de Tratamiento del dolor se registran en Tratamiento del dolor > Entregas, sin cargo.','ENTREGA_DOLOR_CENTRALIZADA',422);
             if(in_array($tipo,['ENTREGA_DONACION','SALIDA_VENTA'],true)) self::verificarVigenciaParaEntrega($m);
             // "Descarte por vencimiento" solo aplica a stock vencido (o sin fecha,
             // que no se puede entregar). Para corregir errores de carga existe el ajuste.
@@ -492,17 +491,13 @@ trait MedicamentosGestion {
         },$auth,$b,'cerrarPrestamo');
     }
 
-    /**
-     * Entrega cobrada de Tratamiento del dolor (Trello: "igual que préstamos, pero sí se
-     * cobra; medio de pago transferencia o efectivo"). Varios tratamientos en una sola
-     * solicitud y transacción: un movimiento SALIDA_VENTA por tratamiento (marcado con
-     * origen ENTREGA COBRADA e id_entrega) y UN solo ingreso contable por el total,
-     * vinculado a la entrega y no a cada renglón. Si algo falla no se guarda nada.
-     */
+    /** Alta o corrección de una entrega gratuita. El historial de stock es inmutable. */
     protected static function entregarDolor(array $auth,array $b): array {
         return self::transaccionMed($auth['db'],static function(PDO $db)use($auth,$b){
-            if(!self::entregasCobradasDisponibles($db))
-                api_error('Falta ejecutar la migración de Entregas de Tratamiento del dolor. Ejecutá el SQL incluido en el ZIP.','MIGRACION_PENDIENTE',503);
+            if(!self::entregasCobradasDisponibles($db) || !self::entregasGratuitasDisponibles($db))
+                api_error('Ejecutá la migración de Entregas gratuitas antes de continuar.','MIGRACION_PENDIENTE',503);
+            if(array_key_exists('importe',$b) || array_key_exists('id_medio_pago',$b))
+                api_error('Las entregas son gratuitas: no se admite importe ni medio de pago.','ENTREGA_SIN_CARGO',422);
             $paciente=self::textoLimitado($b,'paciente_nombre',160,'nombre y apellido del paciente');
             if($paciente===null || self::largo($paciente)<3)
                 api_error('Ingresá nombre y apellido del paciente (mínimo 3 caracteres).','VALIDATION_ERROR',422,['campo'=>'paciente_nombre']);
@@ -523,39 +518,71 @@ trait MedicamentosGestion {
                 if(isset($pedidos[$id]))api_error('No repitas el mismo tratamiento en la entrega.','ENTREGA_DUPLICADA',422);
                 $pedidos[$id]=self::qty($item['cantidad']??null);
             }
-            $importe=self::money($b['importe']??null);
-            $nota=self::str($b,'observaciones',450);
-            $ids=array_keys($pedidos);
-            self::bloquearMedicamentos($db,$ids);
-            $meds=[];
-            foreach($pedidos as $id=>$cantidad){
-                $m=self::medicamentoBloqueado($db,$id);
-                if(!MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion']))
-                    api_error('«'.$m['nombre_comercial'].'» no corresponde a Tratamiento del dolor.','VALIDATION_ERROR',422);
-                self::verificarVigenciaParaEntrega($m);
-                if((int)$m['stock_actual']<$cantidad)api_error('Stock insuficiente de '.$m['nombre_comercial'].'.','STOCK_INSUFICIENTE',422);
-                $meds[$id]=$m;
+            $nota=self::textoLimitado($b,'observaciones',450,'observaciones');
+            $anterior=null;$previos=[];$motivo=null;$entrega=null;
+            if(array_key_exists('id_entrega',$b)){
+                $entrega=positive_id($b['id_entrega'],'entrega');
+                $revision=positive_id($b['revision']??null,'revisión');
+                $q=$db->prepare('SELECT * FROM medicamentos_entregas WHERE id_entrega=? FOR UPDATE');
+                $q->execute([$entrega]);$anterior=$q->fetch(PDO::FETCH_ASSOC);
+                if(!$anterior)api_error('Entrega no encontrada.','NOT_FOUND',404);
+                if(e2e_request_enabled() && !e2e_marker_text($anterior['nombre_receptor']))e2e_scope_error('medicamentos_entregar','La entrega no tiene receptor E2E.');
+                if((float)$anterior['importe']!==0.0 || $anterior['id_ingreso_contable']!==null || $anterior['id_medio_pago']!==null)
+                    api_error('Las entregas históricas cobradas no se pueden corregir desde este flujo.','ENTREGA_HISTORICA',409);
+                if((int)$anterior['revision']!==$revision)api_error('La entrega cambió. Cerrá y volvé a abrir para corregirla.','ENTREGA_DESACTUALIZADA',409);
+                $motivo=self::textoLimitado($b,'motivo_correccion',300,'motivo de corrección');
+                if(!$motivo || self::largo($motivo)<10)api_error('Ingresá un motivo de corrección de al menos 10 caracteres.','VALIDATION_ERROR',422);
+                $q=$db->prepare('SELECT id_medicamento,variacion_disponible FROM medicamentos_movimientos WHERE id_entrega=? ORDER BY id_movimiento FOR UPDATE');
+                $q->execute([$entrega]);foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){
+                    $mid=(int)$r['id_medicamento'];
+                    $previos[$mid]=($previos[$mid]??0)-(int)$r['variacion_disponible'];
+                    if(e2e_request_enabled() && !e2e_medicamento($db,$mid))e2e_scope_error('medicamentos_entregar','La entrega incluye stock real.');
+                }
+                foreach($previos as $cantidad)if($cantidad<0)api_error('La entrega tiene inconsistencias de stock.','ENTREGA_INCONSISTENTE',409);
+                $previos=array_filter($previos,static fn($cantidad)=>$cantidad>0);
+                if(!$previos)api_error('No se encontraron tratamientos de la entrega.','ENTREGA_INCONSISTENTE',409);
             }
-            $medio=self::medioEntrega($db,$b['id_medio_pago']??null);
-            $ahora=date('Y-m-d H:i:s');
-            $db->prepare('INSERT INTO medicamentos_entregas (fecha,paciente_nombre,paciente_dni,nombre_receptor,apellido_receptor,dni_receptor,celular_receptor,importe,id_medio_pago,observaciones) VALUES (?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$ahora,$paciente,$pacienteDni,$nombre,$apellido,$dni,$celular,$importe,$medio,$nota]);
-            $entrega=(int)$db->lastInsertId();
+            $ids=array_unique(array_merge(array_keys($previos),array_keys($pedidos)));
+            self::bloquearMedicamentos($db,$ids);
+            $deltas=[];
+            foreach($ids as $id){
+                $delta=($previos[$id]??0)-($pedidos[$id]??0);
+                $m=self::medicamentoBloqueado($db,$id,false);
+                if($delta!==0 && ((int)$m['activo']!==1 || !MedicamentosOpciones::esPresentacionDolor((string)$m['presentacion'])))
+                    api_error('«'.$m['nombre_comercial'].'» no corresponde a Tratamiento del dolor activo.','VALIDATION_ERROR',422);
+                if($delta<0){
+                    self::verificarVigenciaParaEntrega($m);
+                    if((int)$m['stock_actual']<-$delta)api_error('Stock insuficiente de '.$m['nombre_comercial'].'.','STOCK_INSUFICIENTE',422);
+                }
+                if($delta>0){
+                    if(!in_array($b['stock_confirmado']??null,[true,1,'1'],true))api_error('Confirmá que las unidades que se reincorporan nunca salieron del stock físico.','CORRECCION_STOCK_CONFIRMACION',422);
+                    // No reincorporar automáticamente medicamentos vencidos o sin fecha.
+                    self::verificarVigenciaParaEntrega($m);
+                    if((int)$m['stock_actual']>4294967295-$delta)api_error('La corrección supera el límite de stock.','STOCK_LIMITE',422);
+                }
+                if($delta!==0)$deltas[$id]=$delta;
+            }
             $receptor=trim($nombre.' '.$apellido);
-            $ingreso=self::ingresoContable($db,date('Y-m-d'),$medio,'ENTREGAS TRATAMIENTO DEL DOLOR','COBRO DE ENTREGA',$importe,
-                'Entrega Tratamiento del dolor #'.$entrega.': '.implode(', ',array_map(static fn($id)=>$meds[$id]['nombre_comercial'].' x'.$pedidos[$id],$ids)),$receptor);
-            $db->prepare('UPDATE medicamentos_entregas SET id_ingreso_contable=? WHERE id_entrega=?')->execute([$ingreso,$entrega]);
+            if($anterior===null){
+                $db->prepare('INSERT INTO medicamentos_entregas (fecha,paciente_nombre,paciente_dni,nombre_receptor,apellido_receptor,dni_receptor,celular_receptor,importe,id_medio_pago,observaciones) VALUES (?,?,?,?,?,?,?,0,NULL,?)')
+                    ->execute([date('Y-m-d H:i:s'),$paciente,$pacienteDni,$nombre,$apellido,$dni,$celular,$nota]);
+                $entrega=(int)$db->lastInsertId();$revision=1;
+            }else{
+                $db->prepare('UPDATE medicamentos_entregas SET paciente_nombre=?,paciente_dni=?,nombre_receptor=?,apellido_receptor=?,dni_receptor=?,celular_receptor=?,observaciones=?,revision=revision+1 WHERE id_entrega=?')
+                    ->execute([$paciente,$pacienteDni,$nombre,$apellido,$dni,$celular,$nota,$entrega]);
+                $revision++;
+            }
             $marcar=$db->prepare('UPDATE medicamentos_movimientos SET id_entrega=? WHERE id_movimiento=?');
             $movimientos=[];
-            foreach($pedidos as $id=>$cantidad){
-                // Sin id_ingreso_contable propio: así anular un renglón jamás devuelve el total.
-                $mov=self::inventory($db,$id,'SALIDA_VENTA',$cantidad,-$cantidad,null,null,null,null,null,$nota,'ENTREGA COBRADA',$receptor);
-                $marcar->execute([$entrega,$mov]);
-                $movimientos[]=$mov;
+            foreach($deltas as $id=>$delta){
+                $tipo=$anterior===null?'ENTREGA_DONACION':($delta>0?'AJUSTE_ENTRADA':'AJUSTE_SALIDA');
+                $mov=self::inventory($db,$id,$tipo,abs($delta),$delta,null,null,null,null,null,$anterior===null?$nota:$motivo,$anterior===null?'ENTREGA SIN CARGO':'CORRECCION ENTREGA',$receptor);
+                $marcar->execute([$entrega,$mov]);$movimientos[]=$mov;
             }
-            self::audit($db,$auth,'ENTREGA_DOLOR','medicamentos_entregas',$entrega,null,
-                ['items'=>$pedidos,'importe'=>$importe,'medio'=>$medio,'ingreso'=>$ingreso,'movimientos'=>$movimientos,'receptor'=>$receptor,'paciente'=>$paciente]);
-            return ['id_entrega'=>$entrega,'id_movimientos'=>$movimientos,'id_ingreso_contable'=>$ingreso,'importe'=>$importe];
+            self::audit($db,$auth,$anterior===null?'ENTREGA_DOLOR':'CORRECCION_ENTREGA_DOLOR','medicamentos_entregas',$entrega,
+                $anterior===null?null:['entrega'=>$anterior,'items'=>$previos],
+                ['items'=>$pedidos,'revision'=>$revision,'motivo'=>$motivo,'movimientos'=>$movimientos,'receptor'=>$receptor,'paciente'=>$paciente,'paciente_dni'=>$pacienteDni,'nombre_receptor'=>$nombre,'apellido_receptor'=>$apellido,'dni_receptor'=>$dni,'celular_receptor'=>$celular,'observaciones'=>$nota]);
+            return ['id_entrega'=>$entrega,'revision'=>$revision,'id_movimientos'=>$movimientos,'id_ingreso_contable'=>null,'importe'=>0];
         },$auth,$b,'entregarDolor');
     }
 

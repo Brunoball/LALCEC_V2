@@ -289,7 +289,7 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
     </> : <>
       <Campo label="Motivo de salida" required value={movement.tipo} options={tiposSalida}
         onChange={v => updateMovement('tipo',v)} />
-      {esDolor ? <p className="med-inline-note" role="note">Las entregas se cobran y se registran en Tratamiento del dolor → Entregas.</p> : null}
+      {esDolor ? <p className="med-inline-note" role="note">Las entregas sin cargo se registran en Tratamiento del dolor → Entregas.</p> : null}
       {!tiposSalida.length ? <p role="alert" className="med-inline-danger">No hay motivos de salida disponibles (Entrega sin cargo, Descarte por vencimiento, Ajuste por error de carga). Revisá su estado en Configuración → Medicamentos.</p> : null}
       {esEntrega ? <Campo
         label="Nombre y apellido de quien recibe" required maxLength={160}
@@ -388,8 +388,10 @@ export default function Stock({ sector = 'MEDICAMENTOS' }) {
             <Campo required={procedenciaInicial} disabled={!procedenciaInicial}
               label={movement.origen === 'DONACION' ? 'Nombre y apellido del donante (manual)' : movement.origen === 'COMPRA' ? 'Datos del proveedor (manual)' : 'Procedencia (manual)'}
               maxLength={160} value={movement.procedencia} onChange={v => updateMovement('procedencia',v)} />
-            <Campo label="Costo unitario ($)" money required={compraInicial} disabled={!compraInicial} type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
-            <Campo label="Medio de pago" required={compraInicial} disabled={!compraInicial} options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
+            {compraInicial ? <>
+              <Campo label="Costo unitario ($)" money required type="number" min="0.01" step="0.01" value={movement.costo_unitario} onChange={v=>updateMovement('costo_unitario',v)} />
+              <Campo label="Medio de pago" required options={payments} value={movement.id_medio_pago} onChange={v=>updateMovement('id_medio_pago',v)} />
+            </> : null}
           </> : null}
         </Campos>
       </> : <>

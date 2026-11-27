@@ -76,7 +76,7 @@ const NAV_ITEMS = [
   },
   {
     key: "medicamentos",
-    label: "Medicamentos",
+    label: "Banco de Drogas",
     path: "/medicamentos",
     defaultPath: "/medicamentos/stock",
     icon: faPills,

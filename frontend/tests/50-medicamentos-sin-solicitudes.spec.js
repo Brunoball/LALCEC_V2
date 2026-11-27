@@ -10,7 +10,7 @@ test.describe('Medicamentos: invariantes del módulo simplificado',()=>{
   test('diez operaciones transaccionales de medicamentos con idempotencia',()=>{
     const gestion=read(backend,'modules/medicamentos/medicamentos_gestion.php');
     const soporte=read(backend,'modules/medicamentos/medicamentos_soporte.php');
-    expect((gestion.match(/self::transaccionMed\(/g)||[]).length).toBe(10); // + entrega cobrada de Dolor
+    expect((gestion.match(/self::transaccionMed\(/g)||[]).length).toBe(10); // + alta/corrección de entrega gratuita de Dolor
     for(const fragment of ['medicamentos_solicitudes','_idempotency_key','hash_solicitud','respuesta_json','FOR UPDATE','IDEMPOTENCY_CONFLICT'])expect(soporte).toContain(fragment);
     expect(soporte).not.toContain('id_lote');
   });

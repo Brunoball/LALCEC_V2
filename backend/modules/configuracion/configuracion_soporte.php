@@ -63,6 +63,7 @@ function configuracion_relaciones(array $definition): array
             ['tabla' => 'contable_ingresos', 'columna' => 'id_medio_pago'],
             ['tabla' => 'contable_egresos', 'columna' => 'id_medio_pago'],
             ['tabla' => 'medicamentos_prestamos_senas_movimientos', 'columna' => 'id_medio_pago'],
+            ['tabla' => 'medicamentos_entregas', 'columna' => 'id_medio_pago'],
         ],
         'condiciones_iva' => [
             ['tabla' => 'socios_empresas', 'columna' => 'id_condicion_iva'],
@@ -188,6 +189,8 @@ function configuracion_medio_utilizado_en_medicamentos(PDO $db, array $definitio
     if ($definition['lista'] !== 'medios_pago') return false;
     $checks = [
         ['medicamentos_prestamos_senas_movimientos', 'id_medio_pago', null, null],
+        ['medicamentos_entregas', 'id_medio_pago', null, null],
+        ['medicamentos_entregas', 'id_ingreso_contable', 'contable_ingresos', 'id_ingreso'],
         ['medicamentos_movimientos', 'id_ingreso_contable', 'contable_ingresos', 'id_ingreso'],
         ['medicamentos_movimientos', 'id_egreso_contable', 'contable_egresos', 'id_egreso'],
         ['medicamentos_prestamos_senas_movimientos', 'id_ingreso_contable', 'contable_ingresos', 'id_ingreso'],

@@ -11,6 +11,16 @@ trait ContableSoporte
         'CONCEPTO_EGRESO',
     ];
 
+    /** Fuentes de caja de Banco de Drogas disponibles para el vínculo solicitado. */
+    protected static function tablasVinculoMedicamentos(PDO $db, string $columna): array
+    {
+        $statement = $db->prepare("SELECT TABLE_NAME FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = ?
+              AND TABLE_NAME IN ('medicamentos_movimientos', 'medicamentos_prestamos_senas_movimientos', 'medicamentos_entregas')");
+        $statement->execute([$columna]);
+        return $statement->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     protected static function filtroAnio(mixed $value): int
     {
         $text = trim((string)$value);

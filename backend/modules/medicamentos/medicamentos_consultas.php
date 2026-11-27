@@ -60,8 +60,8 @@ trait MedicamentosConsultas {
      */
     /**
      * Historial de Entregas de Tratamiento del dolor:
-     * - Entregas cobradas (medicamentos_entregas): una fila por entrega con todos sus
-     *   tratamientos, importe total y medio de pago.
+     * - Entregas agrupadas (medicamentos_entregas): cantidades netas de las correcciones.
+     *   Solo las históricas cobradas conservan importe y medio de pago.
      * - Entregas históricas sin cargo (ENTREGA_DONACION de presentaciones de Dolor):
      *   se conservan visibles, una fila por movimiento, con su significado original.
      */
@@ -73,9 +73,11 @@ trait MedicamentosConsultas {
         $like='%'.$buscar.'%';
         $historicas="SELECT 'HISTORICA' AS tipo_registro,mov.id_movimiento AS id_registro,mov.id_movimiento,NULL AS id_entrega,
                 mov.fecha_movimiento,mov.procedencia AS receptor,NULL AS paciente_nombre,NULL AS dni_receptor,NULL AS celular_receptor,
-                NULL AS importe,NULL AS medio_pago,mov.detalle,mov.cantidad,m.nombre_comercial,m.droga,m.presentacion,m.unidad_stock
+                NULL AS importe,NULL AS medio_pago,mov.detalle,mov.cantidad,m.nombre_comercial,m.droga,m.presentacion,m.unidad_stock,
+                NULL AS paciente_dni,NULL AS nombre_receptor,NULL AS apellido_receptor,NULL AS revision
             FROM medicamentos_movimientos mov JOIN medicamentos m ON m.id_medicamento=mov.id_medicamento
             WHERE mov.tipo='ENTREGA_DONACION' AND m.presentacion IN ({$dolor})";
+        if(self::entregasCobradasDisponibles($db))$historicas.=' AND mov.id_entrega IS NULL';
         $params=[];
         if($buscar!==''){
             $historicas.=" AND (m.nombre_comercial LIKE ? OR m.droga LIKE ? OR mov.procedencia LIKE ?)";
@@ -83,17 +85,18 @@ trait MedicamentosConsultas {
         }
         $union=$historicas;
         if(self::entregasCobradasDisponibles($db)){
-            $cobradas="SELECT 'COBRADA',e.id_entrega,NULL,e.id_entrega,e.fecha,
+            $revision=self::entregasGratuitasDisponibles($db)?'e.revision':'NULL';
+            $cobradas="SELECT CASE WHEN e.importe=0 AND e.id_ingreso_contable IS NULL AND e.id_medio_pago IS NULL THEN 'GRATUITA' ELSE 'COBRADA' END,e.id_entrega,NULL,e.id_entrega,e.fecha,
                     TRIM(CONCAT_WS(' ',e.nombre_receptor,e.apellido_receptor)),e.paciente_nombre,e.dni_receptor,e.celular_receptor,
                     e.importe,mp.nombre,e.observaciones,
-                    (SELECT COALESCE(SUM(x.cantidad),0) FROM medicamentos_movimientos x WHERE x.id_entrega=e.id_entrega),
-                    NULL,NULL,NULL,NULL
+                    (SELECT COALESCE(-SUM(x.variacion_disponible),0) FROM medicamentos_movimientos x WHERE x.id_entrega=e.id_entrega),
+                    NULL,NULL,NULL,NULL,e.paciente_dni,e.nombre_receptor,e.apellido_receptor,{$revision}
                 FROM medicamentos_entregas e LEFT JOIN medios_pago mp ON mp.id_medio_pago=e.id_medio_pago";
             if($buscar!==''){
                 $cobradas.=" WHERE (e.nombre_receptor LIKE ? OR e.apellido_receptor LIKE ? OR e.paciente_nombre LIKE ?
                     OR e.paciente_dni LIKE ? OR e.dni_receptor LIKE ?
                     OR EXISTS (SELECT 1 FROM medicamentos_movimientos x JOIN medicamentos mx ON mx.id_medicamento=x.id_medicamento
-                        WHERE x.id_entrega=e.id_entrega AND (mx.nombre_comercial LIKE ? OR mx.droga LIKE ?)))";
+                        WHERE x.id_entrega=e.id_entrega AND (mx.nombre_comercial LIKE ? OR mx.droga LIKE ?) GROUP BY x.id_medicamento HAVING SUM(x.variacion_disponible)<0))";
                 array_push($params,...array_fill(0,7,$like));
             }
             $union.=' UNION ALL '.$cobradas;
@@ -106,18 +109,18 @@ trait MedicamentosConsultas {
         $q->bindValue(count($params)+2,($pagina-1)*$porPagina,PDO::PARAM_INT);
         $q->execute();
         $registros=$q->fetchAll(PDO::FETCH_ASSOC);
-        // Tratamientos de cada entrega cobrada (consulta única para la página).
-        $ids=array_values(array_map(static fn($r)=>(int)$r['id_entrega'],array_filter($registros,static fn($r)=>$r['tipo_registro']==='COBRADA')));
+        // Cantidades netas de cada entrega agrupada (consulta única para la página).
+        $ids=array_values(array_map(static fn($r)=>(int)$r['id_entrega'],array_filter($registros,static fn($r)=>$r['id_entrega']!==null)));
         $items=[];
         if($ids){
-            $q=$db->prepare('SELECT x.id_entrega,x.id_movimiento,x.id_medicamento,x.cantidad,m.nombre_comercial,m.presentacion,m.unidad_stock
+            $q=$db->prepare('SELECT x.id_entrega,MIN(x.id_movimiento) id_movimiento,x.id_medicamento,-SUM(x.variacion_disponible) cantidad,m.nombre_comercial,m.presentacion,m.unidad_stock
                 FROM medicamentos_movimientos x JOIN medicamentos m ON m.id_medicamento=x.id_medicamento
-                WHERE x.id_entrega IN ('.implode(',',array_fill(0,count($ids),'?')).') ORDER BY x.id_movimiento');
+                WHERE x.id_entrega IN ('.implode(',',array_fill(0,count($ids),'?')).') GROUP BY x.id_entrega,x.id_medicamento,m.nombre_comercial,m.presentacion,m.unidad_stock HAVING SUM(x.variacion_disponible)<0 ORDER BY MIN(x.id_movimiento)');
             $q->execute($ids);
             foreach($q->fetchAll(PDO::FETCH_ASSOC) as $it)$items[(int)$it['id_entrega']][]=$it;
         }
         foreach($registros as &$r){
-            if($r['tipo_registro']==='COBRADA'){
+            if($r['id_entrega']!==null){
                 $r['items']=$items[(int)$r['id_entrega']]??[];
             } else {
                 $r['items']=[['id_movimiento'=>$r['id_movimiento'],'cantidad'=>$r['cantidad'],'nombre_comercial'=>$r['nombre_comercial'],

@@ -571,6 +571,12 @@ trait ContableConsultas
             $params[] = $meanId;
         }
         $medicamentosLink = $isIncome ? 'id_ingreso_contable' : 'id_egreso_contable';
+        // Mismas fuentes que usa la protección de escritura. Entregas solo vincula ingresos.
+        $vinculosMedicamentos = array_map(
+            static fn(string $tabla): string => "EXISTS (SELECT 1 FROM {$tabla} med WHERE med.{$medicamentosLink} = m.{$idColumn})",
+            self::tablasVinculoMedicamentos($db, $medicamentosLink)
+        );
+        $esMedicamentos = $vinculosMedicamentos ? implode(' OR ', $vinculosMedicamentos) : '0=1';
         // Recupera el titular de señas anteriores que se guardaron sin proveedor.
         // Sólo se usa el vínculo contable real: jamás se deduce por monto o descripción.
         $nombreSocioPrestamo = "COALESCE(
@@ -608,8 +614,7 @@ trait ContableConsultas
                 m.{$idColumn}, m.fecha, m.id_medio_pago, {$proveedorVisible} AS proveedor, m.categoria,
                 m.concepto, m.importe, m.detalle, m.creado_en, m.actualizado_en,
                 COALESCE(NULLIF(mp.nombre, ''), 'SIN ESPECIFICAR') AS medio,
-                CASE WHEN EXISTS (SELECT 1 FROM medicamentos_movimientos mm WHERE mm.{$medicamentosLink} = m.{$idColumn})
-                      OR EXISTS (SELECT 1 FROM medicamentos_prestamos_senas_movimientos sm WHERE sm.{$medicamentosLink} = m.{$idColumn})
+                CASE WHEN {$esMedicamentos}
                      THEN 1 ELSE 0 END AS es_medicamentos,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = 'PROVEEDOR' AND o.nombre = m.proveedor LIMIT 1) AS id_proveedor,
                 (SELECT o.id_opcion FROM contable_opciones o WHERE o.tipo = '{$categoryType}' AND o.nombre = m.categoria LIMIT 1) AS id_categoria,

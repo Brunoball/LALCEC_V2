@@ -53,6 +53,6 @@ export const medicamentosApi = {
   devolver: (data) => escritura('medicamentos_devolver', data),
   cerrar: (data) => escritura('medicamentos_cerrar', data),
   sena: (data) => escritura('medicamentos_sena', data),
-  // Entrega cobrada de Tratamiento del dolor: varios tratamientos, un solo cobro.
+  // Alta o corrección de entrega gratuita de Tratamiento del dolor.
   entregar: (data) => escritura('medicamentos_entregar', data),
 };

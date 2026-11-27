@@ -116,15 +116,6 @@ trait MedicamentosSoporte {
             api_error('Las señas y sus reintegros deben registrarse en EFECTIVO.', 'MEDIO_EFECTIVO', 422);
         return $medio;
     }
-    /** Entregas cobradas de Tratamiento del dolor: solo EFECTIVO o TRANSFERENCIA (Trello). */
-    private static function medioEntrega(PDO $db,mixed $id): int {
-        $medio=self::medio($db,$id);
-        $q=$db->prepare('SELECT nombre FROM medios_pago WHERE id_medio_pago=?');
-        $q->execute([$medio]);
-        if(!in_array(strtoupper(trim((string)$q->fetchColumn())),['EFECTIVO','TRANSFERENCIA'],true))
-            api_error('Las entregas se cobran en EFECTIVO o TRANSFERENCIA.','MEDIO_ENTREGA',422);
-        return $medio;
-    }
     /** Tabla y columna creadas por la migración de Entregas cobradas (verificado una vez por petición). */
     private static function entregasCobradasDisponibles(PDO $db): bool {
         static $cache=null;
@@ -132,6 +123,9 @@ trait MedicamentosSoporte {
         $tabla=(int)$db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_entregas'")->fetchColumn();
         $columna=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_movimientos' AND COLUMN_NAME='id_entrega'")->fetchColumn();
         return $cache=($tabla===1 && $columna===1);
+    }
+    private static function entregasGratuitasDisponibles(PDO $db): bool {
+        return (int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='medicamentos_entregas' AND COLUMN_NAME='revision'")->fetchColumn()===1;
     }
     /** Reintenta conflictos transitorios. Cada transacción termina en rollback
      * antes de reintentarse; el trabajo anterior jamás queda confirmado a medias.

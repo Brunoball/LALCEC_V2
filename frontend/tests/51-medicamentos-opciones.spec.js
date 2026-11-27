@@ -256,11 +256,30 @@ test.describe('Medicamentos: catálogos configurables', () => {
     expect((await origen.locator('option').evaluateAll(xs => xs.map(x => x.value))).sort()).toEqual(['COMPRA', 'DONACION']);
     await expect(origen).toHaveValue('DONACION');
     await expect(editor.getByLabel('Nombre y apellido del donante (manual)')).toBeVisible();
-    await expect(editor.getByLabel('Medio de pago')).toHaveCount(0);
+    const costo = editor.getByLabel(/Costo unitario/);
+    const medio = editor.getByLabel(/Medio de pago/);
+    await expect(costo).toHaveCount(0);
+    await expect(medio).toHaveCount(0);
     await origen.selectOption('COMPRA');
     await expect(editor.getByLabel('Datos del proveedor (manual)')).toBeVisible();
-    await expect(editor.getByLabel('Costo unitario ($)')).toBeVisible();
-    await expect(editor.getByLabel('Medio de pago *')).toBeVisible();
+    await expect(editor.getByLabel('Nombre y apellido del donante (manual)')).toHaveCount(0);
+    await expect(costo).toBeVisible();
+    await expect(costo).toBeEnabled();
+    await expect(costo).toHaveJSProperty('required', true);
+    await expect(medio).toBeVisible();
+    await expect(medio).toBeEnabled();
+    await expect(medio).toHaveJSProperty('required', true);
+    await costo.fill('12.50');
+    await origen.selectOption('DONACION');
+    await expect(editor.getByLabel('Nombre y apellido del donante (manual)')).toBeVisible();
+    await expect(costo).toHaveCount(0);
+    await expect(medio).toHaveCount(0);
+    await origen.selectOption('COMPRA');
+    await expect(costo).toHaveValue(''); // No conserva un costo de una compra abandonada.
+    await expect(medio).toBeEnabled();
+    await editor.getByLabel('Stock inicial (opcional)').fill('0');
+    await expect(costo).toHaveCount(0);
+    await expect(medio).toHaveCount(0);
     await expect(origen.locator('option[value="__MED_AGREGAR__"]')).toHaveCount(0);
   });
   test('UI: Configuración muestra la pestaña Orígenes de ingreso y permite crear uno', async ({ page, request }) => {

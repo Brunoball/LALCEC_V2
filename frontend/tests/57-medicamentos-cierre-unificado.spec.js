@@ -96,12 +96,22 @@ test.describe('Medicamentos: un único flujo para resolver la seña y finalizar 
     await page.getByRole('textbox', { name: 'Búsqueda' }).fill(people.nombre_receptor);
     const tabla = page.getByRole('table', { name: 'Préstamos de medicamentos' });
     const row = tabla.getByRole('row').filter({ hasText: people.nombre_receptor });
-    await expect(row.getByRole('button', { name: 'Finalizar préstamo' })).toHaveCount(1);
+    const finalizar = row.getByRole('button', { name: 'Finalizar préstamo', exact: true });
+    await expect(finalizar).toHaveCount(1);
     await expect(row.getByRole('button', { name: 'Reintegrar seña' })).toHaveCount(0);
-    await row.getByRole('button', { name: 'Finalizar préstamo' }).click();
+    await expect(row.getByRole('button')).toHaveCount(3); // Información, devolución y cierre unificado.
+    await expect(finalizar.locator('svg[data-icon="money-bill-transfer"]')).toHaveCount(1);
+    await finalizar.click();
     const modal = page.getByRole('dialog', { name: /Finalizar préstamo/ });
     await expect(modal).toContainText(`${people.apellido_receptor}, ${people.nombre_receptor}`);
-    await expect(modal).toContainText('Unidades sin devolver: 1');
+    // El resumen muestra etiqueta y valor en elementos separados, no una frase con dos puntos.
+    // El filtro hasText se evalúa dentro de cada tarjeta; no vuelve a buscar el diálogo.
+    const pendientes = modal.locator('.med-finalizar-item').filter({ hasText: 'Unidades sin devolver' });
+    await expect(pendientes).toHaveCount(1);
+    await expect(pendientes).toBeVisible();
+    await expect(pendientes.getByText('Unidades sin devolver', { exact: true })).toBeVisible();
+    await expect(pendientes.locator('strong')).toHaveText('1');
+    await expect(pendientes.getByText('Quedan registradas como no devueltas')).toBeVisible();
     await modal.getByLabel('Destino de la seña *').selectOption('DONACION');
     await modal.getByRole('button', { name: 'Donar seña y finalizar' }).click();
     await expect(modal).not.toBeVisible();
@@ -113,10 +123,17 @@ test.describe('Medicamentos: un único flujo para resolver la seña y finalizar 
     await finalizado.getByRole('button', { name: 'Ver información del préstamo' }).click();
     const info = page.getByRole('dialog', { name: new RegExp(people.nombre_receptor) });
     await expect(info).toContainText(people.paciente_nombre);
-    await expect(info).toContainText('Pendiente');
+    await expect(info.locator('.med-loan-detail-quantity--pending')).toHaveText('Pendiente 1');
     await info.getByRole('tab', { name: 'Seña' }).click();
-    await expect(info).toContainText('Seña donada');
-    await expect(info).toContainText('Donación');
-    expect((await detalle(request, id)).prestamo.estado).toBe('CERRADO');
+    await expect(info.getByText('Seña donada', { exact: true })).toBeVisible();
+    await expect(info.getByText('Donación', { exact: true })).toBeVisible();
+    const cierre = await detalle(request, id);
+    expect(cierre.prestamo.estado).toBe('CERRADO');
+    expect(cents(cierre.prestamo.sena_pendiente)).toBe(0);
+    const donaciones = cierre.senas.filter(s => s.tipo === 'SENA_DONADA');
+    expect(donaciones).toHaveLength(1);
+    expect(cents(donaciones[0].monto)).toBe(4000);
+    expect(donaciones[0].id_egreso_contable ?? null).toBeNull();
+    expect(cierre.senas.filter(s => s.tipo === 'DEVOLUCION_SENA')).toHaveLength(0);
   });
 });

@@ -49,7 +49,7 @@ test.describe('Medicamentos: seguridad y protección de datos',()=>{
     const direct=[...routes.matchAll(/\$router->register\(\s*'(medicamentos_[^']+)'\s*,/g)].map(x=>x[1]);
     const mapped=[...routes.matchAll(/'([^']+)'\s*=>\s*'[^']+'/g)].map(x=>`medicamentos_${x[1]}`);
     const actions=[...new Set([...direct,...mapped])];
-    expect(actions).toHaveLength(24); // 4 rutas de opciones + 20 del módulo (incluye Entregas cobradas de Dolor).
+    expect(actions).toHaveLength(24); // 4 rutas de opciones + 20 del módulo (incluye Entregas gratuitas de Dolor).
     expect(actions).toContain('medicamentos_entregar');
     expect(direct).toEqual(expect.arrayContaining([
       'medicamentos_opciones', 'medicamentos_opcion_guardar',
@@ -58,7 +58,7 @@ test.describe('Medicamentos: seguridad y protección de datos',()=>{
     const reads=['medicamentos_opciones','medicamentos_alertas','medicamentos_catalogo','medicamentos_historial','medicamentos_entregas','medicamentos_prestamos','medicamentos_prestamo_detalle','medicamentos_socios','medicamentos_procedencias','medicamentos_medios'];
     expect(actions).toContain('medicamentos_entregas');
     for(const action of actions.filter(a=>!reads.includes(a)))expect(guard).toContain(`case '${action}'`);
-    for(const table of ['medicamentos','medicamentos_movimientos','medicamentos_prestamos','medicamentos_prestamos_detalle','medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos','medicamentos_solicitudes','medicamentos_alertas_descartadas'])expect(cleanup).toContain(`'${table}'`);
+    for(const table of ['medicamentos','medicamentos_movimientos','medicamentos_prestamos','medicamentos_prestamos_detalle','medicamentos_prestamos_devoluciones','medicamentos_prestamos_senas_movimientos','medicamentos_solicitudes','medicamentos_alertas_descartadas','medicamentos_entregas'])expect(cleanup).toContain(`'${table}'`);
     expect(cleanup).not.toContain("'medicamentos_lotes'");
   });
 });
