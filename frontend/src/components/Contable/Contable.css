@@ -12,17 +12,23 @@
   flex: 1 1 145px;
 }
 
-.contable-head-filters > .contable-filter--year,
-.contable-head-filters > .contable-filter--month {
-  width: 100%;
-  flex: 0 0 120px;
-  max-width: 120px;
+/* El ancho nativo del select incluye la opción más larga, padding y flecha.
+   Año y Mes no crecen para ocupar espacio sobrante ni recortan su texto. */
+.contable-head-filters > :is(.contable-filter--year, .contable-filter--month),
+html[data-wide-selects-active] body .contable-head-filters > :is(.contable-filter--year, .contable-filter--month) {
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: max-content !important;
+  flex: 0 0 auto !important;
 }
 
-.contable-head-filters > .contable-filter--year select,
-.contable-head-filters > .contable-filter--month select {
-  width: 100%;
-  max-width: 120px;
+.contable-head-filters > :is(.contable-filter--year, .contable-filter--month) select,
+html[data-wide-selects-active] body .contable-head-filters > :is(.contable-filter--year, .contable-filter--month) select {
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: max-content !important;
+  field-sizing: fixed;
+  text-overflow: clip;
 }
 
 .contable-head-filters > .contable-filter--category,
@@ -1049,12 +1055,6 @@
     width: 100%;
     flex-basis: 100%;
     max-width: none;
-  }
-
-  .contable-head-filters > .contable-filter--year,
-  .contable-head-filters > .contable-filter--month {
-    width: 120px;
-    flex-basis: 120px;
   }
 
   .contable-lower-actions {
